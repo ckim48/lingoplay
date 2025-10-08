@@ -1,0 +1,230 @@
+{% extends "base.html" %}
+{% block title %}Take Quiz · LingoPlay{% endblock %}
+
+{% block content %}
+
+<!-- Header -->
+<section class="card border-0 lp-card-modern overflow-hidden mt-4 mb-4">
+  <div class="p-4 p-lg-5 d-flex align-items-center justify-content-between">
+    <div class="d-flex align-items-center gap-3">
+      <span class="badge lp-badge-step">Quiz</span>
+      <div>
+        <h3 class="mb-0 fw-semibold lp-title-lime">Quiz: {{ story.title }}</h3>
+        <div class="text-muted small mt-1">
+          {{ questions|length }} questions · {{ story.language|upper }}
+        </div>
+      </div>
+    </div>
+
+    {# ✅ Prefer linking to the Finish draft when available #}
+    {% if draft_id %}
+      <a href="{{ url_for('finish_view', draft_id=draft_id) }}" class="btn btn-lime-light">
+        <i class="bi bi-pencil-square me-1"></i> View Draft
+      </a>
+    {% else %}
+      <a href="{{ url_for('story_view', slug=story.slug) }}" class="btn btn-lime-light">
+        <i class="bi bi-book me-1"></i> View Story
+      </a>
+    {% endif %}
+  </div>
+</section>
+
+<!-- Quiz Body -->
+<section class="card border-0 lp-card-modern overflow-hidden">
+  <div class="card-body p-4 p-lg-5">
+    <form id="quizForm" method="post" class="vstack gap-4">
+
+      <!-- Questions -->
+      {% for q in questions %}
+        {% set choices = q.choices_json | load_json %}
+        <fieldset class="lp-question-card border rounded-4 p-3 p-md-4">
+          <legend class="lp-question-title mb-3">
+            <span class="lp-q-number">{{ loop.index }}</span>
+            <span>{{ q.question }}</span>
+          </legend>
+
+          <div class="vstack gap-2">
+            {% for c in choices %}
+              <div class="form-check lp-choice">
+                <input class="form-check-input"
+                       type="radio"
+                       name="q{{ q.id }}"
+                       id="q{{ q.id }}_{{ loop.index0 }}"
+                       value="{{ loop.index0 }}">
+                <label class="form-check-label" for="q{{ q.id }}_{{ loop.index0 }}">
+                  {{ c }}
+                </label>
+              </div>
+            {% endfor %}
+          </div>
+        </fieldset>
+      {% endfor %}
+
+      <!-- Sticky submit bar -->
+      <div class="lp-sticky-submit d-flex flex-wrap gap-2 justify-content-between align-items-center">
+        <div class="small text-secondary">
+          <i class="bi bi-info-circle me-1"></i> Your answers save when you submit.
+        </div>
+        <button id="submitBtn" class="btn btn-lime px-4" type="submit">
+          <i class="bi bi-check2-circle me-1"></i> Submit
+        </button>
+      </div>
+    </form>
+  </div>
+</section>
+
+<!-- Overlay -->
+<style>
+  .grading-overlay{position:fixed;inset:0;display:none;place-items:center;background:rgba(15,23,42,.55);backdrop-filter:saturate(140%) blur(4px);z-index:1055}
+  .grading-overlay.show{display:grid}
+  .grading-box{background:#fff;border-radius:1rem;padding:1.5rem 1.75rem;box-shadow:0 10px 30px rgba(0,0,0,.15);text-align:center;min-width:260px}
+</style>
+<div id="gradingOverlay" class="grading-overlay" aria-hidden="true">
+  <div class="grading-box">
+    <div class="spinner-border mb-3" role="status" aria-label="Loading"></div>
+    <h6 class="mb-1">Grading your quiz…</h6>
+    <p class="text-muted small mb-0">We’ll show your score and explanations next.</p>
+  </div>
+</div>
+
+<!-- Theme CSS -->
+<style>
+  /* Lime palette */
+  :root{
+    --lp-lime-50:#f7fee7; --lp-lime-100:#ecfccb; --lp-lime-200:#d9f99d;
+    --lp-lime-300:#bef264; --lp-lime-400:#a3e635; --lp-lime-500:#84cc16;
+    --lp-lime-600:#65a30d; --lp-lime-700:#4d7c0f; --lp-border:#e5e7eb;
+  }
+
+  .lp-card-modern{
+    border-radius:18px;
+    box-shadow:0 10px 30px rgba(2,6,23,.06), 0 2px 6px rgba(2,6,23,.04);
+  }
+
+  .lp-title-lime{
+    color:var(--lp-lime-700);
+    letter-spacing:.2px;
+  }
+
+  /* Buttons */
+  .btn-lime{
+    --bs-btn-color:#fff;
+    --bs-btn-bg:var(--lp-lime-600);
+    --bs-btn-border-color:var(--lp-lime-600);
+    --bs-btn-hover-bg:var(--lp-lime-700);
+    --bs-btn-hover-border-color:var(--lp-lime-700);
+    --bs-btn-focus-shadow-rgb:132,204,22;
+    --bs-btn-active-bg:var(--lp-lime-700);
+    --bs-btn-active-border-color:var(--lp-lime-700);
+  }
+  .btn-lime-light{
+    --bs-btn-color:var(--lp-lime-700);
+    --bs-btn-bg:var(--lp-lime-100);
+    --bs-btn-border-color:var(--lp-lime-200);
+    --bs-btn-hover-color:var(--lp-lime-700);
+    --bs-btn-hover-bg:var(--lp-lime-200);
+    --bs-btn-hover-border-color:var(--lp-lime-300);
+    --bs-btn-focus-shadow-rgb:132,204,22;
+    --bs-btn-active-bg:var(--lp-lime-300);
+    --bs-btn-active-border-color:var(--lp-lime-300);
+  }
+
+  /* Inputs focus */
+  .lp-input-el:focus{
+    border-color:var(--lp-lime-400)!important;
+    box-shadow:0 0 0 .25rem rgba(132,204,22,.15)!important;
+  }
+
+  /* Step badge */
+  .lp-badge-step{
+    background:var(--lp-lime-100);
+    color:var(--lp-lime-700);
+    border:1px solid var(--lp-lime-200);
+    font-weight:600;
+  }
+
+  /* Question card */
+  .lp-question-card{
+    border:1px solid var(--lp-border);
+    background:#fff;
+    transition:border-color .2s ease, box-shadow .2s ease;
+  }
+  .lp-question-card:hover{
+    border-color:var(--lp-lime-200);
+    box-shadow:0 8px 20px rgba(2,6,23,.06);
+  }
+
+  .lp-question-title{
+    font-size:1.05rem;
+    font-weight:600;
+    color:#0f172a;
+    display:flex;
+    align-items:center;
+    gap:.6rem;
+    padding:0;
+    margin:0;
+  }
+  .lp-question-title .lp-q-number{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width:32px; height:32px;
+    border-radius:999px;
+    background:var(--lp-lime-100);
+    color:var(--lp-lime-700);
+    border:1px solid var(--lp-lime-200);
+    font-weight:700;
+    flex:0 0 32px;
+  }
+
+  /* Choices */
+  .lp-choice .form-check-input{
+    width:1.1rem; height:1.1rem; margin-top:.25rem; cursor:pointer;
+  }
+  .lp-choice .form-check-input:checked{
+    background-color:var(--lp-lime-600);
+    border-color:var(--lp-lime-600);
+  }
+  .lp-choice .form-check-input:focus{
+    box-shadow:0 0 0 .2rem rgba(132,204,22,.2);
+    border-color:var(--lp-lime-400);
+  }
+  .lp-choice .form-check-label{
+    cursor:pointer;
+  }
+
+  /* Sticky submit bar */
+  .lp-sticky-submit{
+    position:sticky;
+    bottom:0;
+    background:linear-gradient(to top, #fff 85%, rgba(255,255,255,0));
+    padding-top:1rem;
+  }
+</style>
+
+<!-- JS -->
+<script>
+  (function(){
+    const form = document.getElementById('quizForm');
+    const btn  = document.getElementById('submitBtn');
+    const ovl  = document.getElementById('gradingOverlay');
+    if(form && btn && ovl){
+      form.addEventListener('submit', function(){
+        btn.disabled = true;
+        btn.dataset.originalHtml = btn.innerHTML;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> Grading…';
+        ovl.classList.add('show');
+      });
+      // Restore UI when coming back via bfcache
+      window.addEventListener('pageshow', function(e){
+        if(e.persisted){
+          btn.disabled = false;
+          if(btn.dataset.originalHtml) btn.innerHTML = btn.dataset.originalHtml;
+          ovl.classList.remove('show');
+        }
+      });
+    }
+  })();
+</script>
+
+{% endblock %}

@@ -1,0 +1,224 @@
+{% extends "base.html" %}
+{% block title %}Home · LingoPlay{% endblock %}
+{% block content %}
+
+<!-- =========================
+     HERO (one-line pitch)
+========================== -->
+<section class="card border-0 overflow-hidden mb-4" style="border-radius:20px;">
+  <div class="p-4 p-lg-5">
+    <h1 class="brand-display mb-2">LingoPlay — stories that teach.</h1>
+    <p class="text-secondary mb-4">
+      Turn phonics or vocabulary into delightful stories and quick quizzes. Perfect for young learners, teachers, and researchers.
+    </p>
+    <div class="d-flex flex-wrap gap-2">
+      <a class="btn btn-primary btn-lg px-4" href="{{ url_for('story_new') }}">Create a Story</a>
+      <a class="btn btn-outline-secondary btn-lg px-4" href="{{ url_for('finish_new') }}">Finish the Story</a>
+    </div>
+  </div>
+</section>
+
+<!-- =========================
+     ABOUT / WHO IT'S FOR
+========================== -->
+<section class="mb-5">
+  <div class="row g-3 g-md-4">
+    <div class="col-lg-6">
+      <div class="card border-0 h-100">
+        <div class="card-body p-4">
+          <h4 class="brand-display mb-2">What is LingoPlay?</h4>
+          <p class="mb-3 text-secondary">
+            LingoPlay is a tiny learning lab: type phonics or vocabulary, and it crafts a short, readable story. From there, generate worksheets, take a quick quiz, and save everything into a library—fast.
+          </p>
+          <ul class="list-unstyled vstack gap-2 small">
+            <li><i class="bi bi-check2-circle me-2 text-success"></i>Kid-friendly design and big, clear typography</li>
+            <li><i class="bi bi-check2-circle me-2 text-success"></i>English / Korean or mixed EN·KO stories</li>
+            <li><i class="bi bi-check2-circle me-2 text-success"></i>One-click worksheet + quiz builder</li>
+            <li><i class="bi bi-check2-circle me-2 text-success"></i>Dashboard + CSV export for research</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-6">
+      <div class="card border-0 h-100">
+        <div class="card-body p-4">
+          <h4 class="brand-display mb-2">Who is it for?</h4>
+          <div class="row g-3">
+            <div class="col-sm-6">
+              <div class="p-3 border rounded-3 h-100">
+                <h6 class="mb-1"><i class="bi bi-emoji-smile me-1 text-primary"></i>Young Learners</h6>
+                <p class="small text-secondary mb-0">Short, fun stories that encourage reading aloud and finishing endings.</p>
+              </div>
+            </div>
+            <div class="col-sm-6">
+              <div class="p-3 border rounded-3 h-100">
+                <h6 class="mb-1"><i class="bi bi-mortarboard me-1 text-primary"></i>Teachers & Parents</h6>
+                <p class="small text-secondary mb-0">Instant content for practice, plus auto-made questions for quick checks.</p>
+              </div>
+            </div>
+            <div class="col-sm-6">
+              <div class="p-3 border rounded-3 h-100">
+                <h6 class="mb-1"><i class="bi bi-bar-chart-line me-1 text-primary"></i>Researchers</h6>
+                <p class="small text-secondary mb-0">Log inputs, attempts, and export CSV to analyze learning patterns.</p>
+              </div>
+            </div>
+            <div class="col-sm-6">
+              <div class="p-3 border rounded-3 h-100">
+                <h6 class="mb-1"><i class="bi bi-translate me-1 text-primary"></i>Bilingual Settings</h6>
+                <p class="small text-secondary mb-0">Switch English/Korean or mix EN·KO for flexible classrooms.</p>
+              </div>
+            </div>
+          </div>
+          <div class="mt-3">
+            <a class="btn btn-primary btn-sm" href="{{ url_for('library') }}">Browse the Library</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =========================
+     HOW IT WORKS (3 steps)
+========================== -->
+<section class="mb-5">
+  <div class="card border-0">
+    <div class="card-body p-4 p-lg-5">
+      <h4 class="brand-display mb-3">How it works</h4>
+      <div class="row g-4">
+        <div class="col-md-4">
+          <div class="h-100 p-3 border rounded-4">
+            <div class="badge bg-primary-subtle text-primary fw-bold mb-2">1</div>
+            <h6 class="fw-bold mb-1">Add phonics or words</h6>
+            <p class="small text-secondary mb-0">Choose a language (EN / KO / EN·KO) and level.</p>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="h-100 p-3 border rounded-4">
+            <div class="badge bg-info-subtle text-info fw-bold mb-2">2</div>
+            <h6 class="fw-bold mb-1">Generate a story</h6>
+            <p class="small text-secondary mb-0">Get a short, readable story—perfect for early readers.</p>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="h-100 p-3 border rounded-4">
+            <div class="badge bg-success-subtle text-success fw-bold mb-2">3</div>
+            <h6 class="fw-bold mb-1">Build worksheet & quiz</h6>
+            <p class="small text-secondary mb-0">Create questions, take a quick quiz, and track results.</p>
+          </div>
+        </div>
+      </div>
+      <a class="btn btn-primary mt-3" href="{{ url_for('story_new') }}">Try it now</a>
+    </div>
+  </div>
+</section>
+
+<!-- =========================
+     MAIN FEATURES (grid)
+========================== -->
+<section class="mb-5">
+  <h4 class="brand-display mb-3">Main Features</h4>
+  <div class="row g-3 g-md-4">
+    <div class="col-md-6 col-xl-3">
+      <a class="feature-card" style="--dot:#8b5cf6" href="{{ url_for('story_new') }}">
+        <div class="feature-badge"></div>
+        <h6 class="mb-1">AI Story Generator</h6>
+        <p class="small mb-0 text-secondary">Type phonics/vocab → get a clean story in seconds.</p>
+        <i class="bi bi-arrow-right-short feature-arrow"></i>
+      </a>
+    </div>
+    <div class="col-md-6 col-xl-3">
+      <a class="feature-card" style="--dot:#0ea5e9" href="{{ url_for('finish_new') }}">
+        <div class="feature-badge"></div>
+        <h6 class="mb-1">Finish the Story</h6>
+        <p class="small mb-0 text-secondary">We start the tale, learners craft the ending.</p>
+        <i class="bi bi-arrow-right-short feature-arrow"></i>
+      </a>
+    </div>
+    <div class="col-md-6 col-xl-3">
+      <a class="feature-card" style="--dot:#10b981" href="{{ url_for('library') }}">
+        <div class="feature-badge"></div>
+        <h6 class="mb-1">Learning Library</h6>
+        <p class="small mb-0 text-secondary">All stories & drafts in one cozy shelf.</p>
+        <i class="bi bi-arrow-right-short feature-arrow"></i>
+      </a>
+    </div>
+    <div class="col-md-6 col-xl-3">
+      <a class="feature-card" style="--dot:#f59e0b" href="{{ url_for('dashboard') }}">
+        <div class="feature-badge"></div>
+        <h6 class="mb-1">Research Dashboard</h6>
+        <p class="small mb-0 text-secondary">Usage logs, attempts, and CSV export.</p>
+        <i class="bi bi-arrow-right-short feature-arrow"></i>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- =========================
+     RECENT CONTENT
+========================== -->
+<div class="row g-4">
+  <div class="col-lg-7">
+    <div class="card border-0">
+      <div class="card-body p-4">
+        <div class="d-flex align-items-center justify-content-between mb-3">
+          <h5 class="brand-display mb-0">Recent Stories</h5>
+          <a href="{{ url_for('library') }}" class="small fw-bold text-secondary">View all</a>
+        </div>
+        <ul class="list-group list-group-flush nice-list">
+          {% for s in stories %}
+            <li class="list-group-item d-flex align-items-center justify-content-between">
+              <div>
+                <a href="{{ url_for('story_view', slug=s.slug) }}" class="text-decoration-none fw-semibold">{{ s.title }}</a>
+                <div class="small text-secondary">{{ s.language }}</div>
+              </div>
+              <span class="small pill-date">{{ (s.created_at or '')[:16] }}</span>
+            </li>
+          {% else %}
+            <li class="list-group-item text-secondary">No stories yet.</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="card border-0">
+      <div class="card-body p-4">
+        <div class="d-flex align-items-center justify-content-between mb-3">
+          <h5 class="brand-display mb-0">Recent Finishes</h5>
+          <a href="{{ url_for('library') }}" class="small fw-bold text-secondary">View all</a>
+        </div>
+        <ul class="list-group list-group-flush nice-list">
+          {% for d in finishes %}
+            <li class="list-group-item d-flex align-items-center justify-content-between">
+              <a href="{{ url_for('finish_view', draft_id=d.id) }}" class="text-decoration-none">
+                Seed: {{ d.seed_prompt[:42] }}{% if d.seed_prompt|length > 42 %}…{% endif %}
+                <div class="small text-secondary">{{ d.language }}</div>
+              </a>
+              <span class="small pill-date">{{ (d.created_at or '')[:16] }}</span>
+            </li>
+          {% else %}
+            <li class="list-group-item text-secondary">No drafts yet.</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- =========================
+     CTA
+========================== -->
+<section class="mt-5">
+  <div class="card text-center border-0" style="border-radius:20px;">
+    <div class="card-body p-4 p-lg-5">
+      <h4 class="brand-display mb-2">Ready to try LingoPlay?</h4>
+      <p class="text-secondary mb-4">Start with a few sounds or words and watch a story appear.</p>
+      <a class="btn btn-primary btn-lg px-4" href="{{ url_for('story_new') }}">Create your first story</a>
+    </div>
+  </div>
+</section>
+
+{% endblock %}

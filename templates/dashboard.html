@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+{% block title %}Dashboard · LingoPlay{% endblock %}
+{% block content %}
+
+<div class="row g-4">
+  <div class="col-lg-6">
+    <!-- Overview -->
+    <div class="card border-0 shadow-sm rounded-4 lp-card-modern">
+      <div class="card-body p-4">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h5 class="mb-0 lp-section-title">Overview</h5>
+          <a class="btn btn-sm btn-lime-light" href="{{ url_for('dashboard_export') }}">
+            <i class="bi bi-download me-1"></i> Export CSV
+          </a>
+        </div>
+        <div class="row text-center">
+          <div class="col-6">
+            <div class="display-6 lp-metric">{{ story_count }}</div>
+            <div class="text-secondary small">Stories</div>
+          </div>
+          <div class="col-6">
+            <div class="display-6 lp-metric">{{ finish_count }}</div>
+            <div class="text-secondary small">Completed Stories</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quizzes Ready -->
+    <div class="card border-0 shadow-sm rounded-4 mt-4 lp-card-modern">
+      <div class="card-body p-4">
+        <h6 class="mb-3 lp-section-title">Quizzes Ready</h6>
+        <ul class="list-group list-group-flush">
+          {% for q in quizzes_ready %}
+            <li class="list-group-item d-flex justify-content-between align-items-center lp-list-item">
+              <div class="me-3">
+                <a class="text-decoration-none fw-semibold lp-link" href="{{ url_for('quiz_take', slug=q.slug) }}">
+                  {{ q.title }}
+                </a>
+                <div class="small text-secondary mt-1">
+                  <span class="badge rounded-pill lp-badge-soft me-2">{{ q.qcount }} Qs</span>
+                  {% if q.last_score is not none and q.last_total is not none %}
+                    Last: <strong>{{ q.last_score }}/{{ q.last_total }}</strong>
+                    {% if q.last_when %} · {{ q.last_when|dt("%Y-%m-%d %H:%M") }}{% endif %}
+                  {% else %}
+                    Not taken yet
+                  {% endif %}
+                </div>
+              </div>
+              <a class="btn btn-sm btn-lime" href="{{ url_for('quiz_take', slug=q.slug) }}">
+                {% if q.last_score is not none %}Retake{% else %}Take{% endif %} Quiz
+              </a>
+            </li>
+          {% else %}
+            <li class="list-group-item text-secondary">No quizzes yet. Generate a worksheet from a story.</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+
+    <!-- Recent Attempts -->
+    <div class="card border-0 shadow-sm rounded-4 mt-4 lp-card-modern">
+      <div class="card-body p-4">
+        <h6 class="mb-3 lp-section-title">Recent Quiz Attempts</h6>
+        <div class="table-responsive">
+          <table class="table align-middle">
+            <thead class="lp-table-head">
+              <tr>
+                <th>Name</th>
+                <th>Story ID</th>
+                <th>Score</th>
+                <th>When</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for a in attempts %}
+                <tr>
+                  <td>{{ a.taker_name }}</td>
+                  <td>{{ a.story_id }}</td>
+                  <td><span class="badge rounded-pill lp-badge-soft">{{ a.score }}/{{ a.total }}</span></td>
+                  <td class="small text-secondary">{{ a.created_at|dt("%Y-%m-%d %H:%M") }}</td>
+                </tr>
+              {% else %}
+                <tr><td colspan="4" class="text-secondary">No attempts yet.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <!-- Stories to Finish -->
+    <div class="card border-0 shadow-sm rounded-4 lp-card-modern">
+      <div class="card-body p-4">
+        <h6 class="mb-3 lp-section-title">Stories to Finish</h6>
+        <ul class="list-group list-group-flush">
+          {% for d in unfinished_drafts %}
+            <li class="list-group-item d-flex justify-content-between align-items-center lp-list-item">
+              <div class="me-3">
+                <a class="text-decoration-none fw-semibold lp-link" href="{{ url_for('finish_view', draft_id=d.id) }}">
+                  {{ d.story_title or 'Untitled Story' }}
+                </a>
+                <div class="small text-secondary">
+                  Keywords/Phonics: {{ d.seed_prompt[:60] }}{% if d.seed_prompt|length > 60 %}…{% endif %}
+                  · <span class="badge rounded-pill lp-badge-lang align-text-bottom">{{ d.language|upper }}</span>
+                </div>
+              </div>
+              <span class="small text-secondary">{{ d.created_at|dt("%Y-%m-%d %H:%M") }}</span>
+            </li>
+          {% else %}
+            <li class="list-group-item text-secondary">Nothing to finish. Nice!</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+
+    <!-- Completed Stories -->
+    <div class="card border-0 shadow-sm rounded-4 mt-4 lp-card-modern">
+      <div class="card-body p-4">
+        <h6 class="mb-3 lp-section-title">Your Completed Stories</h6>
+        <ul class="list-group list-group-flush">
+          {% for d in completed_drafts %}
+            <li class="list-group-item d-flex justify-content-between align-items-center lp-list-item">
+              <div class="me-3">
+                <a class="text-decoration-none fw-semibold lp-link" href="{{ url_for('finish_view', draft_id=d.id) }}">
+                  {{ d.story_title or 'Untitled Story' }}
+                </a>
+                <div class="small text-secondary">
+                  Keywords/Phonics: {{ d.seed_prompt[:60] }}{% if d.seed_prompt|length > 60 %}…{% endif %}
+                  · <span class="badge rounded-pill lp-badge-lang align-text-bottom">{{ d.language|upper }}</span>
+                </div>
+              </div>
+              <span class="small text-secondary">{{ d.created_at|dt("%Y-%m-%d %H:%M") }}</span>
+            </li>
+          {% else %}
+            <li class="list-group-item text-secondary">No completed stories yet.</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<style>
+  /* Lime palette (shared) */
+  :root{
+    --lp-lime-50:#f7fee7; --lp-lime-100:#ecfccb; --lp-lime-200:#d9f99d;
+    --lp-lime-300:#bef264; --lp-lime-400:#a3e635; --lp-lime-500:#84cc16;
+    --lp-lime-600:#65a30d; --lp-lime-700:#4d7c0f; --lp-border:#e5e7eb;
+  }
+
+  .lp-card-modern{ border-radius:18px; box-shadow:0 10px 30px rgba(2,6,23,.06), 0 2px 6px rgba(2,6,23,.04); }
+
+  .lp-section-title{ color:var(--lp-lime-700); }
+  .lp-metric{ color:var(--lp-lime-700); line-height:1; }
+
+  .lp-link{ color:var(--lp-lime-700); }
+  .lp-link:hover{ color:var(--lp-lime-600); }
+
+  .lp-badge-soft{
+    background:var(--lp-lime-100);
+    color:var(--lp-lime-700);
+    border:1px solid var(--lp-lime-200);
+    font-weight:600;
+  }
+  .lp-badge-lang{
+    background:var(--lp-lime-50);
+    color:var(--lp-lime-700);
+    border:1px solid var(--lp-lime-200);
+    font-weight:600;
+  }
+
+  .btn-lime{
+    --bs-btn-color:#fff;
+    --bs-btn-bg:var(--lp-lime-600);
+    --bs-btn-border-color:var(--lp-lime-600);
+    --bs-btn-hover-bg:var(--lp-lime-700);
+    --bs-btn-hover-border-color:var(--lp-lime-700);
+    --bs-btn-focus-shadow-rgb:132,204,22;
+    --bs-btn-active-bg:var(--lp-lime-700);
+    --bs-btn-active-border-color:var(--lp-lime-700);
+  }
+  .btn-lime-light{
+    --bs-btn-color:var(--lp-lime-700);
+    --bs-btn-bg:var(--lp-lime-100);
+    --bs-btn-border-color:var(--lp-lime-200);
+    --bs-btn-hover-color:var(--lp-lime-700);
+    --bs-btn-hover-bg:var(--lp-lime-200);
+    --bs-btn-hover-border-color:var(--lp-lime-300);
+    --bs-btn-focus-shadow-rgb:132,204,22;
+    --bs-btn-active-bg:var(--lp-lime-300);
+    --bs-btn-active-border-color:var(--lp-lime-300);
+  }
+
+  /* Lists / tables */
+  .list-group .list-group-item{ border-color:var(--lp-border); transition:background .15s ease; }
+  .lp-list-item:hover{ background:var(--lp-lime-50); }
+  .lp-table-head{ background:var(--lp-lime-50); border-bottom:1px solid var(--lp-border); }
+</style>
+
+{% endblock %}

@@ -1,0 +1,249 @@
+{% extends "base.html" %}
+{% block title %}{{ draft.story_title or 'Story' }} · LingoPlay{% endblock %}
+
+{% block content %}
+
+<section class="card border-0 lp-card-modern mb-4">
+  <div class="p-4 p-lg-5">
+    <div class="d-flex align-items-center justify-content-between">
+      <div>
+        <h2 class="mb-1 lp-page-title">{{ draft.story_title or 'Untitled Story' }}</h2>
+
+        <div class="d-flex flex-wrap align-items-center gap-2">
+          <div class="text-muted small">
+            By {{ draft.learner_name or 'guest' }} · {{ draft.created_at | dt }} · {{ draft.language|upper }}
+          </div>
+          {% if draft.seed_prompt %}
+            <span class="badge lp-badge-soft ms-1">
+              Keywords / Phonics: {{ draft.seed_prompt }}
+            </span>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="d-flex gap-2">
+        <a href="{{ url_for('library') }}" class="btn btn-lime-light">Back to Library</a>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-outline-lime">Dashboard</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="card border-0 lp-card-modern mb-4">
+  <div class="card-body p-4 p-lg-5">
+    <h5 class="fw-bold text-uppercase small text-muted mb-3">Partial Story</h5>
+    <div style="white-space:pre-wrap">
+      {{ draft.partial_text | replace('Your Turn: ', '') }}
+    </div>
+  </div>
+</section>
+
+{% if draft.completion_text and draft.completion_text|trim %}
+<section class="card border-0 lp-card-modern mb-5">
+  <div class="card-body p-4 p-lg-5">
+    <h5 class="fw-bold text-uppercase small text-muted mb-3">Finished Ending</h5>
+    <div style="white-space:pre-wrap">{{ draft.completion_text }}</div>
+  </div>
+</section>
+{% else %}
+  {% if not can_edit %}
+  <section class="card border-0 lp-card-modern mb-5">
+    <div class="card-body p-4">
+      <div class="text-muted">This story isn’t finished yet. Only the author can add an ending.</div>
+    </div>
+  </section>
+  {% endif %}
+{% endif %}
+
+{% if can_edit %}
+<section class="card border-0 lp-card-modern mb-5">
+  <div class="card-body p-4">
+    <form method="post">
+      <label class="form-label fw-bold">Your Ending</label>
+      <textarea name="completion_text" class="form-control" rows="6" placeholder="Write your ending here…">{{ draft.completion_text or '' }}</textarea>
+      <div class="d-flex justify-content-end mt-3">
+        <button class="btn btn-lime">
+          <i class="bi bi-pencil-square me-1"></i> Save Ending
+        </button>
+      </div>
+    </form>
+  </div>
+</section>
+{% endif %}
+
+{# Worksheets & Quizzes section with conditional CTA #}
+<section class="card border-0 lp-card-modern mb-5">
+  <div class="card-body p-4 p-lg-5">
+    <h5 class="fw-bold text-uppercase small text-muted mb-2">Worksheets &amp; Quizzes</h5>
+    <p class="text-secondary mb-4">
+      Automatically generated from story content to reinforce comprehension, vocabulary, and sequence skills.
+      Learner performance data is recorded.
+    </p>
+
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+      {% if has_quiz and draft.story_slug %}
+        <a class="btn btn-lime" href="{{ url_for('quiz_take', slug=draft.story_slug) }}">
+          <i class="bi bi-check2-circle me-1"></i> Take Worksheet &amp; Quiz
+        </a>
+        <form method="post" action="{{ url_for('finish_build_worksheet_ai', draft_id=draft.id) }}" class="d-inline">
+          <button class="btn btn-outline-lime" type="submit" title="Re-generate questions via GPT">
+            <i class="bi bi-stars me-1"></i> Regenerate (AI)
+          </button>
+        </form>
+      {% else %}
+        <form id="genForm" method="post" action="{{ url_for('finish_build_worksheet_ai', draft_id=draft.id) }}">
+          <button id="genBtn" class="btn btn-lime" type="submit"
+                  title="Use GPT to generate a worksheet & quiz, then you'll be taken to it">
+            <i class="bi bi-stars me-1"></i> Generate Worksheet &amp; Quiz (AI)
+          </button>
+        </form>
+        {% if not draft.story_slug %}
+          <div class="alert alert-info mb-0 ms-2">
+            We couldn’t find the original story to link yet. You can still generate; we’ll attach it automatically.
+          </div>
+        {% endif %}
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+{# Completion Modal (after a save) #}
+<div class="modal fade" id="finishCompleteModal" tabindex="-1" aria-labelledby="finishCompleteLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content rounded-4">
+      <div class="modal-header border-0">
+        <h5 class="modal-title" id="finishCompleteLabel">Ending saved 🎉</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body pt-0">
+        Nice work! What would you like to do next?
+      </div>
+      <div class="modal-footer border-0">
+        <a href="{{ url_for('library') }}" class="btn btn-lime-light">Go to Library</a>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-outline-lime">Go to Dashboard</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# Small generating overlay only for the Generate action #}
+<style>
+  /* Lime palette (shared) */
+  :root{
+    --lp-lime-50:#f7fee7; --lp-lime-100:#ecfccb; --lp-lime-200:#d9f99d;
+    --lp-lime-300:#bef264; --lp-lime-400:#a3e635; --lp-lime-500:#84cc16;
+    --lp-lime-600:#65a30d; --lp-lime-700:#4d7c0f; --lp-border:#e5e7eb;
+  }
+
+  .lp-card-modern{
+    border-radius:18px;
+    box-shadow:0 10px 30px rgba(2,6,23,.06), 0 2px 6px rgba(2,6,23,.04);
+  }
+
+  .lp-page-title{
+    color:var(--lp-lime-700);
+    font-weight:700;
+    letter-spacing:.2px;
+  }
+
+  .lp-badge-soft{
+    background:var(--lp-lime-50);
+    color:var(--lp-lime-700);
+    border:1px solid var(--lp-lime-200);
+    font-weight:600;
+  }
+
+  /* Buttons */
+  .btn-lime{
+    --bs-btn-color:#fff;
+    --bs-btn-bg:var(--lp-lime-600);
+    --bs-btn-border-color:var(--lp-lime-600);
+    --bs-btn-hover-bg:var(--lp-lime-700);
+    --bs-btn-hover-border-color:var(--lp-lime-700);
+    --bs-btn-focus-shadow-rgb:132,204,22;
+    --bs-btn-active-bg:var(--lp-lime-700);
+    --bs-btn-active-border-color:var(--lp-lime-700);
+  }
+  .btn-lime-light{
+    --bs-btn-color:var(--lp-lime-700);
+    --bs-btn-bg:var(--lp-lime-100);
+    --bs-btn-border-color:var(--lp-lime-200);
+    --bs-btn-hover-color:var(--lp-lime-700);
+    --bs-btn-hover-bg:var(--lp-lime-200);
+    --bs-btn-hover-border-color:var(--lp-lime-300);
+    --bs-btn-focus-shadow-rgb:132,204,22;
+    --bs-btn-active-bg:var(--lp-lime-300);
+    --bs-btn-active-border-color:var(--lp-lime-300);
+  }
+  .btn-outline-lime{
+    --bs-btn-color:var(--lp-lime-700);
+    --bs-btn-border-color:var(--lp-lime-300);
+    --bs-btn-hover-bg:var(--lp-lime-100);
+    --bs-btn-hover-color:var(--lp-lime-700);
+    --bs-btn-hover-border-color:var(--lp-lime-400);
+    --bs-btn-focus-shadow-rgb:132,204,22;
+    --bs-btn-active-bg:var(--lp-lime-200);
+    --bs-btn-active-border-color:var(--lp-lime-400);
+  }
+
+  /* Overlay */
+  .gen-overlay{position:fixed;inset:0;display:none;place-items:center;background:rgba(15,23,42,.55);backdrop-filter:saturate(140%) blur(4px);z-index:1055}
+  .gen-overlay.show{display:grid}
+  .gen-box{background:#fff;border-radius:1rem;padding:1.5rem 1.75rem;box-shadow:0 10px 30px rgba(0,0,0,.15);text-align:center;min-width:260px}
+</style>
+
+<div id="genOverlay" class="gen-overlay" aria-hidden="true">
+  <div class="gen-box">
+    <div class="spinner-border mb-3" role="status" aria-label="Loading"></div>
+    <h6 class="mb-1">Generating worksheet & quiz…</h6>
+    <p class="text-muted small mb-0">You’ll be taken to the quiz automatically.</p>
+  </div>
+</div>
+
+<script>
+  (function(){
+    const form = document.getElementById('genForm');
+    const btn  = document.getElementById('genBtn');
+    const ovl  = document.getElementById('genOverlay');
+    if(form && btn && ovl){
+      form.addEventListener('submit', function(){
+        btn.disabled = true;
+        btn.dataset.originalHtml = btn.innerHTML;
+        btn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i> Generating…';
+        ovl.classList.add('show');
+      });
+      window.addEventListener('pageshow', function(e){
+        if(e.persisted){
+          btn.disabled = false;
+          if(btn.dataset.originalHtml) btn.innerHTML = btn.dataset.originalHtml;
+          ovl.classList.remove('show');
+        }
+      });
+    }
+  })();
+</script>
+
+{% if draft.completion_text and draft.completion_text|trim and request.args.get('saved') %}
+<script>
+  (function () {
+    function showCompletedModal() {
+      var el = document.getElementById('finishCompleteModal');
+      if (!el) return;
+      if (window.bootstrap && window.bootstrap.Modal) {
+        var modal = new window.bootstrap.Modal(el, { backdrop: 'static' });
+        modal.show();
+      } else {
+        window.addEventListener('load', function () {
+          if (window.bootstrap && window.bootstrap.Modal) {
+            var modal = new window.bootstrap.Modal(el, { backdrop: 'static' });
+            modal.show();
+          }
+        }, { once: true });
+      }
+    }
+    document.addEventListener('DOMContentLoaded', showCompletedModal, { once: true });
+  })();
+</script>
+{% endif %}
+
+{% endblock %}

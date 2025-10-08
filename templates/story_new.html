@@ -1,0 +1,355 @@
+{% extends "base.html" %}
+{% block title %}AI Story Generator · LingoPlay{% endblock %}
+
+{% block content %}
+
+<div class="card border-0 lp-card-modern overflow-hidden mt-4">
+  <div class="card-body p-4 p-lg-5">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+      <h3 class="mb-0 fw-semibold">AI Story Generator</h3>
+      <a href="{{ url_for('library') }}" class="btn btn-lime-light">Library</a>
+    </div>
+
+    <form method="post" id="storyForm">
+      <!-- Step hint -->
+      <div class="d-flex flex-wrap align-items-center gap-2 mb-4">
+        <span class="badge rounded-pill lp-badge-step">1</span>
+        <span class="fw-medium">Story Basics</span>
+        <span class="vr mx-2"></span>
+        <span class="text-secondary small">Add a title, author, and target phonics or vocabulary.</span>
+      </div>
+
+      <!-- Title + Author -->
+      <div class="row g-4 mb-2">
+        <div class="col-md-7">
+          <label class="form-label small text-uppercase fw-bold text-muted">Title</label>
+          <div class="input-group input-group-lg lp-input">
+            <span class="input-group-text"><i class="bi bi-book"></i></span>
+            <input name="title" class="form-control" placeholder="A Rainy Day at the Park">
+          </div>
+        </div>
+        <div class="col-md-5">
+          <label class="form-label small text-uppercase fw-bold text-muted">Author / Learner</label>
+          <div class="input-group input-group-lg lp-input">
+            <span class="input-group-text"><i class="bi bi-person"></i></span>
+            <input name="author_name" class="form-control" placeholder="Student name">
+          </div>
+        </div>
+      </div>
+
+      <!-- Phonics / Vocab -->
+      <div class="mb-4">
+        <label class="form-label small text-uppercase fw-bold text-muted">Phonics or Vocabulary</label>
+        <div class="input-group input-group-lg lp-input">
+          <span class="input-group-text"><i class="bi bi-mic"></i></span>
+          <input name="prompt" id="promptInput" class="form-control" placeholder="s, sh, sun, shop">
+          <button type="button" class="btn btn-outline-secondary only-md" id="clearPrompt" title="Clear">
+            <i class="bi bi-x-circle"></i>
+          </button>
+        </div>
+
+        <!-- Smart chips -->
+        <div class="d-flex flex-wrap gap-2 mt-3">
+          <button type="button" class="lp-chip" data-add="ch, cheese, cherry">ch</button>
+          <button type="button" class="lp-chip" data-add="th, thin, thick">th</button>
+          <button type="button" class="lp-chip" data-add="ai, rain, train">ai</button>
+          <button type="button" class="lp-chip" data-add="ee, tree, green">ee</button>
+          <button type="button" class="lp-chip" data-add="ow, snow, window">ow</button>
+          <button type="button" class="lp-chip" data-add="ㄱ, 고구마, 가방">KO</button>
+        </div>
+        <div class="form-text">Enter letters/sounds or comma-separated words (e.g., <em>sh, ship, shop</em>).</div>
+      </div>
+
+      <!-- Divider -->
+      <div class="lp-divider my-4"></div>
+
+      <!-- Step hint 2 -->
+      <div class="d-flex flex-wrap align-items-center gap-2 mb-4">
+        <span class="badge rounded-pill lp-badge-step">2</span>
+        <span class="fw-medium">Style & Language</span>
+        <span class="vr mx-2"></span>
+        <span class="text-secondary small">Guide tone, theme, and structure. You can also set bilingual output.</span>
+      </div>
+
+      <!-- Theme / Characters -->
+      <div class="row g-4">
+        <div class="col-md-6">
+          <label class="form-label small text-uppercase fw-bold text-muted">Theme</label>
+          <select name="theme" class="form-select form-select-lg lp-input">
+            <option value="" selected>Let the AI choose</option>
+            <option value="friendship">Friendship</option>
+            <option value="kindness">Kindness</option>
+            <option value="perseverance">Perseverance</option>
+            <option value="curiosity">Curiosity</option>
+            <option value="adventure">Adventure</option>
+            <option value="family">Family</option>
+            <option value="school">School</option>
+          </select>
+        </div>
+
+        <div class="col-md-6">
+          <label class="form-label small text-uppercase fw-bold text-muted">Characters</label>
+          <div class="input-group input-group-lg lp-input">
+            <span class="input-group-text"><i class="bi bi-people"></i></span>
+            <input name="characters" class="form-control"
+                   placeholder="e.g., Mia (a shy reader), Mr. Park (teacher), Sunny the cat">
+          </div>
+          <div class="form-text">List 1–3 main characters (optional).</div>
+        </div>
+
+        <div class="col-md-6">
+          <label class="form-label small text-uppercase fw-bold text-muted">Language</label>
+          <select name="language" class="form-select form-select-lg lp-input">
+            <option value="en">English</option>
+            <option value="ko">Korean</option>
+            <option value="en-ko">English + Korean</option>
+          </select>
+        </div>
+
+        <div class="col-md-6">
+          <label class="form-label small text-uppercase fw-bold text-muted">Level</label>
+          <select name="level" class="form-select form-select-lg lp-input">
+            <option value="phonics">Phonics</option>
+            <option value="early-reader">Early Reader</option>
+            <option value="custom">Custom</option>
+          </select>
+        </div>
+
+        <div class="col-md-6">
+          <label class="form-label small text-uppercase fw-bold text-muted">Tone</label>
+          <select name="tone" class="form-select form-select-lg lp-input">
+            <option value="" selected>Warm (default)</option>
+            <option value="playful">Playful</option>
+            <option value="adventurous">Adventurous</option>
+            <option value="gentle">Gentle</option>
+            <option value="silly">Silly</option>
+            <option value="inspirational">Inspirational</option>
+          </select>
+        </div>
+
+        <div class="col-md-6">
+          <label class="form-label small text-uppercase fw-bold text-muted d-block">Structure</label>
+          <div class="form-check form-switch lp-switch">
+            <input class="form-check-input" type="checkbox" id="bmeSwitch" name="bme" value="1" checked>
+            <label class="form-check-label" for="bmeSwitch">Enforce Beginning–Middle–End structure</label>
+          </div>
+          <div class="form-text">Stories will follow a clear arc for early readers.</div>
+        </div>
+
+        <div class="col-md-6">
+          <div class="form-check form-switch lp-switch">
+            <input class="form-check-input" type="checkbox" id="genImage" name="gen_image" value="1">
+            <label class="form-check-label" for="genImage">Generate one cover illustration</label>
+          </div>
+          <div class="form-text">Creates a text-free, kid-friendly cover image.</div>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="d-flex flex-wrap gap-2 justify-content-end mt-5">
+        <a href="{{ url_for('library') }}" class="btn btn-outline-secondary btn-lg">Library</a>
+        <button type="submit" class="btn btn-lime btn-lg px-4" id="genBtn">
+          <i class="bi bi-magic me-1"></i> Generate Story
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Loading Overlay -->
+<div id="genOverlay" class="gen-overlay" aria-hidden="true">
+  <div class="gen-box">
+    <div class="spinner-border mb-3" role="status" aria-label="Loading"></div>
+    <h6 class="mb-1">Generating your story…</h6>
+    <p class="text-muted small mb-0">This usually takes a few seconds. Please keep this tab open.</p>
+  </div>
+</div>
+
+<!-- Success Modal -->
+<div class="modal fade" id="generatedModal" tabindex="-1" aria-labelledby="generatedModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content rounded-4">
+      <div class="modal-header border-0">
+        <h5 class="modal-title" id="generatedModalLabel">Story ready! 🎉</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body pt-0">
+        Great! Your story is ready. Want to finish the ending now or build a worksheet?
+      </div>
+      <div class="modal-footer border-0">
+        <a href="{{ url_for('library') }}" class="btn btn-outline-secondary">Go to Library</a>
+        <a id="goFinishBtn" href="{{ url_for('finish_new') }}" class="btn btn-lime">Finish the Story</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  /* Lime palette */
+  :root{
+    --lp-lime-50:  #f7fee7;
+    --lp-lime-100: #ecfccb;
+    --lp-lime-200: #d9f99d;
+    --lp-lime-300: #bef264;
+    --lp-lime-400: #a3e635;
+    --lp-lime-500: #84cc16;
+    --lp-lime-600: #65a30d;
+    --lp-lime-700: #4d7c0f;
+    --lp-border:   #e5e7eb;
+  }
+
+  .lp-card-modern{
+    border-radius: 18px;
+    box-shadow: 0 10px 30px rgba(2,6,23,.06), 0 2px 6px rgba(2,6,23,.04);
+  }
+
+  /* Inputs with subtle lime accents */
+  .lp-input .input-group-text{
+    border-radius: .8rem 0 0 .8rem;
+    border-right: 0;
+    background: #f8fafc;
+    color: var(--lp-lime-700);
+  }
+  .lp-input .form-control{
+    border-left: 0;
+    border-radius: 0 .8rem .8rem 0;
+  }
+  .lp-input .form-control:focus,
+  .form-select.lp-input:focus{
+    border-color: var(--lp-lime-400);
+    box-shadow: 0 0 0 .25rem rgba(132,204,22,.15);
+  }
+  .form-select.lp-input{
+    border-radius: .8rem;
+  }
+
+  /* Lime chips */
+  .lp-chip{
+    border: 1px solid var(--lp-border);
+    background: #fff;
+    border-radius: 999px;
+    padding: .45rem .85rem;
+    font-size: .925rem;
+    transition: transform .06s ease, background .15s ease, box-shadow .15s ease, border-color .15s ease;
+    box-shadow: 0 1px 0 rgba(2,6,23,.06);
+  }
+  .lp-chip:hover{
+    background: var(--lp-lime-50);
+    border-color: var(--lp-lime-200);
+    transform: translateY(-1px);
+  }
+  .lp-chip:active{ transform: translateY(0); }
+
+  /* Lime step badge */
+  .lp-badge-step{
+    background: var(--lp-lime-100);
+    color: var(--lp-lime-700);
+    border: 1px solid var(--lp-lime-200);
+  }
+
+  .lp-divider{ border-top: 1px dashed var(--lp-border); }
+
+  /* Switch (lime when checked) */
+  .lp-switch .form-check-input{ width: 3rem; height: 1.5rem; cursor: pointer; }
+  .lp-switch .form-check-input:checked{
+    background-color: var(--lp-lime-600);
+    border-color: var(--lp-lime-600);
+  }
+  .lp-switch .form-check-input:focus{
+    box-shadow: 0 0 0 .25rem rgba(132,204,22,.2);
+    border-color: var(--lp-lime-400);
+  }
+
+  /* Lime buttons (solid + light) */
+  .btn-lime{
+    --bs-btn-color: #fff;
+    --bs-btn-bg: var(--lp-lime-600);
+    --bs-btn-border-color: var(--lp-lime-600);
+    --bs-btn-hover-bg: var(--lp-lime-700);
+    --bs-btn-hover-border-color: var(--lp-lime-700);
+    --bs-btn-focus-shadow-rgb: 132,204,22;
+    --bs-btn-active-bg: var(--lp-lime-700);
+    --bs-btn-active-border-color: var(--lp-lime-700);
+  }
+  .btn-lime-light{
+    --bs-btn-color: var(--lp-lime-700);
+    --bs-btn-bg: var(--lp-lime-100);
+    --bs-btn-border-color: var(--lp-lime-200);
+    --bs-btn-hover-color: var(--lp-lime-700);
+    --bs-btn-hover-bg: var(--lp-lime-200);
+    --bs-btn-hover-border-color: var(--lp-lime-300);
+    --bs-btn-focus-shadow-rgb: 132,204,22;
+    --bs-btn-active-bg: var(--lp-lime-300);
+    --bs-btn-active-border-color: var(--lp-lime-300);
+  }
+
+  /* Overlay */
+  .gen-overlay{position:fixed;inset:0;display:none;place-items:center;background:rgba(15,23,42,.55);backdrop-filter:saturate(140%) blur(4px);z-index:1055}
+  .gen-overlay.show{display:grid}
+  .gen-box{background:#fff;border-radius:1rem;padding:2rem 2.25rem;box-shadow:0 10px 30px rgba(0,0,0,.15);text-align:center;min-width:260px}
+</style>
+
+<script>
+  (function(){
+    const input = document.getElementById('promptInput');
+    const chips = document.querySelectorAll('.lp-chip');
+    const clearBtn = document.getElementById('clearPrompt');
+
+    chips.forEach(ch => ch.addEventListener('click', () => {
+      const add = ch.getAttribute('data-add');
+      if(!add) return;
+      input.value = (input.value ? input.value.replace(/\s+$/,'') + ', ' : '') + add;
+      input.focus();
+    }));
+    clearBtn?.addEventListener('click', () => { input.value=''; input.focus(); });
+
+    const form = document.getElementById('storyForm');
+    const overlay = document.getElementById('genOverlay');
+    const genBtn = document.getElementById('genBtn');
+
+    if(form){
+      form.addEventListener('submit', () => {
+        if(genBtn){
+          genBtn.disabled = true;
+          genBtn.dataset.originalHtml = genBtn.innerHTML;
+          genBtn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i> Generating…';
+        }
+        overlay?.classList.add('show');
+      });
+
+      window.addEventListener('pageshow', (e) => {
+        if (e.persisted) {
+          if (genBtn){
+            genBtn.disabled = false;
+            if (genBtn.dataset.originalHtml) genBtn.innerHTML = genBtn.dataset.originalHtml;
+          }
+          overlay?.classList.remove('show');
+        }
+      });
+    }
+
+    // Auto-show the success modal if ?generated=1 (optionally with &finish_url=...)
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('generated') === '1') {
+      const el = document.getElementById('generatedModal');
+      const goBtn = document.getElementById('goFinishBtn');
+      const finishUrl = params.get('finish_url');
+      if (finishUrl && goBtn) goBtn.setAttribute('href', finishUrl);
+
+      const showModal = () => {
+        if (window.bootstrap && window.bootstrap.Modal) {
+          const modal = new window.bootstrap.Modal(el, { backdrop: 'static' });
+          modal.show();
+        }
+      };
+
+      if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        showModal();
+      } else {
+        document.addEventListener('DOMContentLoaded', showModal, { once: true });
+      }
+    }
+  })();
+</script>
+
+{% endblock %}

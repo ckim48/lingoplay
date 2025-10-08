@@ -1,0 +1,14 @@
+{% if story.visuals %}
+<section class="card border-0 lp-card mb-4">
+  <div class="card-body p-0">
+    <img
+      src="{{ story.visuals }}"
+      alt="Story illustration"
+      class="img-fluid rounded-3 w-100"
+      style="display:block; max-height:520px; object-fit:cover;"
+      loading="lazy"
+      decoding="async"
+    >
+  </div>
+</section>
+{% endif %}

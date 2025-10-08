@@ -1,0 +1,255 @@
+{% extends "base.html" %}
+{% block title %}Quiz Results · LingoPlay{% endblock %}
+
+{% block content %}
+
+<!-- Header -->
+<section class="card border-0 lp-card-modern overflow-hidden mt-4 mb-4">
+  <div class="p-4 p-lg-5 d-flex flex-wrap align-items-center justify-content-between gap-3">
+    <div class="d-flex align-items-center gap-3">
+      <span class="badge lp-badge-step">Results</span>
+      <div>
+        <h3 class="mb-0 fw-semibold lp-title-lime">Results: {{ story.title }}</h3>
+        <div class="text-muted small mt-1">
+          Taken by {{ taker }} · {{ total }} questions · {{ story.language|upper }}
+        </div>
+      </div>
+    </div>
+
+    <div class="d-flex align-items-center gap-2">
+      <div class="lp-score-chip">
+        <div class="lp-score">{{ score }}/{{ total }}</div>
+        <div class="lp-score-sub">{{ percent }}%</div>
+      </div>
+      {% if percent >= 80 %}
+        <span class="badge lp-badge-good">Great job!</span>
+      {% elif percent >= 50 %}
+        <span class="badge lp-badge-okay">Keep practicing!</span>
+      {% else %}
+        <span class="badge lp-badge-bad">Let’s review together</span>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+<!-- Results Body -->
+<section class="card border-0 lp-card-modern overflow-hidden">
+  <div class="card-body p-4 p-lg-5">
+
+    <!-- Legend -->
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-4">
+      <span class="small text-muted me-1">Legend:</span>
+      <span class="badge lp-chip-correct"><i class="bi bi-check2 me-1"></i>Correct</span>
+      <span class="badge lp-chip-your"><i class="bi bi-person-check me-1"></i>Your answer</span>
+      <span class="badge lp-chip-opt">Option</span>
+    </div>
+
+    <!-- Question Cards -->
+    <div class="vstack gap-3">
+      {% for q in questions %}
+        {% set idx = loop.index0 %}
+        {% set you = q.chosen_index %}
+        {% set correct = q.correct_index %}
+        {% set is_right = (you == correct) %}
+
+        <article class="lp-result-card border rounded-4 p-3 p-md-4 {% if is_right %}is-correct{% elif you != -1 %}is-incorrect{% endif %}">
+          <header class="d-flex justify-content-between align-items-start mb-2">
+            <div class="lp-result-title">
+              <span class="lp-q-number">{{ loop.index }}</span>
+              <span>{{ q.question }}</span>
+            </div>
+            {% if is_right %}
+              <span class="badge lp-chip-correct"><i class="bi bi-check2 me-1"></i>Correct</span>
+            {% elif you == -1 %}
+              <span class="badge lp-chip-skip"><i class="bi bi-dash-circle me-1"></i>Skipped</span>
+            {% else %}
+              <span class="badge lp-chip-wrong"><i class="bi bi-x-lg me-1"></i>Incorrect</span>
+            {% endif %}
+          </header>
+
+          <ul class="list-unstyled mb-2 vstack gap-2">
+            {% for c in q.choices %}
+              {% set i = loop.index0 %}
+              {% set is_correct = (i == correct) %}
+              {% set is_chosen  = (i == you) %}
+              <li class="lp-choice-line d-flex align-items-center gap-2">
+                <span class="lp-dot
+                  {% if is_correct %}dot-correct{% elif is_chosen and not is_correct %}dot-wrong{% else %}dot-neutral{% endif %}"></span>
+
+                <div class="flex-grow-1">{{ c }}</div>
+
+                {% if is_correct %}
+                  <span class="badge lp-chip-correct"><i class="bi bi-check2 me-1"></i>Correct</span>
+                {% elif is_chosen %}
+                  <span class="badge lp-chip-your"><i class="bi bi-person-check me-1"></i>Your answer</span>
+                {% else %}
+                  <span class="badge lp-chip-opt">Option</span>
+                {% endif %}
+              </li>
+            {% endfor %}
+          </ul>
+
+          <div class="small text-muted mt-2">
+            <strong>Why:</strong> {{ explanations[idx] }}
+          </div>
+        </article>
+      {% endfor %}
+    </div>
+
+    <!-- Sticky action bar -->
+    <div class="lp-sticky-actions d-flex flex-wrap gap-2 justify-content-between align-items-center mt-4">
+      <div class="small text-secondary">
+        <i class="bi bi-graph-up-arrow me-1"></i> Try again to improve your score.
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <a href="{{ url_for('quiz_take', slug=story.slug) }}" class="btn btn-lime-light">
+          <i class="bi bi-arrow-repeat me-1"></i> Retake Quiz
+        </a>
+
+        {% if draft_id %}
+          <a href="{{ url_for('finish_view', draft_id=draft_id) }}" class="btn btn-lime">
+            <i class="bi bi-pencil-square me-1"></i> Back to Draft
+          </a>
+        {% else %}
+          <a href="{{ url_for('story_view', slug=story.slug) }}" class="btn btn-lime">
+            <i class="bi bi-book me-1"></i> Back to Story
+          </a>
+        {% endif %}
+
+        <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary">
+          <i class="bi bi-speedometer2 me-1"></i> Dashboard
+        </a>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- Theme CSS -->
+<style>
+  /* Lime palette */
+  :root{
+    --lp-lime-50:#f7fee7; --lp-lime-100:#ecfccb; --lp-lime-200:#d9f99d;
+    --lp-lime-300:#bef264; --lp-lime-400:#a3e635; --lp-lime-500:#84cc16;
+    --lp-lime-600:#65a30d; --lp-lime-700:#4d7c0f; --lp-border:#e5e7eb;
+  }
+
+  .lp-card-modern{
+    border-radius:18px;
+    box-shadow:0 10px 30px rgba(2,6,23,.06), 0 2px 6px rgba(2,6,23,.04);
+  }
+
+  .lp-title-lime{
+    color:var(--lp-lime-700);
+    letter-spacing:.2px;
+  }
+
+  /* Step badge */
+  .lp-badge-step{
+    background:var(--lp-lime-100);
+    color:var(--lp-lime-700);
+    border:1px solid var(--lp-lime-200);
+    font-weight:600;
+  }
+
+  /* Score chip */
+  .lp-score-chip{
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    width:84px; height:64px; border:1px solid var(--lp-border); border-radius:12px;
+    background:#fff; box-shadow:0 2px 6px rgba(2,6,23,.06);
+  }
+  .lp-score{ font-weight:700; font-size:1.125rem; line-height:1; color:#0f172a; }
+  .lp-score-sub{ font-size:.8rem; color:var(--lp-lime-700); font-weight:600; }
+
+  /* Result cards with left accent */
+  .lp-result-card{ position:relative; border:1px solid var(--lp-border); background:#fff; }
+  .lp-result-card::before{
+    content:""; position:absolute; left:-1px; top:-1px; bottom:-1px; width:6px;
+    border-radius:10px 0 0 10px; background:transparent;
+  }
+  .lp-result-card.is-correct::before{ background:var(--lp-lime-400); }
+  .lp-result-card.is-incorrect::before{ background:#fecaca; } /* soft red */
+
+  .lp-result-title{
+    font-weight:600; color:#0f172a; display:flex; align-items:center; gap:.6rem;
+  }
+  .lp-q-number{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:32px; height:32px; border-radius:999px;
+    background:var(--lp-lime-100); color:var(--lp-lime-700);
+    border:1px solid var(--lp-lime-200); font-weight:700; flex:0 0 32px;
+  }
+
+  /* Choice lines */
+  .lp-choice-line{ padding:.4rem .5rem; border-radius:.5rem; }
+  .lp-choice-line:hover{ background:var(--lp-lime-50); }
+
+  .lp-dot{ width:10px; height:10px; border-radius:999px; display:inline-block; }
+  .dot-correct{ background:var(--lp-lime-500); }
+  .dot-wrong{ background:#ef4444; }
+  .dot-neutral{ background:#cbd5e1; }
+
+  /* Chips */
+  .lp-chip-correct{
+    background:var(--lp-lime-100); color:var(--lp-lime-700);
+    border:1px solid var(--lp-lime-200); font-weight:600;
+  }
+  .lp-chip-your{
+    background:#e0f2fe; color:#075985; border:1px solid #bae6fd; font-weight:600;
+  }
+  .lp-chip-opt{
+    background:#f8fafc; color:#334155; border:1px solid var(--lp-border);
+  }
+  .lp-chip-wrong{
+    background:#fee2e2; color:#7f1d1d; border:1px solid #fecaca; font-weight:600;
+  }
+  .lp-chip-skip{
+    background:#f1f5f9; color:#334155; border:1px solid #e2e8f0; font-weight:600;
+  }
+
+  /* Praise badges */
+  .lp-badge-good{
+    background:var(--lp-lime-200);
+    color:var(--lp-lime-700);
+    border:1px solid var(--lp-lime-300);
+    font-weight:700;
+  }
+  .lp-badge-okay{
+    background:#fef3c7; color:#92400e; border:1px solid #fde68a; font-weight:700;
+  }
+  .lp-badge-bad{
+    background:#fee2e2; color:#991b1b; border:1px solid #fecaca; font-weight:700;
+  }
+
+  /* Buttons */
+  .btn-lime{
+    --bs-btn-color:#fff;
+    --bs-btn-bg:var(--lp-lime-600);
+    --bs-btn-border-color:var(--lp-lime-600);
+    --bs-btn-hover-bg:var(--lp-lime-700);
+    --bs-btn-hover-border-color:var(--lp-lime-700);
+    --bs-btn-focus-shadow-rgb:132,204,22;
+    --bs-btn-active-bg:var(--lp-lime-700);
+    --bs-btn-active-border-color:var(--lp-lime-700);
+  }
+  .btn-lime-light{
+    --bs-btn-color:var(--lp-lime-700);
+    --bs-btn-bg:var(--lp-lime-100);
+    --bs-btn-border-color:var(--lp-lime-200);
+    --bs-btn-hover-color:var(--lp-lime-700);
+    --bs-btn-hover-bg:var(--lp-lime-200);
+    --bs-btn-hover-border-color:var(--lp-lime-300);
+    --bs-btn-focus-shadow-rgb:132,204,22;
+    --bs-btn-active-bg:var(--lp-lime-300);
+    --bs-btn-active-border-color:var(--lp-lime-300);
+  }
+
+  /* Sticky action bar */
+  .lp-sticky-actions{
+    position:sticky; bottom:0;
+    background:linear-gradient(to top,#fff 85%,rgba(255,255,255,0));
+    padding-top:1rem;
+  }
+</style>
+
+{% endblock %}
