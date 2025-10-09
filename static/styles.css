@@ -44,15 +44,6 @@ body{
   z-index:-1;
 }
 
-/* ===== NAVBAR (light) ===== */
-.navbar{
-  background: rgba(255,255,255,.8) !important;
-  backdrop-filter: saturate(140%) blur(8px);
-  border-bottom: 1px solid var(--line);
-}
-.nav-link{ color: var(--muted); font-weight:600; }
-.nav-link:hover{ color: var(--ink); }
-
 /* ===== HERO (bright glass) ===== */
 .hero{
   position:relative; overflow:hidden; border-radius: 1.25rem;

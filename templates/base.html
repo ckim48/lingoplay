@@ -4,32 +4,80 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}LingoPlay{% endblock %}</title>
+
+  <!-- Bootstrap + icons -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+
+  <!-- Fonts (same as the first page) -->
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Baloo+2:wght@500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Optional: your site-wide stylesheet -->
   <link href="{{ url_for('static', filename='styles.css') }}" rel="stylesheet">
 
-   <!-- Add right under the Bootstrap CSS link -->
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
-<!-- Favicons -->
-<link rel="icon" href="{{ url_for('static', filename='favicon.png') }}" sizes="32x32" type="image/png">
-<link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
+  <!-- Favicons -->
+  <link rel="icon" href="{{ url_for('static', filename='favicon.png') }}" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
+  <meta name="theme-color" content="#65a30d">
 
-<meta name="theme-color" content="#65a30d">
+  <style>
+  :root{
+    --brand-600:#65a30d; --brand-700:#4d7c0f;
+    --mint-500:#10b981;  --mint-600:#059669;
+    --ink:#0f172a; --muted:#667085; --border:rgba(15,23,42,.12);
+  }
 
-    <style>
-nav{
-  z-index:9999;
-}
-</style>
+  html,body{height:100%}
+  body{
+    font-family:"Plus Jakarta Sans", system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    color:var(--ink); background:#fbfef6;
+  }
 
+  /* ===== NAV (same look & structure as the first page) ===== */
+  .navbar{
+    position:sticky; top:0; z-index:9999;
+    backdrop-filter:saturate(140%) blur(10px);
+    -webkit-backdrop-filter:saturate(140%) blur(10px);
+    background:linear-gradient(180deg, rgba(255,255,255,.82), rgba(255,255,255,.68));
+    border-bottom:1px solid var(--border);
+  }
+  .navbar-brand{
+    font-family:"Baloo 2", system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    font-weight:700; letter-spacing:.2px; display:flex; align-items:center; gap:.4rem; font-size:24px;
+    color:var(--ink);
+  }
+  .navbar-brand .brand-dot{
+    inline-size:.6rem; block-size:.6rem; border-radius:999px;
+    background: radial-gradient(65% 65% at 30% 30%, var(--brand-600), var(--mint-500));
+    box-shadow:0 0 0 3px rgba(101,163,13,.15);
+  }
+  .nav-link{ color:var(--ink) }
+  .nav-link:hover{ color:var(--brand-700) }
+
+  .btn-brand{
+    --bs-btn-color:#fff; --bs-btn-bg:var(--brand-600); --bs-btn-border-color:var(--brand-600);
+    --bs-btn-hover-bg:var(--brand-700); --bs-btn-hover-border-color:var(--brand-700);
+    border-radius:999px; padding:.55rem 1rem; font-weight:600;
+  }
+  .btn-ghost{
+    --bs-btn-color:var(--brand-600);
+    --bs-btn-bg:rgba(101,163,13,.08);
+    --bs-btn-border-color:rgba(101,163,13,.12);
+    --bs-btn-hover-bg:rgba(101,163,13,.14);
+    --bs-btn-hover-border-color:rgba(101,163,13,.22);
+    border-radius:999px; padding:.55rem 1rem; font-weight:600;
+  }
+  </style>
 </head>
-<body>
-<nav class="navbar navbar-expand-lg border-bottom bg-white">
-  <div class="container">
-    <a class="navbar-brand fw-bold" href="{{ url_for('index') }}">LingoPlay</a>
 
-    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
+<body>
+<nav class="navbar navbar-expand-lg">
+  <div class="container">
+    <a class="navbar-brand" href="{{ url_for('index') }}">
+      <span class="brand-dot"></span> LingoPlay
+    </a>
+
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav" aria-controls="nav" aria-expanded="false" aria-label="Toggle navigation">
       <span class="navbar-toggler-icon"></span>
     </button>
 
@@ -40,7 +88,6 @@ nav{
         <li class="nav-item"><a class="nav-link" href="{{ url_for('dashboard') }}">Dashboard</a></li>
 
         {% if current_user %}
-          <!-- Logged-in state -->
           <li class="nav-item dropdown">
             <a class="nav-link dropdown-toggle fw-semibold" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
               {{ current_user.username }}
@@ -53,18 +100,14 @@ nav{
               <li><hr class="dropdown-divider"></li>
               <li>
                 <form action="{{ url_for('logout') }}" method="post" class="px-3 py-1">
-                  <button class="btn btn-sm w-100 btn-outline-secondary">Sign out</button>
+                  <button class="btn btn-sm w-100 btn-ghost">Sign out</button>
                 </form>
               </li>
             </ul>
           </li>
         {% else %}
-          <!-- Logged-out state -->
           <li class="nav-item">
-            <a class="btn btn-outline-primary" href="{{ url_for('login') }}">Sign in</a>
-          </li>
-          <li class="nav-item">
-            <a class="btn btn-primary" href="{{ url_for('register') }}">Register</a>
+            <a class="btn btn-ghost" href="{{ url_for('login') }}">Sign in</a>
           </li>
         {% endif %}
       </ul>

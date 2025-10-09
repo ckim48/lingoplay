@@ -1,224 +1,470 @@
-{% extends "base.html" %}
-{% block title %}Home · LingoPlay{% endblock %}
-{% block content %}
+<!doctype html>
+<html lang="en" data-bs-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LingoPlay · Read · Create · Smile</title>
 
-<!-- =========================
-     HERO (one-line pitch)
-========================== -->
-<section class="card border-0 overflow-hidden mb-4" style="border-radius:20px;">
-  <div class="p-4 p-lg-5">
-    <h1 class="brand-display mb-2">LingoPlay — stories that teach.</h1>
-    <p class="text-secondary mb-4">
-      Turn phonics or vocabulary into delightful stories and quick quizzes. Perfect for young learners, teachers, and researchers.
-    </p>
-    <div class="d-flex flex-wrap gap-2">
-      <a class="btn btn-primary btn-lg px-4" href="{{ url_for('story_new') }}">Create a Story</a>
-      <a class="btn btn-outline-secondary btn-lg px-4" href="{{ url_for('finish_new') }}">Finish the Story</a>
+  <!-- Bootstrap + icons -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+
+  <!-- Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Baloo+2:wght@500;600;700&display=swap" rel="stylesheet">
+
+  <!-- AOS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/aos@2.3.4/dist/aos.css">
+
+  <!-- Favicons -->
+  <link rel="icon" href="{{ url_for('static', filename='favicon.png') }}" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
+  <meta name="theme-color" content="#65a30d">
+
+  <style>
+  :root{
+    --brand-600:#65a30d; --brand-700:#4d7c0f;
+    --mint-500:#10b981;  --mint-600:#059669;
+    --ink:#0f172a; --muted:#667085; --border:rgba(15,23,42,.12);
+  }
+
+  html,body{height:100%}
+  body{
+    font-family:"Plus Jakarta Sans", system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    color:var(--ink); background:#fbfef6;
+  }
+
+  /* NAV */
+  .navbar{
+    position:sticky; top:0; z-index:9999;
+    backdrop-filter:saturate(140%) blur(10px);
+    -webkit-backdrop-filter:saturate(140%) blur(10px);
+    background:linear-gradient(180deg, rgba(255,255,255,.82), rgba(255,255,255,.68));
+    border-bottom:1px solid var(--border);
+  }
+  .navbar-brand{
+    font-family:"Baloo 2", system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    font-weight:700; letter-spacing:.2px; display:flex; align-items:center; gap:.4rem; font-size:24px;
+  }
+  .navbar-brand .brand-dot{
+    inline-size:.6rem; block-size:.6rem; border-radius:999px;
+    background: radial-gradient(65% 65% at 30% 30%, var(--brand-600), var(--mint-500));
+    box-shadow:0 0 0 3px rgba(101,163,13,.15);
+  }
+  .btn-brand{
+    --bs-btn-color:#fff; --bs-btn-bg:var(--brand-600); --bs-btn-border-color:var(--brand-600);
+    --bs-btn-hover-bg:var(--brand-700); --bs-btn-hover-border-color:var(--brand-700);
+    border-radius:999px; padding:.55rem 1rem; font-weight:600;
+  }
+  .btn-ghost{
+    --bs-btn-color:var(--brand-600);
+    --bs-btn-bg:rgba(101,163,13,.08);
+    --bs-btn-border-color:rgba(101,163,13,.12);
+    --bs-btn-hover-bg:rgba(101,163,13,.14);
+    --bs-btn-hover-border-color:rgba(101,163,13,.22);
+    border-radius:999px; padding:.55rem 1rem; font-weight:600;
+  }
+  .subtle{ color:var(--muted) }
+
+  /* ================= SIMPLE FEW-LARGE-CUBES HERO ================= */
+  .lp-hero-full{
+    min-height:100vh; margin:0; padding-top:1px;
+    position:relative; overflow:hidden; isolation:isolate;
+    background: linear-gradient(180deg, #f9fff0 0%, #f6fff7 40%, #f2fbff 100%);
+  }
+  .lp-hero-full .container{ position:relative; z-index:2 }
+
+  /* Cubes wrapper */
+  .cube-bg{
+    position:absolute; inset:0; z-index:1; pointer-events:none;
+  }
+
+  /* Single cube: big, soft, transform-only animation */
+  .cube{
+    position:absolute;
+    width:22vmin; height:22vmin; /* largish squares */
+    opacity:.16; border-radius:10px;  /* slight rounding feels modern */
+    background:
+      linear-gradient(145deg, rgba(101,163,13,.18), rgba(16,185,129,.12));
+    box-shadow: 0 12px 30px rgba(16,185,129,.10);
+    will-change: transform;
+    transform: translate3d(0,0,0) rotate(0deg);
+    animation: cubeFloat 36s ease-in-out infinite;
+  }
+  /* 3–4 cubes with different sizes/positions/durations */
+  .cube.c1{ left:-6vmin;  top:8vh;    width:26vmin; height:26vmin; animation-duration:44s }
+  .cube.c2{ right:-10vmin; top:18vh;  width:24vmin; height:24vmin; animation-duration:40s; animation-delay:-6s }
+  .cube.c3{ left:20vw; bottom:-10vmin; width:28vmin; height:28vmin; animation-duration:46s; animation-delay:-12s }
+  .cube.c4{ right:22vw; bottom:6vh;    width:20vmin; height:20vmin; animation-duration:38s; animation-delay:-18s }
+     .cube.c5{ right:3vw; top:2vh;    width:20vmin; height:20vmin; animation-duration:38s; animation-delay:-18s }
+
+  @keyframes cubeFloat{
+    0%   { transform: translate3d(0,0,0) rotate(0deg) }
+    25%  { transform: translate3d(12px,-10px,0) rotate(3deg) }
+    50%  { transform: translate3d(0,-18px,0) rotate(6deg) }
+    75%  { transform: translate3d(-10px,-6px,0) rotate(3deg) }
+    100% { transform: translate3d(0,0,0) rotate(0deg) }
+  }
+
+  /* Content entrance (uses CSS only; AOS still applied for consistency) */
+  .hero-title{ opacity:.0; transform:translateY(10px); transition:all .6s ease .15s }
+  .hero-copy{  opacity:.0; transform:translateY(10px); transition:all .6s ease .25s }
+  .hero-ctas{  opacity:.0; transform:translateY(10px); transition:all .6s ease .35s }
+  .hero-ready .hero-title,
+  .hero-ready .hero-copy,
+  .hero-ready .hero-ctas{ opacity:1; transform:none }
+
+  @media (max-width: 768px){
+    /* fewer/larger cubes off-screen to keep things calm on mobile */
+    .cube.c3{ display:none }
+    .cube.c4{ display:none }
+    .cube.c1{ left:-12vmin; top:12vh }
+    .cube.c2{ right:-14vmin; top:36vh }
+  }
+  @media (prefers-reduced-motion:reduce){
+    .cube{ animation:none }
+  }
+
+  /* ===== About / Features / Contact / Footer (same styles you already use) ===== */
+  .lp-card{ border:1px solid var(--border); border-radius:16px; background:linear-gradient(180deg, rgba(255,255,255,.9), rgba(255,255,255,.8)); box-shadow:0 10px 30px rgba(16,185,129,.08) }
+  .py-6{padding-top:3.5rem;padding-bottom:3.5rem} .py-lg-8{padding-top:6rem;padding-bottom:6rem}
+
+  .about-section{ background:radial-gradient(900px 400px at 5% 0%, rgba(255,255,255,.75), transparent 60%), linear-gradient(180deg, #fbfef6 0%, #f7fff9 60%, #f4fbff 100%); border-top:1px solid var(--border) }
+  .eyebrow{ display:inline-block; padding:.25rem .6rem; border-radius:999px; font-size:.85rem; font-weight:700; color:var(--brand-600); background:rgba(101,163,13,.10); border:1px solid rgba(101,163,13,.18) }
+  .about-list .tick{ display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:999px; background:rgba(101,163,13,.12); color:var(--brand-600); flex:0 0 auto }
+  .img-frame{ position:relative; padding:10px; border-radius:20px; background:linear-gradient(180deg, rgba(255,255,255,.9), rgba(255,255,255,.86)) padding-box, linear-gradient(135deg, rgba(101,163,13,.4), rgba(16,185,129,.35), rgba(56,189,248,.3)) border-box; border:1px solid transparent; box-shadow:0 18px 50px rgba(16,185,129,.12); max-width:560px }
+  .img-frame img{ display:block; width:100%; height:auto; border-radius:14px }
+  .img-frame .ring{ position:absolute; width:120px; height:120px; border-radius:999px; pointer-events:none; background:radial-gradient(closest-side, rgba(163,230,53,.35), transparent 65%); filter:blur(8px); opacity:.7 }
+  .img-frame .r1{ right:-28px; top:-28px } .img-frame .r2{ left:-22px; bottom:-22px; background:radial-gradient(closest-side, rgba(56,189,248,.3), transparent 65%) }
+  @keyframes float-a{ 0%,100%{ transform:translateY(0)} 50%{ transform:translateY(-8px)} } @keyframes float-b{ 0%,100%{ transform:translateY(0)} 50%{ transform:translateY(10px)} }
+  @media (prefers-reduced-motion:no-preference){ .img-frame .r1{ animation:float-a 10s ease-in-out infinite } .img-frame .r2{ animation:float-b 12s ease-in-out infinite } }
+
+  .features-section{ background:radial-gradient(900px 400px at 100% 0%, rgba(255,255,255,.75), transparent 60%), linear-gradient(180deg, #fbfef6 0%, #f7fff9 60%, #f4fbff 100%); border-top:1px solid var(--border) }
+  .section-head{ display:flex; align-items:flex-end; justify-content:space-between; gap:1.25rem; flex-wrap:wrap }
+  .section-meta{ min-width:280px; max-width:760px }
+  .section-kicker{ display:inline-flex; align-items:center; gap:.45rem; padding:.28rem .7rem; border-radius:999px; font-weight:700; font-size:.85rem; color:var(--brand-600); background:rgba(101,163,13,.10); border:1px solid rgba(101,163,13,.18) }
+  .section-title{ margin:10px 0 4px 0; font-weight:700; line-height:1.5; letter-spacing:-.3px; font-size:clamp(1.6rem, 3.2vw + .8rem, 2.25rem); background:linear-gradient(90deg, var(--brand-600), var(--mint-500)); -webkit-background-clip:text; background-clip:text; color:transparent }
+  .section-sub{ color:var(--muted); font-size:1.05rem; max-width:52ch }
+  .features-section .row.cards-row{ display:flex; flex-wrap:wrap } .features-section .cards-row > [class*="col-"]{ display:flex }
+  .feat-card{ display:flex; flex-direction:column; justify-content:space-between; flex:1; position:relative; padding:1.5rem; border-radius:20px; background:linear-gradient(180deg, rgba(255,255,255,.92), rgba(255,255,255,.86)) padding-box, linear-gradient(135deg, rgba(101,163,13,.35), rgba(16,185,129,.30), rgba(56,189,248,.28)) border-box; border:1px solid transparent; box-shadow:0 16px 40px rgba(16,185,129,.08); transition: transform .35s cubic-bezier(.2,.8,.2,1), box-shadow .35s ease }
+  .feat-card:hover{ transform: translateY(-6px); box-shadow:0 24px 60px rgba(16,185,129,.12) }
+  .feat-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:.5rem }
+  .feat-icon{ display:inline-grid; place-items:center; width:48px; height:48px; border-radius:14px; background: radial-gradient(85% 85% at 30% 30%, var(--brand-600), var(--mint-500)); color:#fff; font-size:22px; box-shadow:0 6px 14px rgba(101,163,13,.25) }
+  .feat-badge{ padding:.35rem .7rem; border-radius:999px; font-size:.8rem; font-weight:700; color:var(--brand-600); background:rgba(101,163,13,.10); border:1px solid rgba(101,163,13,.18) }
+  .feat-list{ list-style:none; padding:0; margin:0 0 1rem 0 } .feat-list li{ display:flex; align-items:flex-start; gap:.6rem; padding:.15rem 0 } .feat-list i{ color:var(--brand-600); margin-top:.15rem }
+  .feat-link{ display:inline-flex; align-items:center; justify-content:center; gap:.4rem; font-weight:600; text-decoration:none; color:#fff; border:none; border-radius:999px; background:linear-gradient(90deg, var(--brand-600), var(--mint-500)); padding:.55rem 1.1rem; transition:all .3s ease; box-shadow:0 4px 14px rgba(101,163,13,.3) }
+  .feat-link i{ transition:transform .3s ease } .feat-link:hover{ transform:translateY(-3px); box-shadow:0 6px 18px rgba(16,185,129,.35) } .feat-link:hover i{ transform:translateX(3px) }
+
+  .contact-section{ background:radial-gradient(900px 400px at 0% 100%, rgba(255,255,255,.75), transparent 60%), linear-gradient(180deg, #fbfef6 0%, #f7fff9 60%, #f4fbff 100%); border-top:1px solid var(--border) }
+  .contact-card{ max-width:720px; margin-inline:auto; padding:2rem; border-radius:20px; background:transparent; text-align:center }
+  .mail-pill{ display:inline-flex; align-items:center; gap:.5rem; font-weight:700; letter-spacing:.2px; padding:.65rem 1rem; border-radius:999px; background:rgba(101,163,13,.10); border:1px solid rgba(101,163,13,.18); color:var(--brand-600); text-decoration:none }
+  .mail-pill:hover{ background:rgba(101,163,13,.14); border-color:rgba(101,163,13,.28) }
+
+  .site-footer{ border-top:1px solid var(--border); background:linear-gradient(180deg, rgba(255,255,255,.86), rgba(255,255,255,.78)) }
+  .site-footer .brand{ font-family:"Baloo 2", system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; font-weight:700 }
+  .site-footer a{ color:var(--muted); text-decoration:none } .site-footer a:hover{ color:var(--brand-700) }
+
+  /* --- HERO BG: flatter base so cubes pop --- */
+.lp-hero-full{
+  background:#f7fff9; /* flatter than the gradient */
+}
+  /* ===== HERO SECTION ===== */
+  .lp-hero-full{
+    min-height:100vh;position:relative;overflow:hidden;background:#f7fff9;
+  }
+  .lp-hero-full .container{position:relative;z-index:3;}
+
+  /* Subtle gradient wash */
+  .bg-wash{
+    position:absolute;inset:0;z-index:0;pointer-events:none;
+    background:linear-gradient(120deg,
+      rgba(101,163,13,.12) 0%,
+      rgba(16,185,129,.10) 40%,
+      rgba(56,189,248,.10) 70%,
+      rgba(255,255,255,0) 100%);
+    background-size:200% 200%;
+    animation:washShift 28s ease-in-out infinite;
+  }
+  @keyframes washShift{
+    0%{background-position:0% 0%}
+    50%{background-position:100% 100%}
+    100%{background-position:0% 0%}
+  }
+
+  /* ===== 5 CUBES MOVING ===== */
+  .cube-bg{position:absolute;inset:0;z-index:1;pointer-events:none;}
+  .cube{
+    position:absolute;width:28vmin;height:28vmin;border-radius:12px;
+    opacity:.30;background:linear-gradient(135deg,rgba(101,163,13,.30),rgba(16,185,129,.22));
+    border:1.5px solid rgba(101,163,13,.25);
+    box-shadow:0 16px 50px rgba(16,185,129,.14);
+    animation:cubeRoam 1s ease-in-out infinite;
+    will-change:transform;
+  }
+  @keyframes cubeRoam{
+    0%{transform:translate3d(var(--x0,0),var(--y0,0),0)rotate(var(--base,0deg))}
+    25%{transform:translate3d(var(--x1,0),var(--y1,0),0)rotate(calc(var(--base,0deg)+3deg))}
+    50%{transform:translate3d(var(--x2,0),var(--y2,0),0)rotate(calc(var(--base,0deg)+6deg))}
+    75%{transform:translate3d(var(--x3,0),var(--y3,0),0)rotate(calc(var(--base,0deg)+3deg))}
+    100%{transform:translate3d(var(--x0,0),var(--y0,0),0)rotate(var(--base,0deg))}
+  }
+  .cube.c1{left:-12vmin;top:12vh;--base:5deg;--dur:35s;animation-delay:-10s;
+    --x0:0;--y0:0;--x1:18px;--y1:-14px;--x2:-8px;--y2:-28px;--x3:-12px;--y3:-10px;}
+  .cube.c2{right:-14vmin;top:24vh;--base:-6deg;--dur:28s;animation-delay:-20s;
+    --x0:0;--y0:0;--x1:-16px;--y1:-12px;--x2:2px;--y2:-26px;--x3:8px;--y3:-6px;}
+  .cube.c3{left:18vw;bottom:-10vmin;--base:7deg;--dur:30s;animation-delay:-28s;width:32vmin;height:32vmin;
+    --x0:0;--y0:0;--x1:10px;--y1:-8px;--x2:-6px;--y2:-22px;--x3:-12px;--y3:-8px;}
+  .cube.c4{right:20vw;bottom:6vh;--base:-8deg;--dur:32s;animation-delay:-36s;width:26vmin;height:26vmin;
+    --x0:0;--y0:0;--x1:-12px;--y1:-6px;--x2:0;--y2:-18px;--x3:10px;--y3:-4px;}
+  .cube.c5{right:19vw;top:5vh;--base:3deg;--dur:35s;animation-delay:-42s;width:22vmin;height:22vmin;opacity:.25;
+    --x0:0;--y0:0;--x1:12px;--y1:-10px;--x2:-8px;--y2:-20px;--x3:-14px;--y3:-8px;}
+
+  @media(max-width:768px){
+    .cube.c3,.cube.c4,.cube.c5{display:none;}
+    .cube.c1{width:40vmin;height:40vmin;left:-16vmin;top:12vh;}
+    .cube.c2{width:36vmin;height:36vmin;right:-18vmin;top:44vh;}
+  }
+
+  /* Text entrance */
+  .hero-title,.hero-copy,.hero-ctas{opacity:0;transform:translateY(10px);transition:all .6s ease;}
+  .hero-ready .hero-title,.hero-ready .hero-copy,.hero-ready .hero-ctas{opacity:1;transform:none;}
+.nav-link:hover {
+    color: var(--brand-700);
+}
+    .nav-link {
+    color: var(--ink);
+}
+  </style>
+</head>
+
+<body>
+<nav class="navbar navbar-expand-lg">
+  <div class="container">
+    <a class="navbar-brand" href="{{ url_for('index') }}">
+      <span class="brand-dot"></span> LingoPlay
+    </a>
+
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+
+    <div id="nav" class="collapse navbar-collapse">
+      <ul class="navbar-nav ms-auto align-items-lg-center gap-2">
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('story_new') }}">AI Story</a></li>
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('library') }}">Library</a></li>
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('dashboard') }}">Dashboard</a></li>
+
+        {% if current_user %}
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle fw-semibold" href="#" role="button" data-bs-toggle="dropdown">
+              {{ current_user.username }}
+            </a>
+            <ul class="dropdown-menu dropdown-menu-end">
+              <li><span class="dropdown-item-text text-secondary small">Signed in</span></li>
+              <li><hr class="dropdown-divider"></li>
+              <li><a class="dropdown-item" href="{{ url_for('finish_new') }}">Your drafts</a></li>
+              <li><a class="dropdown-item" href="{{ url_for('library') }}">Community library</a></li>
+              <li><hr class="dropdown-divider"></li>
+              <li>
+                <form action="{{ url_for('logout') }}" method="post" class="px-3 py-1">
+                  <button class="btn btn-sm w-100 btn-ghost">Sign out</button>
+                </form>
+              </li>
+            </ul>
+          </li>
+        {% else %}
+          <li class="nav-item"><a class="btn btn-ghost" href="{{ url_for('login') }}">Sign in</a></li>
+        {% endif %}
+      </ul>
     </div>
   </div>
-</section>
+</nav>
+<section class="lp-hero-full d-flex align-items-center position-relative overflow-hidden" id="hero">
+  <div class="bg-wash"></div>
+  <div class="cube-bg">
+    <span class="cube c1"></span>
+    <span class="cube c2"></span>
+    <span class="cube c3"></span>
+    <span class="cube c4"></span>
+    <span class="cube c5"></span>
+  </div>
 
-<!-- =========================
-     ABOUT / WHO IT'S FOR
-========================== -->
-<section class="mb-5">
-  <div class="row g-3 g-md-4">
-    <div class="col-lg-6">
-      <div class="card border-0 h-100">
-        <div class="card-body p-4">
-          <h4 class="brand-display mb-2">What is LingoPlay?</h4>
-          <p class="mb-3 text-secondary">
-            LingoPlay is a tiny learning lab: type phonics or vocabulary, and it crafts a short, readable story. From there, generate worksheets, take a quick quiz, and save everything into a library—fast.
-          </p>
-          <ul class="list-unstyled vstack gap-2 small">
-            <li><i class="bi bi-check2-circle me-2 text-success"></i>Kid-friendly design and big, clear typography</li>
-            <li><i class="bi bi-check2-circle me-2 text-success"></i>English / Korean or mixed EN·KO stories</li>
-            <li><i class="bi bi-check2-circle me-2 text-success"></i>One-click worksheet + quiz builder</li>
-            <li><i class="bi bi-check2-circle me-2 text-success"></i>Dashboard + CSV export for research</li>
-          </ul>
-        </div>
+  <div class="container position-relative">
+    <div class="col-lg-8">
+      <h1 class="hero-title display-4 fw-semibold mb-3" data-aos="fade-up">Stories that teach—made from your phonics & words.</h1>
+      <p class="hero-copy lead subtle mb-4" data-aos="fade-up" data-aos-delay="150">
+        Turn phonics or vocabulary into bite-size stories, instant worksheets, and quick quizzes—perfect for classroom and home.
+      </p>
+      <div class="hero-ctas d-flex gap-2" data-aos="zoom-in" data-aos-delay="300">
+        <a class="btn btn-brand" href="#"><i class="bi bi-play-fill me-1"></i> Get started</a>
+        <a class="btn btn-ghost" href="#about"><i class="bi bi-info-circle me-1"></i> Learn more</a>
       </div>
     </div>
-
-    <div class="col-lg-6">
-      <div class="card border-0 h-100">
-        <div class="card-body p-4">
-          <h4 class="brand-display mb-2">Who is it for?</h4>
-          <div class="row g-3">
-            <div class="col-sm-6">
-              <div class="p-3 border rounded-3 h-100">
-                <h6 class="mb-1"><i class="bi bi-emoji-smile me-1 text-primary"></i>Young Learners</h6>
-                <p class="small text-secondary mb-0">Short, fun stories that encourage reading aloud and finishing endings.</p>
-              </div>
-            </div>
-            <div class="col-sm-6">
-              <div class="p-3 border rounded-3 h-100">
-                <h6 class="mb-1"><i class="bi bi-mortarboard me-1 text-primary"></i>Teachers & Parents</h6>
-                <p class="small text-secondary mb-0">Instant content for practice, plus auto-made questions for quick checks.</p>
-              </div>
-            </div>
-            <div class="col-sm-6">
-              <div class="p-3 border rounded-3 h-100">
-                <h6 class="mb-1"><i class="bi bi-bar-chart-line me-1 text-primary"></i>Researchers</h6>
-                <p class="small text-secondary mb-0">Log inputs, attempts, and export CSV to analyze learning patterns.</p>
-              </div>
-            </div>
-            <div class="col-sm-6">
-              <div class="p-3 border rounded-3 h-100">
-                <h6 class="mb-1"><i class="bi bi-translate me-1 text-primary"></i>Bilingual Settings</h6>
-                <p class="small text-secondary mb-0">Switch English/Korean or mix EN·KO for flexible classrooms.</p>
-              </div>
-            </div>
-          </div>
-          <div class="mt-3">
-            <a class="btn btn-primary btn-sm" href="{{ url_for('library') }}">Browse the Library</a>
-          </div>
-        </div>
-      </div>
-    </div>
   </div>
 </section>
 
-<!-- =========================
-     HOW IT WORKS (3 steps)
-========================== -->
-<section class="mb-5">
-  <div class="card border-0">
-    <div class="card-body p-4 p-lg-5">
-      <h4 class="brand-display mb-3">How it works</h4>
-      <div class="row g-4">
-        <div class="col-md-4">
-          <div class="h-100 p-3 border rounded-4">
-            <div class="badge bg-primary-subtle text-primary fw-bold mb-2">1</div>
-            <h6 class="fw-bold mb-1">Add phonics or words</h6>
-            <p class="small text-secondary mb-0">Choose a language (EN / KO / EN·KO) and level.</p>
-          </div>
-        </div>
-        <div class="col-md-4">
-          <div class="h-100 p-3 border rounded-4">
-            <div class="badge bg-info-subtle text-info fw-bold mb-2">2</div>
-            <h6 class="fw-bold mb-1">Generate a story</h6>
-            <p class="small text-secondary mb-0">Get a short, readable story—perfect for early readers.</p>
-          </div>
-        </div>
-        <div class="col-md-4">
-          <div class="h-100 p-3 border rounded-4">
-            <div class="badge bg-success-subtle text-success fw-bold mb-2">3</div>
-            <h6 class="fw-bold mb-1">Build worksheet & quiz</h6>
-            <p class="small text-secondary mb-0">Create questions, take a quick quiz, and track results.</p>
-          </div>
-        </div>
-      </div>
-      <a class="btn btn-primary mt-3" href="{{ url_for('story_new') }}">Try it now</a>
-    </div>
-  </div>
-</section>
 
-<!-- =========================
-     MAIN FEATURES (grid)
-========================== -->
-<section class="mb-5">
-  <h4 class="brand-display mb-3">Main Features</h4>
-  <div class="row g-3 g-md-4">
-    <div class="col-md-6 col-xl-3">
-      <a class="feature-card" style="--dot:#8b5cf6" href="{{ url_for('story_new') }}">
-        <div class="feature-badge"></div>
-        <h6 class="mb-1">AI Story Generator</h6>
-        <p class="small mb-0 text-secondary">Type phonics/vocab → get a clean story in seconds.</p>
-        <i class="bi bi-arrow-right-short feature-arrow"></i>
-      </a>
-    </div>
-    <div class="col-md-6 col-xl-3">
-      <a class="feature-card" style="--dot:#0ea5e9" href="{{ url_for('finish_new') }}">
-        <div class="feature-badge"></div>
-        <h6 class="mb-1">Finish the Story</h6>
-        <p class="small mb-0 text-secondary">We start the tale, learners craft the ending.</p>
-        <i class="bi bi-arrow-right-short feature-arrow"></i>
-      </a>
-    </div>
-    <div class="col-md-6 col-xl-3">
-      <a class="feature-card" style="--dot:#10b981" href="{{ url_for('library') }}">
-        <div class="feature-badge"></div>
-        <h6 class="mb-1">Learning Library</h6>
-        <p class="small mb-0 text-secondary">All stories & drafts in one cozy shelf.</p>
-        <i class="bi bi-arrow-right-short feature-arrow"></i>
-      </a>
-    </div>
-    <div class="col-md-6 col-xl-3">
-      <a class="feature-card" style="--dot:#f59e0b" href="{{ url_for('dashboard') }}">
-        <div class="feature-badge"></div>
-        <h6 class="mb-1">Research Dashboard</h6>
-        <p class="small mb-0 text-secondary">Usage logs, attempts, and CSV export.</p>
-        <i class="bi bi-arrow-right-short feature-arrow"></i>
-      </a>
-    </div>
-  </div>
-</section>
-
-<!-- =========================
-     RECENT CONTENT
-========================== -->
-<div class="row g-4">
-  <div class="col-lg-7">
-    <div class="card border-0">
-      <div class="card-body p-4">
-        <div class="d-flex align-items-center justify-content-between mb-3">
-          <h5 class="brand-display mb-0">Recent Stories</h5>
-          <a href="{{ url_for('library') }}" class="small fw-bold text-secondary">View all</a>
-        </div>
-        <ul class="list-group list-group-flush nice-list">
-          {% for s in stories %}
-            <li class="list-group-item d-flex align-items-center justify-content-between">
-              <div>
-                <a href="{{ url_for('story_view', slug=s.slug) }}" class="text-decoration-none fw-semibold">{{ s.title }}</a>
-                <div class="small text-secondary">{{ s.language }}</div>
-              </div>
-              <span class="small pill-date">{{ (s.created_at or '')[:16] }}</span>
-            </li>
-          {% else %}
-            <li class="list-group-item text-secondary">No stories yet.</li>
-          {% endfor %}
+<!-- =============== ABOUT =============== -->
+<section id="about" class="about-section py-6 py-lg-8">
+  <div class="container">
+    <div class="row align-items-center g-5">
+      <div class="col-lg-6" data-aos="fade-right">
+        <span class="eyebrow">About LingoPlay</span>
+        <h2 class="display-6 fw-semibold mt-2 mb-3">Turn words into stories, instantly.</h2>
+        <p class="lead subtle mb-4">
+          LingoPlay transforms phonics and vocabulary into short, level-friendly stories — then auto-builds worksheets and quizzes to make learning easy.
+        </p>
+        <ul class="about-list list-unstyled mb-4">
+          <li class="d-flex align-items-start gap-3 mb-2">
+            <span class="tick"><i class="bi bi-check-lg"></i></span>
+            <div><strong>EN · KO bilingual</strong> outputs with age-appropriate tone and length.</div>
+          </li>
+          <li class="d-flex align-items-start gap-3 mb-2">
+            <span class="tick"><i class="bi bi-check-lg"></i></span>
+            <div><strong>One click worksheets</strong> and <strong>5-question quizzes</strong> per story.</div>
+          </li>
+          <li class="d-flex align-items-start gap-3">
+            <span class="tick"><i class="bi bi-check-lg"></i></span>
+            <div><strong>Classroom-ready</strong> layout, exports, and student-friendly fonts.</div>
+          </li>
         </ul>
-      </div>
-    </div>
-  </div>
-
-  <div class="col-lg-5">
-    <div class="card border-0">
-      <div class="card-body p-4">
-        <div class="d-flex align-items-center justify-content-between mb-3">
-          <h5 class="brand-display mb-0">Recent Finishes</h5>
-          <a href="{{ url_for('library') }}" class="small fw-bold text-secondary">View all</a>
+        <div class="d-flex flex-wrap gap-2">
+          <a href="{{ url_for('story_new') }}" class="btn btn-brand">
+            <i class="bi bi-magic me-1"></i> Generate a story
+          </a>
+          <a href="{{ url_for('library') }}" class="btn btn-ghost">
+            <i class="bi bi-journal-text me-1"></i> Browse library
+          </a>
         </div>
-        <ul class="list-group list-group-flush nice-list">
-          {% for d in finishes %}
-            <li class="list-group-item d-flex align-items-center justify-content-between">
-              <a href="{{ url_for('finish_view', draft_id=d.id) }}" class="text-decoration-none">
-                Seed: {{ d.seed_prompt[:42] }}{% if d.seed_prompt|length > 42 %}…{% endif %}
-                <div class="small text-secondary">{{ d.language }}</div>
-              </a>
-              <span class="small pill-date">{{ (d.created_at or '')[:16] }}</span>
-            </li>
-          {% else %}
-            <li class="list-group-item text-secondary">No drafts yet.</li>
-          {% endfor %}
-        </ul>
       </div>
-    </div>
-  </div>
-</div>
 
-<!-- =========================
-     CTA
-========================== -->
-<section class="mt-5">
-  <div class="card text-center border-0" style="border-radius:20px;">
-    <div class="card-body p-4 p-lg-5">
-      <h4 class="brand-display mb-2">Ready to try LingoPlay?</h4>
-      <p class="text-secondary mb-4">Start with a few sounds or words and watch a story appear.</p>
-      <a class="btn btn-primary btn-lg px-4" href="{{ url_for('story_new') }}">Create your first story</a>
+      <div class="col-lg-6" data-aos="fade-left">
+        <div class="img-frame mx-auto">
+          <img src="{{ url_for('static', filename='about1.png') }}" alt="LingoPlay preview" class="img-fluid rounded-4 shadow-sm" loading="lazy"/>
+          <span class="ring r1"></span>
+          <span class="ring r2"></span>
+        </div>
+      </div>
     </div>
   </div>
 </section>
 
-{% endblock %}
+<!-- =============== FEATURES =============== -->
+<section id="features" class="features-section py-6 py-lg-8">
+  <div class="container">
+    <div class="section-head mb-4">
+      <div class="section-meta" data-aos="fade-right">
+        <span class="section-kicker"><i class="bi bi-stars"></i> Features</span>
+        <h2 class="section-title">Everything you need to teach—fast.</h2>
+        <p class="section-sub">Generate stories, worksheets, and quizzes in minutes with classroom-ready design.</p>
+      </div>
+    </div>
+
+    <div class="row g-4 cards-row">
+      <div class="col-md-6 col-lg-4" data-aos="fade-up" data-aos-delay="0">
+        <article class="feat-card h-100">
+          <div>
+            <div class="feat-head">
+              <span class="feat-icon"><i class="bi bi-magic"></i></span>
+              <span class="feat-badge">Auto-create</span>
+            </div>
+            <h3 class="h5 fw-semibold mt-2 mb-2">Story Generator</h3>
+            <p class="mb-3 subtle">Turn phonics & vocabulary into short, level-friendly stories tailored for young readers.</p>
+            <ul class="feat-list">
+              <li><i class="bi bi-check2"></i> Grade-aware tone & length</li>
+              <li><i class="bi bi-check2"></i> EN · KO bilingual output</li>
+              <li><i class="bi bi-check2"></i> One-click export</li>
+            </ul>
+          </div>
+          <a href="{{ url_for('story_new') }}" class="feat-link">Try it now <i class="bi bi-arrow-right-short"></i></a>
+        </article>
+      </div>
+
+      <div class="col-md-6 col-lg-4" data-aos="fade-up" data-aos-delay="100">
+        <article class="feat-card h-100">
+          <div>
+            <div class="feat-head">
+              <span class="feat-icon"><i class="bi bi-file-text"></i></span>
+              <span class="feat-badge">Printable</span>
+            </div>
+            <h3 class="h5 fw-semibold mt-2 mb-2">Worksheets</h3>
+            <p class="mb-3 subtle">Ready-to-use activities from each story: comprehension, phonics, and vocabulary practice.</p>
+            <ul class="feat-list">
+              <li><i class="bi bi-check2"></i> Clean classroom layout</li>
+              <li><i class="bi bi-check2"></i> PDF & image export</li>
+              <li><i class="bi bi-check2"></i> Adjustable difficulty</li>
+            </ul>
+          </div>
+          <a href="{{ url_for('library') }}" class="feat-link">See examples <i class="bi bi-arrow-right-short"></i></a>
+        </article>
+      </div>
+
+      <div class="col-md-6 col-lg-4" data-aos="fade-up" data-aos-delay="200">
+        <article class="feat-card h-100">
+          <div>
+            <div class="feat-head">
+              <span class="feat-icon"><i class="bi bi-clipboard-check"></i></span>
+              <span class="feat-badge">Assess</span>
+            </div>
+            <h3 class="h5 fw-semibold mt-2 mb-2">Quick Quizzes</h3>
+            <p class="mb-3 subtle">Five smart questions per story to check understanding—perfect for warm-ups or exit tickets.</p>
+            <ul class="feat-list">
+              <li><i class="bi bi-check2"></i> Auto-generated from text</li>
+              <li><i class="bi bi-check2"></i> Multiple choice format</li>
+              <li><i class="bi bi-check2"></i> Share or print instantly</li>
+            </ul>
+          </div>
+          <a href="{{ url_for('dashboard') }}" class="feat-link">Manage results <i class="bi bi-arrow-right-short"></i></a>
+        </article>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =============== CONTACT =============== -->
+<section id="contact" class="contact-section py-6 py-lg-8">
+  <div class="container">
+    <div class="text-center mb-4" data-aos="fade-down">
+      <span class="eyebrow">Contact</span>
+      <h2 class="section-title" style="line-height:1.25;">We’d love to hear from you</h2>
+      <p class="section-sub mx-auto">Questions, ideas, or feedback about LingoPlay? Email us anytime.</p>
+    </div>
+
+    <div class="contact-card" data-aos="zoom-in">
+      <a class="mail-pill" href="mailto:hello@lingoplay.app?subject=Hello%20LingoPlay">
+        <i class="bi bi-envelope-fill"></i> hello@lingoplay.app
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer class="site-footer py-4">
+  <div class="container">
+    <div class="d-flex flex-column flex-lg-row align-items-center justify-content-between gap-3">
+      <div class="d-flex align-items-center gap-2">
+        <span class="brand-dot" style="inline-size:.6rem;block-size:.6rem;border-radius:999px;background: radial-gradient(65% 65% at 30% 30%, var(--brand-600), var(--mint-500));box-shadow:0 0 0 3px rgba(101,163,13,.15);"></span>
+        <span class="brand">LingoPlay</span>
+        <span class="text-secondary">·</span>
+        <small class="text-secondary">© {{ current_year or 2025 }}</small>
+      </div>
+      <ul class="nav gap-3">
+        <li class="nav-item"><a class="nav-link p-0" href="#about">About</a></li>
+        <li class="nav-item"><a class="nav-link p-0" href="#features">Features</a></li>
+        <li class="nav-item"><a class="nav-link p-0" href="#contact">Contact</a></li>
+      </ul>
+    </div>
+  </div>
+</footer>
+
+<!-- Scripts -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/aos@2.3.4/dist/aos.js"></script>
+<script>
+  AOS.init({ duration: 700, once: true, offset: 90, easing: 'ease-out-cubic' });
+  // mark hero ready for simple stagger
+  window.addEventListener('load', () => {
+    document.getElementById('hero').classList.add('hero-ready');
+  });
+</script>
+</body>
+</html>
