@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Library · LingoPlay{% endblock %}
+{% block title %}Library · EduWeaver{% endblock %}
 {% block content %}
 
 <div class="card border-0 lp-card-modern overflow-hidden mt-4">
@@ -7,12 +7,15 @@
     <!-- Top bar -->
     <div class="d-flex flex-wrap gap-3 justify-content-between align-items-center mb-4">
       <h3 class="mb-0 fw-semibold">Library</h3>
-      <a href="{{ url_for('story_new') }}" class="btn btn-lime-light">
-        <i class="bi bi-magic me-1"></i> New Story
-      </a>
+      <div class="d-flex align-items-center gap-3">
+        <div class="small text-muted">Matches: <span id="matchCount">0</span></div>
+        <a href="{{ url_for('story_new') }}" class="btn btn-sky-light">
+          <i class="bi bi-magic me-1"></i> New Story
+        </a>
+      </div>
     </div>
 
-    <!-- Controls (no language select) -->
+    <!-- Controls -->
     <div class="row g-3 align-items-end mb-3">
       <div class="col-md-8">
         <label class="form-label small text-uppercase fw-bold text-muted">Search</label>
@@ -35,8 +38,6 @@
       </div>
     </div>
 
-
-
     <!-- Grid of cards -->
     <div id="libGrid" class="row g-4">
       {% for d in completes %}
@@ -46,7 +47,7 @@
              data-author="{{ (d.learner_name or 'guest')|lower }}"
              data-keywords="{{ (d.seed_prompt or '')|lower }}"
              data-created="{{ (d.created_at|string).strip() }}">
-          <div class="card h-100 lp-story-card">
+          <div class="card h-100 lp-story-card position-relative">
             <div class="card-body d-flex flex-column">
               <div class="d-flex align-items-start justify-content-between mb-2">
                 <a href="{{ url_for('finish_view', draft_id=d.id) }}" class="stretched-link text-decoration-none">
@@ -64,13 +65,28 @@
                 {{ d.seed_prompt[:120] }}{% if d.seed_prompt|length > 120 %}…{% endif %}
               </p>
             </div>
+
             <div class="card-footer bg-transparent d-flex justify-content-between align-items-center">
               <span class="small text-secondary">
                 <i class="bi bi-clock me-1"></i>{{ d.created_at|dt("%Y-%m-%d %H:%M") }}
               </span>
-              <a href="{{ url_for('finish_view', draft_id=d.id) }}" class="btn btn-sm btn-outline-secondary">
-                Read
-              </a>
+
+              <div class="d-flex gap-2">
+                <a href="{{ url_for('finish_view', draft_id=d.id) }}" class="btn btn-sm btn-outline-secondary position-relative">
+                  Read
+                </a>
+
+                {% if current_user and current_user.is_admin %}
+                  <button type="button"
+                          class="btn btn-sm btn-outline-danger position-relative"
+                          data-delete
+                          data-draft-id="{{ d.id }}"
+                          data-title="{{ title|e }}"
+                          title="Delete">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                {% endif %}
+              </div>
             </div>
           </div>
         </div>
@@ -83,83 +99,101 @@
   </div>
 </div>
 
+<!-- Delete confirmation modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content rounded-4">
+      <div class="modal-header border-0">
+        <h5 class="modal-title" id="deleteModalLabel">Delete story?</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" data-cancel></button>
+      </div>
+      <div class="modal-body pt-0">
+        <p class="mb-2">You're about to delete:</p>
+        <div class="p-2 rounded border bg-light small" id="deleteStoryTitle"></div>
+        <p class="text-danger small mb-0 mt-2">This cannot be undone.</p>
+      </div>
+      <div class="modal-footer border-0">
+        <button type="button" class="btn btn-sky-light" data-bs-dismiss="modal" data-cancel>Cancel</button>
+        <form id="deleteForm" method="post" class="m-0">
+          <button type="submit" class="btn btn-outline-danger">
+            <i class="bi bi-trash me-1"></i> Delete
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
 <style>
-  /* Lime palette */
   :root{
-    --lp-lime-50:#f7fee7; --lp-lime-100:#ecfccb; --lp-lime-200:#d9f99d;
-    --lp-lime-300:#bef264; --lp-lime-400:#a3e635; --lp-lime-500:#84cc16;
-    --lp-lime-600:#65a30d; --lp-lime-700:#4d7c0f; --lp-border:#e5e7eb;
+    --ink:#0f1b33; --muted:#64748b; --bg:#f6f9ff; --paper:#ffffff;
+    --sky-25:#f2f8ff; --sky-50:#e8f3ff; --sky-100:#d8ebff; --sky-200:#c2e0ff;
+    --sky-300:#a5d1ff; --sky-400:#7fbaff; --sky-500:#4ea2ff; --sky-600:#2f8cea; --sky-700:#236fbb;
+    --border:#e5eaf3;
   }
 
-  .lp-card-modern{ border-radius:18px; box-shadow:0 10px 30px rgba(2,6,23,.06), 0 2px 6px rgba(2,6,23,.04); }
+  body{ background:var(--bg); }
+  .lp-card-modern{ border-radius:18px; box-shadow:0 10px 30px rgba(2,6,23,.06), 0 2px 6px rgba(2,6,23,.04); background:var(--paper); }
 
-  /* Inputs */
-  .lp-input .input-group-text{ border-radius:.8rem 0 0 .8rem; border-right:0; background:#f8fafc; color:var(--lp-lime-700); }
+  /* Inputs (sky theme) */
+  .lp-input .input-group-text{
+    border-radius:.8rem 0 0 .8rem; border-right:0; background:#f8fafc; color:var(--sky-700);
+  }
   .lp-input .form-control{ border-left:0; border-radius:0 .8rem .8rem 0; }
   .lp-input .form-control:focus, .form-select.lp-input:focus{
-    border-color:var(--lp-lime-400);
-    box-shadow:0 0 0 .25rem rgba(132,204,22,.15);
+    border-color:var(--sky-400);
+    box-shadow:0 0 0 .25rem rgba(47,140,234,.15);
   }
   .form-select.lp-input{ border-radius:.8rem; }
 
-  /* Badges + buttons */
-  .lp-badge-step{ background:var(--lp-lime-100); color:var(--lp-lime-700); border:1px solid var(--lp-lime-200); }
-  .lp-badge-lang{ background:var(--lp-lime-50); color:var(--lp-lime-700); border:1px solid var(--lp-lime-200); font-weight:600; }
-  .btn-lime-light{
-    --bs-btn-color:var(--lp-lime-700);
-    --bs-btn-bg:var(--lp-lime-100);
-    --bs-btn-border-color:var(--lp-lime-200);
-    --bs-btn-hover-color:var(--lp-lime-700);
-    --bs-btn-hover-bg:var(--lp-lime-200);
-    --bs-btn-hover-border-color:var(--lp-lime-300);
-    --bs-btn-focus-shadow-rgb:132,204,22;
-    --bs-btn-active-bg:var(--lp-lime-300);
-    --bs-btn-active-border-color:var(--lp-lime-300);
+  /* Badges + buttons (sky) */
+  .lp-badge-lang{
+    background:var(--sky-50);
+    color:var(--sky-700);
+    border:1px solid var(--sky-200);
+    font-weight:600;
+  }
+  .btn-sky{
+    --bs-btn-color:#0b1224; --bs-btn-bg:var(--sky-200); --bs-btn-border-color:var(--sky-300);
+    --bs-btn-hover-bg:var(--sky-300); --bs-btn-hover-border-color:var(--sky-400);
+    --bs-btn-active-bg:var(--sky-400); --bs-btn-active-border-color:var(--sky-500);
+  }
+  .btn-sky-light{
+    --bs-btn-color:#0b1224; --bs-btn-bg:var(--sky-50); --bs-btn-border-color:var(--sky-100);
+    --bs-btn-hover-bg:var(--sky-100); --bs-btn-hover-border-color:var(--sky-200);
   }
 
   /* Story cards */
   .lp-story-card{
-    border:1px solid var(--lp-border);
+    border:1px solid var(--border);
     border-radius:14px;
     transition:transform .1s ease, box-shadow .2s ease, border-color .2s ease;
   }
   .lp-story-card:hover{
     transform:translateY(-2px);
     box-shadow:0 10px 24px rgba(2,6,23,.08);
-    border-color:var(--lp-lime-200);
+    border-color:var(--sky-200);
   }
-  .lp-story-card .card-title{ font-weight:600; line-height:1.25; }
-
-  /* Tweak the Read button */
-  .lp-story-card .btn-outline-secondary{
-    border-color:var(--lp-border);
+  .lp-story-card .card-title{ font-weight:600; line-height:1.25; color: var(--sky-700); }
+  .lp-story-card:hover .card-title,
+  .lp-story-card a:focus-visible .card-title{ color: var(--sky-600); }
+  .lp-story-card a.stretched-link:focus-visible{
+    outline: 3px solid rgba(47,140,234,.30);
+    outline-offset: 2px; border-radius: 8px;
   }
+  .lp-story-card a.text-decoration-none{ color: inherit; }
+  .lp-story-card .btn-outline-secondary{ border-color:var(--border); }
   .lp-story-card .btn-outline-secondary:hover{
-    border-color:var(--lp-lime-300); color:var(--lp-lime-700); background:var(--lp-lime-100);
+    border-color:var(--sky-300); color:var(--sky-700); background:var(--sky-50);
   }
-  /* Greenish titles on story cards */
-.lp-story-card .card-title{
-  color: var(--lp-lime-700);        /* main green */
-}
 
-/* Slightly brighter on hover/focus for the whole card/link */
-.lp-story-card:hover .card-title,
-.lp-story-card a:focus-visible .card-title{
-  color: var(--lp-lime-600);
-}
+  /* Footer controls above stretched-link */
+  .lp-story-card .card-footer .btn,
+  .lp-story-card .card-footer form { position: relative; z-index: 5; }
 
-/* Accessible focus ring on the clickable title area */
-.lp-story-card a.stretched-link:focus-visible{
-  outline: 3px solid rgba(132,204,22,.35); /* lime-500 ring */
-  outline-offset: 2px;
-  border-radius: 8px;
-}
-
-/* If links inside inherit Bootstrap's link color, neutralize it */
-.lp-story-card a.text-decoration-none{
-  color: inherit;
-}
-
+  /* Danger outline */
+  .btn-outline-danger { border-color:#ef4444; }
+  .btn-outline-danger:hover { background:#fee2e2; color:#b91c1c; border-color:#f87171; }
 </style>
 
 <script>
@@ -177,17 +211,12 @@
       const q = norm(search.value);
       let visible = [];
 
-      // Filter
       wraps.forEach(w => {
-        const t = w.dataset.title;
-        const a = w.dataset.author;
-        const k = w.dataset.keywords;
-        const show = !q || t.includes(q) || a.includes(q) || k.includes(q);
+        const show = !q || w.dataset.title.includes(q) || w.dataset.author.includes(q) || w.dataset.keywords.includes(q);
         w.style.display = show ? '' : 'none';
         if (show) visible.push(w);
       });
 
-      // Sort (only visible)
       const sv = sort.value;
       visible.sort((A,B) => {
         if (sv === 'newest')  return new Date(B.dataset.created) - new Date(A.dataset.created);
@@ -197,16 +226,37 @@
         return 0;
       });
 
-      // Re-append in new order
       visible.forEach(el => grid.appendChild(el));
-
-      count.textContent = visible.length;
+      if (count) count.textContent = visible.length;
     }
 
     apply();
     search.addEventListener('input', apply);
     sort.addEventListener('change', apply);
     clear?.addEventListener('click', () => { search.value=''; search.focus(); apply(); });
+
+    // Delete modal
+    const deleteBtns = document.querySelectorAll('[data-delete]');
+    const modalEl = document.getElementById('deleteModal');
+    const titleEl = document.getElementById('deleteStoryTitle');
+    const formEl  = document.getElementById('deleteForm');
+
+    function stopAll(e){ e.preventDefault(); e.stopPropagation(); if (e.stopImmediatePropagation) e.stopImmediatePropagation(); }
+
+    deleteBtns.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        stopAll(e);
+        const id = btn.getAttribute('data-draft-id');
+        const t  = btn.getAttribute('data-title') || 'This story';
+        titleEl.textContent = t;
+        formEl.setAttribute('action', "{{ url_for('library_delete_draft', draft_id=0) }}".replace('/0', '/' + id));
+        if (window.bootstrap && window.bootstrap.Modal) {
+          window.bootstrap.Modal.getOrCreateInstance(modalEl).show();
+        }
+      }, true);
+    });
+
+    modalEl?.querySelectorAll('[data-cancel]').forEach(el=> el.addEventListener('click', stopAll));
   })();
 </script>
 

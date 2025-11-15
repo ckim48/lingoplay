@@ -1,14 +1,13 @@
 {% extends "base.html" %}
-{% block title %}{{ draft.story_title or 'Story' }} · LingoPlay{% endblock %}
+{% block title %}{{ draft.story_title or 'Story' }} · EduWeaver{% endblock %}
 
 {% block content %}
 
-<section class="card border-0 lp-card-modern mb-4">
+<section class="card border-0 lp-card-modern mb-4 no-print">
   <div class="p-4 p-lg-5">
     <div class="d-flex align-items-center justify-content-between">
       <div>
         <h2 class="mb-1 lp-page-title">{{ draft.story_title or 'Untitled Story' }}</h2>
-
         <div class="d-flex flex-wrap align-items-center gap-2">
           <div class="text-muted small">
             By {{ draft.learner_name or 'guest' }} · {{ draft.created_at | dt }} · {{ draft.language|upper }}
@@ -22,204 +21,433 @@
       </div>
 
       <div class="d-flex gap-2">
-        <a href="{{ url_for('library') }}" class="btn btn-lime-light">Back to Library</a>
-        <a href="{{ url_for('dashboard') }}" class="btn btn-outline-lime">Dashboard</a>
+        <a href="{{ url_for('library') }}" class="btn btn-sky-light">Back to Library</a>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-outline-sky">Dashboard</a>
       </div>
     </div>
   </div>
 </section>
 
-<section class="card border-0 lp-card-modern mb-4">
-  <div class="card-body p-4 p-lg-5">
-    <h5 class="fw-bold text-uppercase small text-muted mb-3">Partial Story</h5>
-    <div style="white-space:pre-wrap">
-      {{ draft.partial_text | replace('Your Turn: ', '') }}
+<!-- Print-only cover page -->
+<section class="card border-0 lp-card-modern mb-4 print-only">
+  <div class="p-4 p-lg-5">
+    <h2 class="mb-1">{{ draft.story_title or 'Untitled Story' }}</h2>
+    <div class="text-muted">By {{ draft.learner_name or 'guest' }} · {{ draft.created_at | dt }} · {{ draft.language|upper }}</div>
+    <div class="mt-3 d-flex flex-wrap gap-4">
+      <div><strong>Name:</strong> ________________________</div>
+      <div><strong>Date:</strong> __________________</div>
     </div>
+    <hr class="my-4"/>
   </div>
 </section>
 
-{% if draft.completion_text and draft.completion_text|trim %}
-<section class="card border-0 lp-card-modern mb-5">
-  <div class="card-body p-4 p-lg-5">
-    <h5 class="fw-bold text-uppercase small text-muted mb-3">Finished Ending</h5>
-    <div style="white-space:pre-wrap">{{ draft.completion_text }}</div>
-  </div>
-</section>
-{% else %}
-  {% if not can_edit %}
-  <section class="card border-0 lp-card-modern mb-5">
-    <div class="card-body p-4">
-      <div class="text-muted">This story isn’t finished yet. Only the author can add an ending.</div>
+<div class="row g-4">
+  <div class="col-lg-8">
+
+    <!-- ONE COMBINED STORY CARD -->
+    <section class="card border-0 lp-card-modern mb-5" id="storyCombined">
+      <div class="card-body p-0">
+        <div class="lp-strip d-flex flex-wrap align-items-center justify-content-between px-4 py-3">
+          <div class="d-flex align-items-center gap-2">
+            <span class="lp-dot {% if draft.completion_text and draft.completion_text|trim %}lp-dot-finish{% endif %}" aria-hidden="true"></span>
+            <span class="small text-uppercase fw-semibold">Story</span>
+          </div>
+          {% if draft.completion_text and draft.completion_text|trim %}
+            <div class="d-flex align-items-center gap-2">
+              <span class="lp-chip lp-chip-finish small">
+                <i class="bi bi-check2 me-1"></i>completed
+              </span>
+
+              <button type="button" class="btn btn-outline-sky no-print" id="downloadPdfFinishedBtn" title="Save as PDF">
+                <i class="bi bi-filetype-pdf me-1"></i> Download PDF
+              </button>
+              <button type="button" class="btn btn-sky no-print" id="printFinishedBtn" title="Print">
+                <i class="bi bi-printer me-1"></i> Print
+              </button>
+            </div>
+          {% else %}
+            <span class="lp-chip small">in progress</span>
+          {% endif %}
+        </div>
+
+        <!-- Partial text (always show if exists) -->
+        {% if draft.partial_text and draft.partial_text|trim %}
+        <div class="lp-partial p-4 p-lg-5 keep-together">
+          <h6 class="text-muted text-uppercase small mb-2">Partial Story</h6>
+          <div id="partialText" class="lp-partial-text" style="white-space:pre-wrap">
+            {{ (draft.partial_text or '') | replace('Your Turn: ', '') | safe }}
+          </div>
+        </div>
+        {% endif %}
+
+        <!-- Finished text (inside same card) -->
+        {% if draft.completion_text and draft.completion_text|trim %}
+        <div class="lp-finished p-4 p-lg-5 keep-together">
+          <h6 class="text-muted text-uppercase small mb-2">Finished Ending</h6>
+          <div id="completionText" class="lp-finished-text" style="white-space:pre-wrap">{{ draft.completion_text }}</div>
+        </div>
+        {% elif not can_edit %}
+        <div class="p-4">
+          <div class="text-muted">This story isn’t finished yet. Only the author can add an ending.</div>
+        </div>
+        {% endif %}
+      </div>
+    </section>
+
+    {% if can_edit %}
+    <!-- Your Ending (edit panel) -->
+    <section class="card border-0 lp-card-modern mb-5 no-print">
+      <div class="card-body p-0">
+        <div class="px-4 pt-4 pb-0 d-flex align-items-center justify-content-between">
+          <h6 class="mb-0 text-muted text-uppercase small">Your Ending</h6>
+          <div class="text-muted small" id="endingCount">0 chars</div>
+        </div>
+
+        <form method="post" class="p-4">
+          <div class="lp-editor">
+            <textarea
+              name="completion_text"
+              id="endingText"
+              class="form-control lp-editor-area"
+              rows="7"
+              placeholder="Write the ending here…">{{ draft.completion_text or '' }}</textarea>
+          </div>
+          <div class="d-flex justify-content-end gap-2 mt-3">
+            <button type="submit" class="btn btn-sky">
+              <i class="bi bi-pencil-square me-1"></i> Save Ending
+            </button>
+          </div>
+        </form>
+      </div>
+    </section>
+    {% endif %}
+
+    {% if can_edit and not (draft.completion_text and draft.completion_text|trim) %}
+    <!-- Finish to Share callout (only when unfinished) -->
+    <section class="card border-0 lp-card-modern mb-5 no-print" id="finishShareCallout" aria-live="polite">
+      <div class="card-body p-0">
+        <div class="d-flex flex-wrap align-items-center gap-3 px-4 pt-4">
+          <div class="lp-pencil-wrap" aria-hidden="true">
+            <svg class="lp-pencil" width="60" height="60" viewBox="0 0 60 60" role="img">
+              <defs>
+                <linearGradient id="lpPencilGrad" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stop-color="#7fbaff"/>
+                  <stop offset="100%" stop-color="#2f8cea"/>
+                </linearGradient>
+              </defs>
+              <g transform="translate(10,8)">
+                <rect x="8" y="8" width="22" height="24" rx="4" fill="url(#lpPencilGrad)"></rect>
+                <polygon points="30,12 40,18 30,24" fill="#ffd19c"></polygon>
+                <rect x="10" y="34" width="26" height="6" rx="3" fill="#c2e0ff"></rect>
+              </g>
+            </svg>
+          </div>
+          <div class="flex-grow-1">
+            <h6 class="mb-1 text-muted text-uppercase small">Finish to share</h6>
+            <div class="text-secondary small mb-2">
+              Add your ending to publish this story to the Library and enable sharing.
+            </div>
+
+            <div class="progress" style="height:10px;">
+              <div id="endingProgress" class="progress-bar" role="progressbar"
+                   style="width:0%" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
+            </div>
+
+            <div class="d-flex flex-wrap align-items-center gap-2 mt-3">
+              <button type="button" class="btn btn-sky" id="jumpToEndingBtn">
+                <i class="bi bi-magic me-1"></i> Finish & Share
+              </button>
+
+
+
+
+              <span id="endingReadyTag" class="badge lp-badge-soft ms-1 d-none">ready</span>
+            </div>
+          </div>
+        </div>
+        <div class="px-4 pb-4 pt-2"></div>
+      </div>
+    </section>
+    {% endif %}
+
+  {# --- Private Admin→Learner Comments --- #}
+  {% if is_admin or (is_owner is defined and is_owner) or (current_user and current_user.username == draft.learner_name) %}
+  <section class="card border-0 lp-card-modern mb-5 no-print">
+    <div class="card-body p-4 p-lg-5">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <h6 class="text-muted text-uppercase small mb-0">Teacher’s Note</h6>
+        {% if is_admin %}
+          <span class="badge lp-badge-soft">Admin only</span>
+        {% endif %}
+      </div>
+
+      {% if (is_owner is defined and is_owner) or (current_user and current_user.username == draft.learner_name) %}
+        {% if comments and comments|length %}
+          <div class="mb-3">
+            {% for c in comments %}
+              <div class="border rounded-3 p-3 mb-2" style="border-color:var(--sky-200);">
+                <div class="small text-muted mb-1">
+                  From {{ c.author_name }} · {{ c.created_at | dt }}
+                </div>
+                <div style="white-space:pre-wrap">{{ c.body }}</div>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="text-muted small mb-3">No teacher notes yet.</div>
+        {% endif %}
+      {% endif %}
+
+      {% if is_admin %}
+        <form method="post" action="{{ url_for('finish_comment', draft_id=draft.id) }}">
+          <textarea name="body" class="form-control" rows="3"
+                    placeholder="Write a private note to the author (only they can see this)"></textarea>
+          <div class="d-flex justify-content-end mt-2">
+            <button type="submit" class="btn btn-sky">
+              <i class="bi bi-send me-1"></i> Post Comment
+            </button>
+          </div>
+        </form>
+      {% endif %}
     </div>
   </section>
   {% endif %}
-{% endif %}
 
-{% if can_edit %}
-<section class="card border-0 lp-card-modern mb-5">
-  <div class="card-body p-4">
-    <form method="post">
-      <label class="form-label fw-bold">Your Ending</label>
-      <textarea name="completion_text" class="form-control" rows="6" placeholder="Write your ending here…">{{ draft.completion_text or '' }}</textarea>
-      <div class="d-flex justify-content-end mt-3">
-        <button class="btn btn-lime">
-          <i class="bi bi-pencil-square me-1"></i> Save Ending
-        </button>
+    <!-- Worksheets & Quizzes -->
+    <section class="card border-0 lp-card-modern mb-5 no-print">
+      <div class="card-body p-4 p-lg-5">
+        <h6 class="text-muted text-uppercase small mb-2">Worksheets &amp; Quizzes</h6>
+        <p class="text-secondary mb-4">
+          Automatically generated from story content to reinforce comprehension, vocabulary, and sequence skills. Learner performance data is recorded.
+        </p>
+
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+          {% if has_quiz and draft.story_slug %}
+            <a class="btn btn-sky" href="{{ url_for('quiz_take', slug=draft.story_slug) }}">
+              <i class="bi bi-check2-circle me-1"></i> Take Worksheet &amp; Quiz
+            </a>
+            <form id="regenForm"
+                  class="needs-overlay d-inline"
+                  data-overlay-title="Regenerating worksheet & quiz…"
+                  data-overlay-note="You’ll be taken to the quiz automatically."
+                  method="post"
+                  action="{{ url_for('finish_build_worksheet_ai', draft_id=draft.id) }}">
+              <button id="regenBtn" class="btn btn-outline-sky" type="submit" title="Re-generate questions via GPT">
+                <i class="bi bi-stars me-1"></i> Regenerate (AI)
+              </button>
+            </form>
+          {% else %}
+            <form id="genForm"
+                  class="needs-overlay"
+                  data-overlay-title="Generating worksheet & quiz…"
+                  data-overlay-note="You’ll be taken to the quiz automatically."
+                  method="post"
+                  action="{{ url_for('finish_build_worksheet_ai', draft_id=draft.id) }}">
+              <button id="genBtn" class="btn btn-sky" type="submit"
+                      title="Use GPT to generate a worksheet & quiz, then you'll be taken to it">
+                <i class="bi bi-stars me-1"></i> Generate Worksheet &amp; Quiz (AI)
+              </button>
+            </form>
+          {% endif %}
+        </div>
       </div>
-    </form>
+    </section>
+
   </div>
-</section>
-{% endif %}
 
-{# Worksheets & Quizzes section with conditional CTA #}
-<section class="card border-0 lp-card-modern mb-5">
-  <div class="card-body p-4 p-lg-5">
-    <h5 class="fw-bold text-uppercase small text-muted mb-2">Worksheets &amp; Quizzes</h5>
-    <p class="text-secondary mb-4">
-      Automatically generated from story content to reinforce comprehension, vocabulary, and sequence skills.
-      Learner performance data is recorded.
-    </p>
+  <!-- Right: Vocabulary -->
+  <div class="col-lg-4">
+    <section class="card border-0 lp-card-modern mb-4 no-print">
+      <div class="card-body p-4 p-lg-4">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <h6 class="text-muted mb-0">Word List</h6>
+          <input id="vocabSearch" class="form-control form-control-sm" placeholder="Search…" style="max-width: 160px;">
+        </div>
+        <div id="vocabList" class="lp-vocab-list" role="listbox" aria-label="Vocabulary"></div>
+      </div>
+    </section>
 
-    <div class="d-flex flex-wrap gap-2 align-items-center">
-      {% if has_quiz and draft.story_slug %}
-        <a class="btn btn-lime" href="{{ url_for('quiz_take', slug=draft.story_slug) }}">
-          <i class="bi bi-check2-circle me-1"></i> Take Worksheet &amp; Quiz
-        </a>
-        <form method="post" action="{{ url_for('finish_build_worksheet_ai', draft_id=draft.id) }}" class="d-inline">
-          <button class="btn btn-outline-lime" type="submit" title="Re-generate questions via GPT">
-            <i class="bi bi-stars me-1"></i> Regenerate (AI)
-          </button>
-        </form>
-      {% else %}
-        <form id="genForm" method="post" action="{{ url_for('finish_build_worksheet_ai', draft_id=draft.id) }}">
-          <button id="genBtn" class="btn btn-lime" type="submit"
-                  title="Use GPT to generate a worksheet & quiz, then you'll be taken to it">
-            <i class="bi bi-stars me-1"></i> Generate Worksheet &amp; Quiz (AI)
-          </button>
-        </form>
-        {% if not draft.story_slug %}
-          <div class="alert alert-info mb-0 ms-2">
-            We couldn’t find the original story to link yet. You can still generate; we’ll attach it automatically.
-          </div>
-        {% endif %}
-      {% endif %}
-    </div>
+    <section class="card border-0 lp-card-modern no-print">
+      <div class="card-body p-4 p-lg-4">
+        <h6 class="text-muted mb-3">Definition (in this story)</h6>
+        <div id="defPanel" class="lp-def-panel">
+          <div class="text-muted small">Select a word from the list to see its meaning and an example tied to this story.</div>
+        </div>
+      </div>
+    </section>
   </div>
-</section>
+</div>
 
-{# Completion Modal (after a save) #}
-<div class="modal fade" id="finishCompleteModal" tabindex="-1" aria-labelledby="finishCompleteLabel" aria-hidden="true">
+<!-- Save confirmation -->
+<div class="modal fade no-print" id="finishCompleteModal" tabindex="-1" aria-labelledby="finishCompleteLabel" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content rounded-4">
       <div class="modal-header border-0">
-        <h5 class="modal-title" id="finishCompleteLabel">Ending saved 🎉</h5>
+        <h5 class="modal-title" id="finishCompleteLabel">Ending saved</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body pt-0">
         Nice work! What would you like to do next?
       </div>
       <div class="modal-footer border-0">
-        <a href="{{ url_for('library') }}" class="btn btn-lime-light">Go to Library</a>
-        <a href="{{ url_for('dashboard') }}" class="btn btn-outline-lime">Go to Dashboard</a>
+        <a href="{{ url_for('library') }}" class="btn btn-sky-light">Go to Library</a>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-outline-sky">Go to Dashboard</a>
       </div>
     </div>
   </div>
 </div>
 
-{# Small generating overlay only for the Generate action #}
 <style>
-  /* Lime palette (shared) */
   :root{
-    --lp-lime-50:#f7fee7; --lp-lime-100:#ecfccb; --lp-lime-200:#d9f99d;
-    --lp-lime-300:#bef264; --lp-lime-400:#a3e635; --lp-lime-500:#84cc16;
-    --lp-lime-600:#65a30d; --lp-lime-700:#4d7c0f; --lp-border:#e5e7eb;
+    --ink:#0f1b33; --muted:#64748b; --bg:#f6f9ff; --paper:#ffffff;
+    --sky-25:#f2f8ff; --sky-50:#e8f3ff; --sky-100:#d8ebff; --sky-200:#c2e0ff;
+    --sky-300:#a5d1ff; --sky-400:#7fbaff; --sky-500:#4ea2ff; --sky-600:#2f8cea; --sky-700:#236fbb;
+    --border:#e5eaf3; --ring:#b9d6ff;
+  }
+  body{ background:var(--bg); }
+  .lp-card-modern{ border-radius:18px; box-shadow:0 10px 30px rgba(2,6,23,.06), 0 2px 6px rgba(2,6,23,.04); background:var(--paper); }
+  .lp-page-title{ color:var(--ink); font-weight:800; letter-spacing:.2px; }
+  .lp-badge-soft{ background:var(--sky-50); color:var(--sky-700); border:1px solid var(--sky-100); font-weight:600; }
+
+  .btn-sky{
+    --bs-btn-color:#0b1224; --bs-btn-bg:var(--sky-200); --bs-btn-border-color:var(--sky-300);
+    --bs-btn-hover-bg:var(--sky-300); --bs-btn-hover-border-color:var(--sky-400);
+    --bs-btn-active-bg:var(--sky-400); --bs-btn-active-border-color:var(--sky-500);
+    box-shadow: 0 1px 0 rgba(0,0,0,.03), inset 0 -2px 0 rgba(0,0,0,.05);
+  }
+  .btn-sky-light{
+    --bs-btn-color:#0b1224; --bs-btn-bg:var(--sky-50); --bs-btn-border-color:var(--sky-100);
+    --bs-btn-hover-bg:var(--sky-100); --bs-btn-hover-border-color:var(--sky-200);
+  }
+  .btn-outline-sky{
+    --bs-btn-color:var(--sky-700); --bs-btn-border-color:var(--sky-300);
+    --bs-btn-hover-bg:var(--sky-50); --bs-btn-hover-color:var(--sky-700);
+    --bs-btn-hover-border-color:var(--sky-500);
   }
 
-  .lp-card-modern{
-    border-radius:18px;
-    box-shadow:0 10px 30px rgba(2,6,23,.06), 0 2px 6px rgba(2,6,23,.04);
+  .lp-strip{ border-bottom:1px solid var(--border);
+    background: radial-gradient(40rem 20rem at -10% 0%, var(--sky-25) 0%, transparent 60%),
+               radial-gradient(40rem 20rem at 120% 0%, var(--sky-25) 0%, transparent 55%), #fff;
+    border-top-left-radius:18px; border-top-right-radius:18px;
   }
+  .lp-strip-finished{
+    background: radial-gradient(38rem 18rem at -8% 0%, var(--sky-25) 0%, transparent 60%),
+               radial-gradient(36rem 18rem at 115% 0%, var(--sky-25) 0%, transparent 55%), #fff;
+  }
+  .lp-dot{ width:10px; height:10px; border-radius:50%; background: var(--sky-500); box-shadow: 0 0 0 .25rem rgba(78,162,255,.18); }
+  .lp-dot-finish{ background: var(--sky-600); box-shadow: 0 0 0 .25rem rgba(47,140,234,.22); }
+  .lp-chip{ border:1px dashed var(--sky-200); color:var(--sky-700); background:#fff; padding:.25rem .6rem; border-radius:.6rem; }
+  .lp-chip-finish{ border-style: solid; border-color: var(--sky-300); background: var(--sky-50); color: var(--sky-700); }
 
-  .lp-page-title{
-    color:var(--lp-lime-700);
-    font-weight:700;
-    letter-spacing:.2px;
+  .lp-partial{ position:relative; border-radius:14px;
+    background: radial-gradient(circle at 1px 1px, rgba(78,162,255,.12) 1px, transparent 1px) 0 0/14px 14px, linear-gradient(0deg,#fff,#fff);
+    border:2px dashed var(--sky-300); margin:1rem; box-shadow: inset 0 1px 0 rgba(78,162,255,.10);
   }
+  .lp-partial-text{ line-height:1.8; font-size:1.06rem; color: var(--ink); word-break: keep-all; }
 
-  .lp-badge-soft{
-    background:var(--lp-lime-50);
-    color:var(--lp-lime-700);
-    border:1px solid var(--lp-lime-200);
-    font-weight:600;
+  .lp-finished{ position: relative; border-radius:14px;
+    background: repeating-linear-gradient(to bottom,#ffffff 0 28px, rgba(78,162,255,.06) 28px 29px), linear-gradient(0deg,#fff,#fff);
+    border:2px solid var(--sky-300); margin:1rem; box-shadow: inset 0 1px 0 rgba(0,0,0,.03);
   }
+  .lp-finished-text{ line-height:1.8; font-size:1.06rem; color: var(--ink); word-break: keep-all; }
 
-  /* Buttons */
-  .btn-lime{
-    --bs-btn-color:#fff;
-    --bs-btn-bg:var(--lp-lime-600);
-    --bs-btn-border-color:var(--lp-lime-600);
-    --bs-btn-hover-bg:var(--lp-lime-700);
-    --bs-btn-hover-border-color:var(--lp-lime-700);
-    --bs-btn-focus-shadow-rgb:132,204,22;
-    --bs-btn-active-bg:var(--lp-lime-700);
-    --bs-btn-active-border-color:var(--lp-lime-700);
-  }
-  .btn-lime-light{
-    --bs-btn-color:var(--lp-lime-700);
-    --bs-btn-bg:var(--lp-lime-100);
-    --bs-btn-border-color:var(--lp-lime-200);
-    --bs-btn-hover-color:var(--lp-lime-700);
-    --bs-btn-hover-bg:var(--lp-lime-200);
-    --bs-btn-hover-border-color:var(--lp-lime-300);
-    --bs-btn-focus-shadow-rgb:132,204,22;
-    --bs-btn-active-bg:var(--lp-lime-300);
-    --bs-btn-active-border-color:var(--lp-lime-300);
-  }
-  .btn-outline-lime{
-    --bs-btn-color:var(--lp-lime-700);
-    --bs-btn-border-color:var(--lp-lime-300);
-    --bs-btn-hover-bg:var(--lp-lime-100);
-    --bs-btn-hover-color:var(--lp-lime-700);
-    --bs-btn-hover-border-color:var(--lp-lime-400);
-    --bs-btn-focus-shadow-rgb:132,204,22;
-    --bs-btn-active-bg:var(--lp-lime-200);
-    --bs-btn-active-border-color:var(--lp-lime-400);
-  }
+  .lp-editor{ border:2px dashed var(--sky-200); border-radius:12px; background:#fff; box-shadow: inset 0 1px 0 rgba(0,0,0,.03); }
+  .lp-editor-area{ border:0!important; resize: vertical; min-height: 160px; padding: 14px 16px; font-size:1rem; line-height:1.65; color: var(--ink); background: transparent; }
+  .lp-editor-area:focus{ outline: none; box-shadow: 0 0 0 .3rem rgba(78,162,255,.20); }
 
-  /* Overlay */
-  .gen-overlay{position:fixed;inset:0;display:none;place-items:center;background:rgba(15,23,42,.55);backdrop-filter:saturate(140%) blur(4px);z-index:1055}
+  .lp-vocab-list{ max-height:420px; overflow:auto; border:1px dashed var(--sky-200); border-radius:.75rem; padding:.5rem; background:#fff; }
+  .lp-v-item{ display:flex; align-items:center; justify-content:space-between; border-radius:.5rem; padding:.45rem .6rem; cursor:pointer; }
+  .lp-v-item:hover{ background: var(--sky-50); }
+  .lp-v-item.active{ background: var(--sky-100); }
+  .lp-v-chip{ font-size:.75rem; padding:.1rem .45rem; border:1px solid var(--sky-200); color:var(--sky-700); border-radius:.4rem; background:#fff; }
+  .lp-def-panel .lp-def-word{ font-weight:700; color: var(--ink); margin-bottom:.5rem;}
+  .lp-def-panel .lp-def-block{ border:1px dashed var(--sky-300); border-radius:.75rem; padding:.75rem; background: var(--sky-50); }
+
+  .gen-overlay{position:fixed;inset:0;display:none;place-items:center;background:rgba(15,23,42,.45);backdrop-filter:saturate(140%) blur(4px);z-index:1055}
   .gen-overlay.show{display:grid}
   .gen-box{background:#fff;border-radius:1rem;padding:1.5rem 1.75rem;box-shadow:0 10px 30px rgba(0,0,0,.15);text-align:center;min-width:260px}
+
+  .lp-pencil-wrap{ width:64px;height:64px;display:grid;place-items:center }
+  .lp-pencil{ transform-origin:50% 80%; animation: lp-pencil-bob 2s ease-in-out infinite }
+  @keyframes lp-pencil-bob{ 0%,100%{ transform: translateY(0) rotate(0) } 50%{ transform: translateY(-4px) rotate(-2deg) } }
+
+  .progress{ background:#eef5ff; border-radius:999px; overflow:hidden }
+  .progress-bar{ background: linear-gradient(90deg, var(--sky-300), var(--sky-600)); }
+
+  .lp-editor-area.lp-editor-flash{ box-shadow: 0 0 0 .35rem rgba(78,162,255,.25) !important; transition: box-shadow .2s ease; }
+
+  .print-only{ display:none; }
 </style>
 
-<div id="genOverlay" class="gen-overlay" aria-hidden="true">
+<!-- Print styles -->
+<style>
+  @media print {
+    @page { size: A4; margin: 16mm; }
+    body{ background:#fff !important; }
+    .no-print, .gen-overlay{ display:none !important; }
+
+    .lp-card-modern{ box-shadow:none !important; border-color:#000 !important; }
+
+    .keep-together{ break-inside: avoid-page; page-break-inside: avoid; }
+
+    .lp-finished{ border-color:#000 !important;
+      background: repeating-linear-gradient(to bottom,#ffffff 0 28px, rgba(0,0,0,.06) 28px 29px) !important; }
+
+    .lp-dot, .lp-dot-finish{ box-shadow:none !important; background:#000 !important; }
+
+    .print-only{ display:block !important; }
+  }
+</style>
+
+<div id="genOverlay" class="gen-overlay" aria-hidden="true" aria-live="polite">
   <div class="gen-box">
     <div class="spinner-border mb-3" role="status" aria-label="Loading"></div>
-    <h6 class="mb-1">Generating worksheet & quiz…</h6>
-    <p class="text-muted small mb-0">You’ll be taken to the quiz automatically.</p>
+    <h6 id="genOverlayTitle" class="mb-1">Working…</h6>
+    <p id="genOverlayNote" class="text-muted small mb-0">Please wait.</p>
   </div>
 </div>
 
 <script>
+  // Server-injected context
+  window.LP_VOCAB = {{ (vocab_words or []) | tojson | safe }};
+  window.LP_STORY_ID = {{ draft.story_id or 0 }};
+  window.LP_LANG = {{ (draft.language or 'en') | tojson }};
+
   (function(){
-    const form = document.getElementById('genForm');
-    const btn  = document.getElementById('genBtn');
-    const ovl  = document.getElementById('genOverlay');
-    if(form && btn && ovl){
+    // Overlay helpers
+    const overlay = document.getElementById('genOverlay');
+    const titleEl = document.getElementById('genOverlayTitle');
+    const noteEl  = document.getElementById('genOverlayNote');
+    function hideOverlay(){ overlay?.classList.remove('show'); }
+
+    const forms = Array.from(document.querySelectorAll('form.needs-overlay'));
+    forms.forEach(form => {
+      const btn = form.querySelector('button[type="submit"]');
+      const t   = form.getAttribute('data-overlay-title') || 'Working…';
+      const n   = form.getAttribute('data-overlay-note')  || 'Please wait.';
       form.addEventListener('submit', function(){
-        btn.disabled = true;
-        btn.dataset.originalHtml = btn.innerHTML;
-        btn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i> Generating…';
-        ovl.classList.add('show');
-      });
-      window.addEventListener('pageshow', function(e){
-        if(e.persisted){
-          btn.disabled = false;
-          if(btn.dataset.originalHtml) btn.innerHTML = btn.dataset.originalHtml;
-          ovl.classList.remove('show');
+        if(btn){
+          btn.disabled = true;
+          if(!btn.dataset.originalHtml) btn.dataset.originalHtml = btn.innerHTML;
+          btn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i> Processing…';
         }
+        if(overlay){ overlay.classList.add('show'); }
+        if(titleEl) titleEl.textContent = t;
+        if(noteEl)  noteEl.textContent  = n;
       });
-    }
+    });
+    window.addEventListener('pageshow', function(e){
+      if(e.persisted){
+        forms.forEach(form=>{
+          const btn = form.querySelector('button[type="submit"]');
+          if(btn){
+            btn.disabled = false;
+            if(btn.dataset.originalHtml) btn.innerHTML = btn.dataset.originalHtml;
+          }
+        });
+        hideOverlay();
+      }
+    });
   })();
 </script>
 
@@ -245,5 +473,179 @@
   })();
 </script>
 {% endif %}
+
+<script>
+  // Vocabulary panel logic
+  const storyId   = Number(window.LP_STORY_ID || 0);
+  const vocabRaw  = Array.isArray(window.LP_VOCAB) ? window.LP_VOCAB : [];
+  const vocabMap  = new Map();
+  const unique = [];
+  for (const item of vocabRaw){
+    const w = (item.word || '').toLowerCase().trim();
+    if(!w || vocabMap.has(w)) continue;
+    vocabMap.set(w, item);
+    unique.push(w);
+  }
+  unique.sort((a,b)=> a.localeCompare(b));
+
+  const listEl = document.getElementById('vocabList');
+  const searchEl = document.getElementById('vocabSearch');
+  const defPanel = document.getElementById('defPanel');
+
+  function renderList(filterText=''){
+    const q = (filterText||'').toLowerCase().trim();
+    listEl.innerHTML = '';
+    const frag = document.createDocumentFragment();
+    let shown = 0;
+
+    for(const w of unique){
+      if(q && !w.includes(q)) continue;
+      const li = document.createElement('div');
+      li.className = 'lp-v-item';
+      li.setAttribute('role','option');
+      li.setAttribute('data-word', w);
+      li.innerHTML = `<span>${w}</span><span class="lp-v-chip">view</span>`;
+      li.addEventListener('click', ()=> selectWord(w, li));
+      frag.appendChild(li);
+      shown++;
+    }
+    if(shown === 0){
+      const empty = document.createElement('div');
+      empty.className = 'text-muted small px-2 py-1';
+      empty.textContent = 'No words.';
+      frag.appendChild(empty);
+    }
+    listEl.appendChild(frag);
+  }
+
+  function setActive(li){
+    listEl.querySelectorAll('.lp-v-item.active').forEach(el=>el.classList.remove('active'));
+    if(li) li.classList.add('active');
+  }
+
+  function renderDefinition(word, data){
+    const dEn = (data.definition_en || '').trim();
+    const eEn = (data.example_en || '').trim();
+    const dKo = (data.definition_ko || '').trim();
+    const eKo = (data.example_ko || '').trim();
+
+    defPanel.innerHTML = `
+      <div class="lp-def-word">${word}</div>
+      <div class="lp-def-block mb-2">
+        <div><span class="text-muted small">EN</span> — ${dEn || 'No definition available.'}</div>
+        ${eEn ? `<div class="mt-1"><em>${eEn}</em></div>` : ''}
+      </div>
+      <div class="lp-def-block">
+        <div><span class="text-muted small">KO</span> — ${dKo || '정의가 없습니다.'}</div>
+        ${eKo ? `<div class="mt-1"><em>${eKo}</em></div>` : ''}
+      </div>
+    `;
+  }
+
+  async function fetchDefinition(word){
+    const params = new URLSearchParams({
+      word: word,
+      story_id: String(storyId || 0),
+      language: window.LP_LANG || 'en'
+    });
+    const r = await fetch(`/api/define?${params.toString()}`, { credentials: 'same-origin' });
+    if(!r.ok) throw new Error('lookup failed');
+    return r.json();
+  }
+
+  async function selectWord(word, li){
+    setActive(li);
+    const cached = vocabMap.get(word) || {};
+    if(cached.definition_en || cached.definition_ko){
+      renderDefinition(word, cached);
+      return;
+    }
+    try{
+      defPanel.innerHTML = `<div class="text-muted small">Loading…</div>`;
+      const data = await fetchDefinition(word);
+      if(data && data.ok){
+        const pack = {
+          word,
+          definition_en: data.definition_en || '',
+          example_en: data.example_en || '',
+          definition_ko: data.definition_ko || '',
+          example_ko: data.example_ko || ''
+        };
+        vocabMap.set(word, pack);
+        renderDefinition(word, pack);
+      }else{
+        renderDefinition(word, {definition_en:'No definition available.'});
+      }
+    }catch(e){
+      renderDefinition(word, {definition_en:'No definition available.'});
+    }
+  }
+
+  // Writer panel: live char count + finish-to-share progress
+  document.addEventListener('DOMContentLoaded', function(){
+    renderList();
+    searchEl?.addEventListener('input', (e)=> renderList(e.target.value));
+
+    const first = listEl.querySelector('.lp-v-item');
+    if(first){
+      const w = first.getAttribute('data-word');
+      selectWord(w, first);
+    }
+
+    const ta = document.getElementById('endingText');
+    const counter = document.getElementById('endingCount');
+    const updateCount = () => counter && (counter.textContent = (ta?.value?.length || 0) + ' chars');
+    ta && (ta.addEventListener('input', updateCount), updateCount());
+  });
+</script>
+
+<script>
+  // Finish-to-share progress (when editing)
+  (function(){
+    const ta = document.getElementById('endingText');
+    const counter = document.getElementById('endingCount');
+    const bar = document.getElementById('endingProgress');
+    const readyTag = document.getElementById('endingReadyTag');
+    const jumpBtn = document.getElementById('jumpToEndingBtn');
+
+    const READY_LEN = 120;
+    const MAX_LEN   = 400;
+
+    function pctFromLen(len){ return Math.min(100, Math.round((len / MAX_LEN) * 100)); }
+
+    function updateUI(){
+      const len = (ta?.value?.length || 0);
+      if (counter) counter.textContent = len + ' chars';
+      if (bar){
+        const pct = pctFromLen(len);
+        bar.style.width = pct + '%';
+        bar.setAttribute('aria-valuenow', pct);
+      }
+      if (readyTag){ (len >= READY_LEN) ? readyTag.classList.remove('d-none') : readyTag.classList.add('d-none'); }
+    }
+
+    if (ta){ ta.addEventListener('input', updateUI); updateUI(); }
+    if (jumpBtn && ta){
+      jumpBtn.addEventListener('click', () => {
+        ta.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        ta.focus({ preventScroll: true });
+        ta.classList.add('lp-editor-flash');
+        setTimeout(()=> ta.classList.remove('lp-editor-flash'), 600);
+      });
+    }
+  })();
+
+  // Download/Print for finished story
+  (function(){
+    const dlBtn = document.getElementById('downloadPdfFinishedBtn');
+    const prBtn = document.getElementById('printFinishedBtn');
+    function doPrint(){
+      if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+      setTimeout(()=> window.print(), 30);
+    }
+    dlBtn && dlBtn.addEventListener('click', doPrint);
+    prBtn && prBtn.addEventListener('click', doPrint);
+  })();
+</script>
 
 {% endblock %}

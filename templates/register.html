@@ -3,64 +3,45 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Register · LingoPlay</title>
+    <title>Register · EduWeaver</title>
 
-    <!-- Bootstrap (for grid/inputs) -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="icon" href="{{ url_for('static', filename='favicon.png') }}" sizes="32x32" type="image/png">
-<link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
+    <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
 
     <style>
-      /* ===============================
-         LingoPlay • Lime Theme (register)
-         =============================== */
       :root{
-        --ink:#0f172a;
-        --muted:#64748b;
-        --surface:#ffffff;
-        --line:#e5e7eb;
+        /* Sky palette (shared with final_view) */
+        --sky-25:#f2f8ff; --sky-50:#e8f3ff; --sky-100:#d8ebff;
+        --sky-200:#c2e0ff; --sky-300:#a5d1ff; --sky-400:#7fbaff;
+        --sky-500:#4ea2ff; --sky-600:#2f8cea; --sky-700:#236fbb;
+
+        --ink:#0f172a; --muted:#667085;
+        --surface:#ffffff; --lp-border:#e5eaf3;
         --shadow: 0 10px 30px rgba(2,6,23,.08);
 
-        /* Lime palette (shared) */
-        --lp-lime-50:#f7fee7;
-        --lp-lime-100:#ecfccb;
-        --lp-lime-200:#d9f99d;
-        --lp-lime-300:#bef264;
-        --lp-lime-400:#a3e635;
-        --lp-lime-500:#84cc16;
-        --lp-lime-600:#65a30d;
-        --lp-lime-700:#4d7c0f;
-
-        /* Background */
+        /* Soft blue background wash */
         --bg-grad:
-          radial-gradient(1200px 600px at -10% -10%, var(--lp-lime-50) 0%, rgba(247,254,231,0) 60%),
-          radial-gradient(900px 480px at 110% 10%, #e2e8f0 0%, rgba(226,232,240,0) 65%),
+          radial-gradient(1100px 560px at -10% -10%, var(--sky-50) 0%, rgba(232,243,255,0) 60%),
+          radial-gradient(900px 480px at 110% 10%, #eef2ff 0%, rgba(238,242,255,0) 65%),
           linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
       }
 
       html, body{ min-height:100%; }
       body{
-        background: var(--bg-grad);
-        color: var(--ink);
+        background: var(--bg-grad); color: var(--ink);
         font-family: Inter, Nunito, "Noto Sans KR", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
-        display:flex; align-items:center; justify-content:center;
-        padding: 4vh 16px;
+        display:flex; align-items:center; justify-content:center; padding: 4vh 16px;
       }
 
-      /* Centered card */
       .register-card{
-        width: 100%;
-        max-width: 460px;
-        background: var(--surface);
-        border:1px solid var(--line);
-        border-radius: 20px;
-        box-shadow: var(--shadow);
-        position: relative;
-        overflow: hidden;
+        width:100%; max-width:460px; background:var(--surface);
+        border:1px solid var(--lp-border); border-radius:20px; box-shadow:var(--shadow);
+        position:relative; overflow:hidden;
       }
       .card-body{ position:relative; z-index:1; padding: 2rem; }
 
-      /* Soft lime halos */
+      /* Soft sky halos */
       .register-card::before,
       .register-card::after{
         content:""; position:absolute; border-radius:50%;
@@ -68,89 +49,59 @@
       }
       .register-card::before{
         width:360px; height:360px; top:-140px; left:-140px;
-        background: radial-gradient(closest-side, var(--lp-lime-100) 0%, #fff0 70%);
+        background: radial-gradient(closest-side, var(--sky-100) 0%, #fff0 70%);
       }
       .register-card::after{
         width:360px; height:360px; bottom:-140px; right:-140px;
-        background: radial-gradient(closest-side, var(--lp-lime-50) 0%, #fff0 70%);
+        background: radial-gradient(closest-side, var(--sky-50) 0%, #fff0 70%);
       }
 
-      /* Title */
-      .brand-display{
-        font-family: Fredoka, Nunito, "Noto Sans KR", sans-serif;
-        font-weight: 800; letter-spacing:.2px;
-        color: var(--lp-lime-700);
-      }
-      .subtitle{
-        color: var(--muted);
-      }
+      .brand-display{ font-family: Fredoka, Nunito, "Noto Sans KR", sans-serif; font-weight:800; letter-spacing:.2px; color:var(--sky-700); }
+      .subtitle{ color: var(--muted); }
 
-      /* Inputs */
-      .form-label{
-        font-weight: 700;
-        font-size: .9rem;
-        color: var(--muted);
-        letter-spacing:.15px;
-      }
+      .form-label{ font-weight:700; font-size:.9rem; color:var(--muted); letter-spacing:.15px; }
+
       .form-control{
-        border-radius: .8rem;
-        border:1px solid var(--line);
-        padding:.9rem 1rem;
+        border-radius:.8rem; border:1px solid var(--lp-border); padding:.9rem 1rem;
       }
       .form-control:focus{
-        border-color: var(--lp-lime-400);
-        box-shadow: 0 0 0 .25rem rgba(132,204,22,.16);
+        border-color: var(--sky-300);
+        box-shadow: 0 0 0 .25rem rgba(127,186,255,.22);
       }
 
-      /* Input with icon */
       .input-group .input-group-text{
-        background:#f8fafc;
-        border:1px solid var(--line);
-        border-right:0;
-        color: var(--lp-lime-700);
+        background:#f8fafc; border:1px solid var(--lp-border); border-right:0; color:var(--sky-700);
         border-radius:.8rem 0 0 .8rem;
       }
-      .input-group .form-control{
-        border-left:0; border-radius:0 .8rem .8rem 0;
-      }
+      .input-group .form-control{ border-left:0; border-radius:0 .8rem .8rem 0; }
 
-      /* Buttons */
       .btn{ border-radius:.9rem; }
-      .btn-lime{
-        --bs-btn-color:#fff;
-        --bs-btn-bg:var(--lp-lime-600);
-        --bs-btn-border-color:var(--lp-lime-600);
-        --bs-btn-hover-bg:var(--lp-lime-700);
-        --bs-btn-hover-border-color:var(--lp-lime-700);
-        --bs-btn-focus-shadow-rgb:132,204,22;
-        --bs-btn-active-bg:var(--lp-lime-700);
-        --bs-btn-active-border-color:var(--lp-lime-700);
-        box-shadow: 0 10px 22px rgba(101,163,13,.20);
+
+      /* Buttons (sky) */
+      .btn-sky-solid{
+        --bs-btn-color:#fff; --bs-btn-bg:var(--sky-600); --bs-btn-border-color:var(--sky-600);
+        --bs-btn-hover-bg:var(--sky-700); --bs-btn-hover-border-color:var(--sky-700);
+        --bs-btn-focus-shadow-rgb:35,111,187; --bs-btn-active-bg:var(--sky-700); --bs-btn-active-border-color:var(--sky-700);
+        box-shadow: 0 10px 22px rgba(46,140,234,.22);
       }
-      .btn-lime-light{
-        --bs-btn-color:var(--lp-lime-700);
-        --bs-btn-bg:var(--lp-lime-100);
-        --bs-btn-border-color:var(--lp-lime-200);
-        --bs-btn-hover-color:var(--lp-lime-700);
-        --bs-btn-hover-bg:var(--lp-lime-200);
-        --bs-btn-hover-border-color:var(--lp-lime-300);
-        --bs-btn-focus-shadow-rgb:132,204,22;
-        --bs-btn-active-bg:var(--lp-lime-300);
-        --bs-btn-active-border-color:var(--lp-lime-300);
+      .btn-sky-light{
+        --bs-btn-color:var(--sky-700); --bs-btn-bg:var(--sky-50); --bs-btn-border-color:var(--sky-200);
+        --bs-btn-hover-color:var(--sky-700); --bs-btn-hover-bg:var(--sky-100); --bs-btn-hover-border-color:var(--sky-300);
+        --bs-btn-focus-shadow-rgb:35,111,187; --bs-btn-active-bg:var(--sky-200); --bs-btn-active-border-color:var(--sky-300);
       }
 
-      /* Footer link */
-      .muted-link{ color: var(--muted); text-decoration: none; }
-      .muted-link:hover{ color: var(--ink); text-decoration: underline; }
+      .muted-link{ color: var(--muted); text-decoration:none; }
+      .muted-link:hover{ color:var(--ink); text-decoration:underline; }
 
-      /* Accessibility */
       :focus-visible{
-        outline: 3px solid color-mix(in oklab, var(--lp-lime-500) 65%, white);
+        outline: 3px solid color-mix(in oklab, var(--sky-400) 60%, white);
         outline-offset: 2px; border-radius:.6rem;
       }
 
-      /* Tiny helper text */
       .help{ color:#94a3b8; font-size:.85rem; }
+
+      fieldset{ border:1px dashed var(--lp-border); border-radius:12px; padding:12px 14px; }
+      legend{ font-size:.9rem; color:var(--muted); padding:0 6px; }
     </style>
   </head>
 
@@ -160,7 +111,21 @@
         <div class="d-flex justify-content-between align-items-center mb-2">
           <h2 class="brand-display mb-0">Create Account</h2>
         </div>
-        <p class="subtitle mb-4">Join LingoPlay to create stories & track progress.</p>
+        <p class="subtitle mb-3">Join EduWeaver to create stories & track progress.</p>
+
+        <!-- Flash messages -->
+        {% with messages = get_flashed_messages(with_categories=True) %}
+          {% if messages %}
+            <div class="mb-3" role="region" aria-live="polite" aria-atomic="true">
+              {% for category, msg in messages %}
+                <div class="alert alert-{{ 'danger' if category=='danger' else category }} alert-dismissible fade show" role="alert">
+                  {{ msg }}
+                  <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
+        {% endwith %}
 
         <!-- Form -->
         <form action="/register" method="post" class="vstack gap-3">
@@ -195,10 +160,48 @@
               <span class="input-group-text"><i class="bi bi-check2-square"></i></span>
               <input id="pw2" type="password" name="confirm" class="form-control" placeholder="Type it again" required minlength="8" />
             </div>
-            <div class="form-text" id="matchHint" style="display:none;">Passwords match ✅</div>
+            <div class="form-text" id="matchHint" style="display:none;">Passwords match</div>
           </div>
 
-          <button type="submit" class="btn btn-lime w-100 py-3 mt-1">
+          <!-- About you (optional) -->
+          <fieldset class="mt-1">
+            <legend>About you (optional)</legend>
+
+            <div class="mb-2">
+              <label class="form-label d-block mb-1">Is English your first language?</label>
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" name="is_english_native" id="nativeYes" value="yes">
+                <label class="form-check-label" for="nativeYes">Yes</label>
+              </div>
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" name="is_english_native" id="nativeNo" value="no">
+                <label class="form-check-label" for="nativeNo">No</label>
+              </div>
+            </div>
+
+            <div class="mb-2">
+              <label for="age" class="form-label">Age</label>
+              <input type="number" min="5" max="120" step="1" class="form-control" id="age" name="age" placeholder="e.g., 14">
+            </div>
+
+            <div class="mb-1">
+              <label for="gender" class="form-label">Gender</label>
+              <select class="form-select" id="gender" name="gender">
+                <option value="">Prefer not to say</option>
+                <option value="female">Female</option>
+                <option value="male">Male</option>
+                <option value="nonbinary">Non-binary</option>
+                <option value="prefer_not">Prefer not to answer</option>
+              </select>
+            </div>
+
+            <div class="help mt-2">
+              This information helps us tailor reading level and guidance.
+              It’s optional and only visible to teachers/admins.
+            </div>
+          </fieldset>
+
+          <button type="submit" class="btn btn-sky-solid w-100 py-3 mt-1">
             Create my account
           </button>
 
@@ -212,8 +215,8 @@
       </div>
     </div>
 
-    <!-- Icons + small script -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
       // Tiny UX: live "passwords match" hint
       (function(){

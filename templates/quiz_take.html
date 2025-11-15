@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Take Quiz · LingoPlay{% endblock %}
+{% block title %}Take Quiz · EduWeaver{% endblock %}
 
 {% block content %}
 
 <!-- Header -->
-<section class="card border-0 lp-card-modern overflow-hidden mt-4 mb-4">
+<section class="card border-0 lp-card-modern overflow-hidden mt-4 mb-4 no-print">
   <div class="p-4 p-lg-5 d-flex align-items-center justify-content-between">
     <div class="d-flex align-items-center gap-3">
       <span class="badge lp-badge-step">Quiz</span>
@@ -16,7 +16,6 @@
       </div>
     </div>
 
-    {# ✅ Prefer linking to the Finish draft when available #}
     {% if draft_id %}
       <a href="{{ url_for('finish_view', draft_id=draft_id) }}" class="btn btn-lime-light">
         <i class="bi bi-pencil-square me-1"></i> View Draft
@@ -30,44 +29,93 @@
 </section>
 
 <!-- Quiz Body -->
-<section class="card border-0 lp-card-modern overflow-hidden">
+<section class="card border-0 lp-card-modern overflow-hidden" id="quizRoot">
   <div class="card-body p-4 p-lg-5">
+
+    <!-- Print cover (shown only in PDF/print) -->
+    <div class="print-only mb-4">
+      <h2 class="mb-1">Quiz: {{ story.title }}</h2>
+      <div class="text-muted">Language: {{ story.language|upper }}</div>
+      <div class="mt-3 d-flex gap-3 flex-wrap">
+        <div><strong>Name:</strong> ________________________</div>
+        <div><strong>Date:</strong> __________________</div>
+        <div><strong>Score:</strong> ______ / {{ questions|length }}</div>
+      </div>
+      <hr class="my-4"/>
+    </div>
+
     <form id="quizForm" method="post" class="vstack gap-4">
+
+      <!-- Taker name -->
+      <div class="no-print">
+        <label class="form-label">Your name</label>
+        <input class="form-control lp-input-el" name="taker_name"
+               value="{{ current_user.username if current_user else 'guest' }}"
+               placeholder="Your name">
+      </div>
 
       <!-- Questions -->
       {% for q in questions %}
-        {% set choices = q.choices_json | load_json %}
-        <fieldset class="lp-question-card border rounded-4 p-3 p-md-4">
+        {% set qtype = (q.qtype or 'mcq') %}
+        {% set choices = (q.choices if q.choices is defined else (q.choices_json | load_json)) %}
+
+        <fieldset class="lp-question-card border rounded-4 p-3 p-md-4 keep-together">
           <legend class="lp-question-title mb-3">
             <span class="lp-q-number">{{ loop.index }}</span>
             <span>{{ q.question }}</span>
+            <span class="ms-2 badge rounded-pill text-bg-light border no-print">
+              {% if qtype == 'mcq' %}MCQ{% elif qtype == 'short' %}Short{% else %}Long{% endif %}
+            </span>
           </legend>
 
-          <div class="vstack gap-2">
-            {% for c in choices %}
-              <div class="form-check lp-choice">
-                <input class="form-check-input"
-                       type="radio"
-                       name="q{{ q.id }}"
-                       id="q{{ q.id }}_{{ loop.index0 }}"
-                       value="{{ loop.index0 }}">
-                <label class="form-check-label" for="q{{ q.id }}_{{ loop.index0 }}">
-                  {{ c }}
-                </label>
+          {% if qtype == 'mcq' %}
+            <div class="vstack gap-2">
+              {% for c in choices %}
+                <div class="form-check lp-choice">
+                  <input class="form-check-input"
+                         type="radio"
+                         name="q{{ q.id }}"
+                         id="q{{ q.id }}_{{ loop.index0 }}"
+                         value="{{ loop.index0 }}">
+                  <label class="form-check-label" for="q{{ q.id }}_{{ loop.index0 }}">
+                    {{ c }}
+                  </label>
+                </div>
+              {% endfor %}
+            </div>
+
+          {% elif qtype == 'short' %}
+            <input class="form-control lp-input-el printable-short" type="text" name="q{{ q.id }}" placeholder="Write a short answer">
+            {% if q.rubric %}
+              <div class="text-muted small mt-2 no-print">
+                <i class="bi bi-lightbulb me-1"></i> Hint: {{ q.rubric }}
               </div>
-            {% endfor %}
-          </div>
+            {% endif %}
+
+          {% else %}
+            <textarea class="form-control lp-input-el printable-long" name="q{{ q.id }}" rows="5" placeholder="Write a longer answer"></textarea>
+            {% if q.rubric %}
+              <div class="text-muted small mt-2 no-print">
+                <i class="bi bi-journal-text me-1"></i> Rubric: {{ q.rubric }}
+              </div>
+            {% endif %}
+          {% endif %}
         </fieldset>
       {% endfor %}
 
       <!-- Sticky submit bar -->
-      <div class="lp-sticky-submit d-flex flex-wrap gap-2 justify-content-between align-items-center">
+      <div class="lp-sticky-submit d-flex flex-wrap gap-2 justify-content-between align-items-center no-print">
         <div class="small text-secondary">
           <i class="bi bi-info-circle me-1"></i> Your answers save when you submit.
         </div>
-        <button id="submitBtn" class="btn btn-lime px-4" type="submit">
-          <i class="bi bi-check2-circle me-1"></i> Submit
-        </button>
+        <div class="d-flex gap-2">
+          <button id="downloadPdfBtn" class="btn btn-outline-lime px-3" type="button" title="Save as PDF">
+            <i class="bi bi-filetype-pdf me-1"></i> Download PDF
+          </button>
+          <button id="submitBtn" class="btn btn-lime px-4" type="submit">
+            <i class="bi bi-check2-circle me-1"></i> Submit
+          </button>
+        </div>
       </div>
     </form>
   </div>
@@ -89,122 +137,110 @@
 
 <!-- Theme CSS -->
 <style>
-  /* Lime palette */
   :root{
     --lp-lime-50:#f7fee7; --lp-lime-100:#ecfccb; --lp-lime-200:#d9f99d;
     --lp-lime-300:#bef264; --lp-lime-400:#a3e635; --lp-lime-500:#84cc16;
     --lp-lime-600:#65a30d; --lp-lime-700:#4d7c0f; --lp-border:#e5e7eb;
   }
+  .lp-card-modern{border-radius:18px; box-shadow:0 10px 30px rgba(2,6,23,.06), 0 2px 6px rgba(2,6,23,.04);}
+  .lp-title-lime{color:var(--lp-lime-700); letter-spacing:.2px;}
 
-  .lp-card-modern{
-    border-radius:18px;
-    box-shadow:0 10px 30px rgba(2,6,23,.06), 0 2px 6px rgba(2,6,23,.04);
-  }
-
-  .lp-title-lime{
-    color:var(--lp-lime-700);
-    letter-spacing:.2px;
-  }
-
-  /* Buttons */
   .btn-lime{
-    --bs-btn-color:#fff;
-    --bs-btn-bg:var(--lp-lime-600);
-    --bs-btn-border-color:var(--lp-lime-600);
-    --bs-btn-hover-bg:var(--lp-lime-700);
-    --bs-btn-hover-border-color:var(--lp-lime-700);
-    --bs-btn-focus-shadow-rgb:132,204,22;
-    --bs-btn-active-bg:var(--lp-lime-700);
-    --bs-btn-active-border-color:var(--lp-lime-700);
+    --bs-btn-color:#fff; --bs-btn-bg:var(--lp-lime-600); --bs-btn-border-color:var(--lp-lime-600);
+    --bs-btn-hover-bg:var(--lp-lime-700); --bs-btn-hover-border-color:var(--lp-lime-700);
+    --bs-btn-focus-shadow-rgb:132,204,22; --bs-btn-active-bg:var(--lp-lime-700); --bs-btn-active-border-color:var(--lp-lime-700);
   }
   .btn-lime-light{
-    --bs-btn-color:var(--lp-lime-700);
-    --bs-btn-bg:var(--lp-lime-100);
-    --bs-btn-border-color:var(--lp-lime-200);
-    --bs-btn-hover-color:var(--lp-lime-700);
-    --bs-btn-hover-bg:var(--lp-lime-200);
-    --bs-btn-hover-border-color:var(--lp-lime-300);
+    --bs-btn-color:var(--lp-lime-700); --bs-btn-bg:var(--lp-lime-100); --bs-btn-border-color:var(--lp-lime-200);
+    --bs-btn-hover-color:var(--lp-lime-700); --bs-btn-hover-bg:var(--lp-lime-200); --bs-btn-hover-border-color:var(--lp-lime-300);
+    --bs-btn-focus-shadow-rgb:132,204,22; --bs-btn-active-bg:var(--lp-lime-300); --bs-btn-active-border-color:var(--lp-lime-300);
+  }
+  .btn-outline-lime{
+    --bs-btn-color:var(--lp-lime-700); --bs-btn-border-color:var(--lp-lime-300);
+    --bs-btn-hover-color:#fff; --bs-btn-hover-bg:var(--lp-lime-600); --bs-btn-hover-border-color:var(--lp-lime-600);
     --bs-btn-focus-shadow-rgb:132,204,22;
-    --bs-btn-active-bg:var(--lp-lime-300);
-    --bs-btn-active-border-color:var(--lp-lime-300);
   }
 
-  /* Inputs focus */
-  .lp-input-el:focus{
-    border-color:var(--lp-lime-400)!important;
-    box-shadow:0 0 0 .25rem rgba(132,204,22,.15)!important;
-  }
-
-  /* Step badge */
-  .lp-badge-step{
-    background:var(--lp-lime-100);
-    color:var(--lp-lime-700);
-    border:1px solid var(--lp-lime-200);
-    font-weight:600;
-  }
-
-  /* Question card */
-  .lp-question-card{
-    border:1px solid var(--lp-border);
-    background:#fff;
-    transition:border-color .2s ease, box-shadow .2s ease;
-  }
-  .lp-question-card:hover{
-    border-color:var(--lp-lime-200);
-    box-shadow:0 8px 20px rgba(2,6,23,.06);
-  }
-
-  .lp-question-title{
-    font-size:1.05rem;
-    font-weight:600;
-    color:#0f172a;
-    display:flex;
-    align-items:center;
-    gap:.6rem;
-    padding:0;
-    margin:0;
-  }
+  .lp-input-el:focus{border-color:var(--lp-lime-400)!important; box-shadow:0 0 0 .25rem rgba(132,204,22,.15)!important;}
+  .lp-badge-step{background:var(--lp-lime-100); color:var(--lp-lime-700); border:1px solid var(--lp-lime-200); font-weight:600;}
+  .lp-question-card{border:1px solid var(--lp-border); background:#fff; transition:border-color .2s ease, box-shadow .2s ease;}
+  .lp-question-card:hover{border-color:var(--lp-lime-200); box-shadow:0 8px 20px rgba(2,6,23,.06);}
+  .lp-question-title{font-size:1.05rem; font-weight:600; color:#0f172a; display:flex; align-items:center; gap:.6rem; padding:0; margin:0;}
   .lp-question-title .lp-q-number{
-    display:inline-flex;
-    align-items:center;
-    justify-content:center;
-    width:32px; height:32px;
-    border-radius:999px;
-    background:var(--lp-lime-100);
-    color:var(--lp-lime-700);
-    border:1px solid var(--lp-lime-200);
-    font-weight:700;
-    flex:0 0 32px;
+    display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px; border-radius:999px;
+    background:var(--lp-lime-100); color:var(--lp-lime-700); border:1px solid var(--lp-lime-200); font-weight:700; flex:0 0 32px;
   }
+  .lp-choice .form-check-input{width:1.1rem; height:1.1rem; margin-top:.25rem; cursor:pointer;}
+  .lp-choice .form-check-input:checked{background-color:var(--lp-lime-600); border-color:var(--lp-lime-600);}
+  .lp-choice .form-check-input:focus{box-shadow:0 0 0 .2rem rgba(132,204,22,.2); border-color:var(--lp-lime-400);}
+  .lp-choice .form-check-label{cursor:pointer;}
+  .lp-sticky-submit{position:sticky; bottom:0; background:linear-gradient(to top, #fff 85%, rgba(255,255,255,0)); padding-top:1rem;}
+</style>
 
-  /* Choices */
-  .lp-choice .form-check-input{
-    width:1.1rem; height:1.1rem; margin-top:.25rem; cursor:pointer;
-  }
-  .lp-choice .form-check-input:checked{
-    background-color:var(--lp-lime-600);
-    border-color:var(--lp-lime-600);
-  }
-  .lp-choice .form-check-input:focus{
-    box-shadow:0 0 0 .2rem rgba(132,204,22,.2);
-    border-color:var(--lp-lime-400);
-  }
-  .lp-choice .form-check-label{
-    cursor:pointer;
-  }
+<!-- Print styles (keep questions from splitting across pages) -->
+<style>
+  .print-only{display:none;}
 
-  /* Sticky submit bar */
-  .lp-sticky-submit{
-    position:sticky;
-    bottom:0;
-    background:linear-gradient(to top, #fff 85%, rgba(255,255,255,0));
-    padding-top:1rem;
+  @media print {
+    @page { size: A4; margin: 16mm; }
+    body{ background:#fff !important; }
+    .no-print, .grading-overlay{ display:none !important; }
+    .print-only{ display:block !important; }
+
+    /* Remove shadows / unify borders for print */
+    .lp-card-modern, .lp-question-card{ box-shadow:none !important; border-color:#000 !important; }
+
+    /* KEEP QUESTIONS TOGETHER */
+    fieldset.lp-question-card{
+      break-inside: avoid-page;
+      page-break-inside: avoid;
+      -webkit-column-break-inside: avoid;
+      -webkit-region-break-inside: avoid;
+      padding:12px !important;
+      margin-bottom:14px !important;
+    }
+    legend.lp-question-title{
+      break-inside: avoid-page;
+      page-break-inside: avoid;
+      font-size:1rem !important;
+      margin-bottom:.5rem !important;
+    }
+    .lp-choice{
+      break-inside: avoid-page;
+      page-break-inside: avoid;
+    }
+
+    .lp-question-title .lp-q-number{
+      background:#fff !important; color:#000 !important; border:1px solid #000 !important;
+    }
+
+    /* MCQ: hide inputs, show circles before labels */
+    .lp-choice .form-check-input{ display:none !important; }
+    .lp-choice .form-check-label::before{
+      content:"◯ "; font-weight:400; margin-right:.1rem;
+    }
+
+    /* Short answer: dotted line */
+    input.printable-short{
+      border:0 !important; border-bottom:1px dotted #000 !important;
+      width:100%; height:28px; padding:0; background:transparent !important;
+      break-inside: avoid-page; page-break-inside: avoid;
+    }
+
+    /* Long answer: ruled textarea */
+    textarea.printable-long{
+      border:1px solid #000 !important;
+      background:repeating-linear-gradient(to bottom,#ffffff 0 22px, rgba(0,0,0,.08) 22px 23px) !important;
+      height:160px !important;
+      break-inside: avoid-page; page-break-inside: avoid;
+    }
   }
 </style>
 
-<!-- JS -->
+<!-- JS (submit overlay + download PDF via print) -->
 <script>
   (function(){
+    // Submit overlay
     const form = document.getElementById('quizForm');
     const btn  = document.getElementById('submitBtn');
     const ovl  = document.getElementById('gradingOverlay');
@@ -215,13 +251,23 @@
         btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> Grading…';
         ovl.classList.add('show');
       });
-      // Restore UI when coming back via bfcache
       window.addEventListener('pageshow', function(e){
         if(e.persisted){
           btn.disabled = false;
           if(btn.dataset.originalHtml) btn.innerHTML = btn.dataset.originalHtml;
           ovl.classList.remove('show');
         }
+      });
+    }
+
+    // Download as PDF (native browser print-to-PDF)
+    const pdfBtn = document.getElementById('downloadPdfBtn');
+    if (pdfBtn){
+      pdfBtn.addEventListener('click', function(){
+        // Blur active element to avoid focus outlines in print
+        if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+        // Allow layout to settle
+        setTimeout(() => window.print(), 50);
       });
     }
   })();

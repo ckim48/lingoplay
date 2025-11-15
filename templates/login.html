@@ -3,41 +3,30 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Login · LingoPlay</title>
+    <title>Login · EduWeaver</title>
 
-    <!-- Bootstrap -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Icons (for input adornments) -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link rel="icon" href="{{ url_for('static', filename='favicon.png') }}" sizes="32x32" type="image/png">
-<link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
+    <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
 
     <style>
-      /* ===============================
-         LingoPlay • Lime Theme (login)
-         =============================== */
       :root{
-        --ink:#0f172a;
+        --ink:#0f1b33;
         --muted:#64748b;
         --surface:#ffffff;
-        --line:#e5e7eb;
-        --shadow: 0 10px 30px rgba(2,6,23,.08);
+        --line:#e5eaf3;
+        --shadow:0 10px 30px rgba(2,6,23,.08);
 
-        /* Lime palette (shared) */
-        --lp-lime-50:#f7fee7;
-        --lp-lime-100:#ecfccb;
-        --lp-lime-200:#d9f99d;
-        --lp-lime-300:#bef264;
-        --lp-lime-400:#a3e635;
-        --lp-lime-500:#84cc16;
-        --lp-lime-600:#65a30d;
-        --lp-lime-700:#4d7c0f;
+        /* Sky palette (shared with final_view) */
+        --sky-25:#f2f8ff; --sky-50:#e8f3ff; --sky-100:#d8ebff;
+        --sky-200:#c2e0ff; --sky-300:#a5d1ff; --sky-400:#7fbaff;
+        --sky-500:#4ea2ff; --sky-600:#2f8cea; --sky-700:#236fbb;
 
-        /* Background gradient */
         --bg-grad:
-          radial-gradient(1200px 600px at -10% -10%, var(--lp-lime-50) 0%, rgba(247,254,231,0) 60%),
-          radial-gradient(900px 480px at 110% 10%, #e2e8f0 0%, rgba(226,232,240,0) 65%),
-          linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+          radial-gradient(1200px 600px at -10% -10%, var(--sky-50) 0%, #0000 60%),
+          radial-gradient(900px 480px at 110% 10%, #eef2ff 0%, #0000 65%),
+          linear-gradient(180deg, #f7fbff 0%, #f2f8ff 100%);
       }
 
       html, body{ min-height:100%; }
@@ -49,7 +38,6 @@
         padding: 4vh 16px;
       }
 
-      /* Centered card */
       .login-card{
         width: 100%;
         max-width: 460px;
@@ -62,7 +50,6 @@
       }
       .card-body{ position:relative; z-index:1; padding: 2rem; }
 
-      /* Soft lime halos */
       .login-card::before,
       .login-card::after{
         content:""; position:absolute; border-radius:50%;
@@ -70,22 +57,20 @@
       }
       .login-card::before{
         width:360px; height:360px; top:-140px; left:-140px;
-        background: radial-gradient(closest-side, var(--lp-lime-100) 0%, #fff0 70%);
+        background: radial-gradient(closest-side, var(--sky-100) 0%, #fff0 70%);
       }
       .login-card::after{
         width:360px; height:360px; bottom:-140px; right:-140px;
-        background: radial-gradient(closest-side, var(--lp-lime-50) 0%, #fff0 70%);
+        background: radial-gradient(closest-side, var(--sky-50) 0%, #fff0 70%);
       }
 
-      /* Title */
       .brand-display{
         font-family: Fredoka, Nunito, "Noto Sans KR", sans-serif;
         font-weight: 800; letter-spacing:.2px;
-        color: var(--lp-lime-700);
+        color: var(--sky-700);
       }
       .subtitle{ color: var(--muted); }
 
-      /* Inputs with icons */
       .form-label{
         font-weight: 700;
         font-size: .9rem;
@@ -96,7 +81,7 @@
         background:#f8fafc;
         border:1px solid var(--line);
         border-right:0;
-        color: var(--lp-lime-700);
+        color: var(--sky-700);
         border-radius:.8rem 0 0 .8rem;
       }
       .input-group .form-control{
@@ -106,42 +91,39 @@
         padding:.9rem 1rem;
       }
       .form-control:focus{
-        border-color: var(--lp-lime-400);
-        box-shadow: 0 0 0 .25rem rgba(132,204,22,.16);
+        border-color: var(--sky-400);
+        box-shadow: 0 0 0 .25rem rgba(47,140,234,.16);
       }
 
-      /* Buttons */
       .btn{ border-radius:.9rem; }
-      .btn-lime{
-        --bs-btn-color:#fff;
-        --bs-btn-bg:var(--lp-lime-600);
-        --bs-btn-border-color:var(--lp-lime-600);
-        --bs-btn-hover-bg:var(--lp-lime-700);
-        --bs-btn-hover-border-color:var(--lp-lime-700);
-        --bs-btn-focus-shadow-rgb:132,204,22;
-        --bs-btn-active-bg:var(--lp-lime-700);
-        --bs-btn-active-border-color:var(--lp-lime-700);
-        box-shadow: 0 10px 22px rgba(101,163,13,.20);
+      .btn-sky{
+        --bs-btn-color:#0b1224;
+        --bs-btn-bg:var(--sky-200);
+        --bs-btn-border-color:var(--sky-300);
+        --bs-btn-hover-bg:var(--sky-300);
+        --bs-btn-hover-border-color:var(--sky-400);
+        --bs-btn-focus-shadow-rgb:47,140,234;
+        --bs-btn-active-bg:var(--sky-400);
+        --bs-btn-active-border-color:var(--sky-500);
+        box-shadow: 0 10px 22px rgba(47,140,234,.18);
       }
-      .btn-lime-light{
-        --bs-btn-color:var(--lp-lime-700);
-        --bs-btn-bg:var(--lp-lime-100);
-        --bs-btn-border-color:var(--lp-lime-200);
-        --bs-btn-hover-color:var(--lp-lime-700);
-        --bs-btn-hover-bg:var(--lp-lime-200);
-        --bs-btn-hover-border-color:var(--lp-lime-300);
-        --bs-btn-focus-shadow-rgb:132,204,22;
-        --bs-btn-active-bg:var(--lp-lime-300);
-        --bs-btn-active-border-color:var(--lp-lime-300);
+      .btn-sky-solid{
+        --bs-btn-color:#fff;
+        --bs-btn-bg:var(--sky-600);
+        --bs-btn-border-color:var(--sky-600);
+        --bs-btn-hover-bg:var(--sky-700);
+        --bs-btn-hover-border-color:var(--sky-700);
+        --bs-btn-focus-shadow-rgb:47,140,234;
+        --bs-btn-active-bg:var(--sky-700);
+        --bs-btn-active-border-color:var(--sky-700);
+        box-shadow: 0 10px 22px rgba(47,140,234,.28);
       }
 
-      /* Links */
       .muted-link{ color: var(--muted); text-decoration: none; }
       .muted-link:hover{ color: var(--ink); text-decoration: underline; }
 
-      /* Accessibility */
       :focus-visible{
-        outline: 3px solid color-mix(in oklab, var(--lp-lime-500) 65%, white);
+        outline: 3px solid color-mix(in oklab, var(--sky-500) 65%, white);
         outline-offset: 2px; border-radius:.6rem;
       }
     </style>
@@ -154,6 +136,12 @@
           <h2 class="brand-display mb-0">Welcome Back</h2>
         </div>
         <p class="subtitle mb-4">Sign in to continue learning and creating stories.</p>
+
+        {% if error %}
+        <div class="alert alert-danger py-2 mb-3" role="alert">
+          {{ error }}
+        </div>
+        {% endif %}
 
         <form method="post" class="vstack gap-3">
           <div>
@@ -172,7 +160,7 @@
             </div>
           </div>
 
-          <button type="submit" class="btn btn-lime w-100 py-3 mt-1">Sign in</button>
+          <button type="submit" class="btn btn-sky-solid w-100 py-3 mt-1">Sign in</button>
 
           <div class="text-center">
             <small class="text-secondary">

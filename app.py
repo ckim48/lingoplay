@@ -5,6 +5,9 @@ import csv
 import json
 import sqlite3
 from datetime import datetime
+from functools import wraps
+from urllib.parse import urlparse, urljoin
+import random
 from slugify import slugify
 from flask import (
     Flask, render_template, request, redirect, url_for,
@@ -14,7 +17,12 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 # --- OpenAI SDK (env-based; do NOT hardcode secrets) ---
 from openai import OpenAI
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+import requests
+import math
+import html
+import nltk
+from nltk.corpus import wordnet as wn
+
 DEFAULT_MODEL = os.getenv("LINGOPLAY_MODEL", "gpt-4.1-mini")
 
 # ------------------------------------------------------------------------------------
@@ -23,12 +31,13 @@ DEFAULT_MODEL = os.getenv("LINGOPLAY_MODEL", "gpt-4.1-mini")
 app = Flask(__name__, instance_relative_config=True)
 app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY", "dev-secret")
 
-# Ensure instance folder exists (DB goes here)
+# Ensure instance folder exists
 os.makedirs(app.instance_path, exist_ok=True)
 DB_PATH = os.path.join(app.instance_path, "lingoplay.db")
 
+
 # ------------------------------------------------------------------------------------
-# SQLite helpers
+# Helpers: DB, JSON, datetime
 # ------------------------------------------------------------------------------------
 def dict_factory(cursor, row):
     """Return rows as dicts instead of tuples."""
@@ -56,11 +65,83 @@ def format_dt(value, fmt="%Y-%m-%d %H:%M"):
         return value
 
 @app.template_filter("load_json")
-def load_json_filter(s):
+def load_json_filter_template(s):
     try:
         return json.loads(s) if s else {}
     except Exception:
         return {}
+def get_learner_profile():
+    """
+    Returns a normalized, safe dict about the current learner.
+    Keys: age (int|None), is_english_native (bool|None), gender ('female'|'male'|'nonbinary'|'prefer_not'|None)
+    """
+    u = g.get("current_user") or {}
+    age = u.get("age")
+    try:
+        age = int(age) if age is not None else None
+    except Exception:
+        age = None
+
+    native = u.get("is_english_native")
+    if native is None:
+        is_native = None
+    else:
+        try:
+            is_native = bool(int(native))
+        except Exception:
+            is_native = None
+
+    gender = (u.get("gender") or "").strip().lower() or None
+    if gender not in ("female", "male", "nonbinary", "prefer_not"):
+        gender = None
+
+    return {
+        "age": age,
+        "is_english_native": is_native,
+        "gender": gender,
+        "username": u.get("username") or "guest"
+    }
+def _reading_prefs_from_profile(profile: dict, explicit_level: str | None):
+    """
+    Decide level + difficulty notes from age + native flag.
+    Returns (level, bullets[str]) where bullets is appended to prompt.
+    """
+    level = (explicit_level or "phonics").strip().lower()
+
+    age = profile.get("age")
+    is_native = profile.get("is_english_native")
+
+    # Infer level only if user didn't override with 'custom'
+    if explicit_level not in ("custom",):
+        if age is not None:
+            if age <= 7:
+                level = "phonics"
+            elif 8 <= age <= 10:
+                level = "early-reader"
+            else:
+                level = level  # keep user's choice
+
+    notes = []
+    # Simplicity knobs for non-native readers
+    if is_native is False:
+        notes += [
+            "Prefer high-frequency, decodable words; avoid idioms and slang.",
+            "Keep sentences short (≤10–12 words) and concrete.",
+            "Rephrase rare words with simpler synonyms."
+        ]
+    # Age-tailored structure hints
+    if age is not None and age <= 7:
+        notes += [
+            "Use clear repetition and predictable patterns.",
+            "One action per sentence; present tense preferred."
+        ]
+    elif age is not None and 8 <= age <= 10:
+        notes += [
+            "Keep sentences simple (8–12 words) with occasional compound sentences.",
+            "Use concrete details and gentle cause-effect."
+        ]
+
+    return level, notes
 
 def get_db():
     """Get a cached connection for the current request context."""
@@ -75,7 +156,6 @@ def close_db(exc):
     db = g.pop("db", None)
     if db is not None:
         db.close()
-
 def init_db():
     """Create tables if they don't exist (incl. users)."""
     db = get_db()
@@ -108,8 +188,12 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             story_id INTEGER NOT NULL,
             question TEXT NOT NULL,
-            choices_json TEXT NOT NULL,
-            correct_index INTEGER NOT NULL,
+            choices_json TEXT,
+            correct_index INTEGER,
+            /* NEW: type + free-text fields */
+            qtype TEXT DEFAULT 'mcq',
+            answer_text TEXT,
+            rubric TEXT,
             FOREIGN KEY (story_id) REFERENCES stories(id) ON DELETE CASCADE
         );
 
@@ -149,35 +233,205 @@ def init_db():
             example TEXT,
             picture_url TEXT,
             created_at TEXT DEFAULT (DATETIME('now')),
+            definition_ko TEXT,
+            example_ko TEXT,
             FOREIGN KEY (story_id) REFERENCES stories(id) ON DELETE CASCADE
         );
         """
     )
+    db.executescript(
+        """
+        PRAGMA foreign_keys = ON;
+
+        CREATE TABLE IF NOT EXISTS finish_comments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            draft_id INTEGER NOT NULL,
+            author_name TEXT NOT NULL,
+            body TEXT NOT NULL,
+            created_at TEXT DEFAULT (DATETIME('now')),
+            FOREIGN KEY (draft_id) REFERENCES finish_drafts(id) ON DELETE CASCADE
+        );
+        """
+    )
+
+    # Idempotent ALTERs for older DBs
+    try:
+        db.execute("ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
+
+    try:
+        db.execute("ALTER TABLE quiz_questions ADD COLUMN qtype TEXT DEFAULT 'mcq'")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        db.execute("ALTER TABLE quiz_questions ADD COLUMN answer_text TEXT")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        db.execute("ALTER TABLE quiz_questions ADD COLUMN rubric TEXT")
+    except sqlite3.OperationalError:
+        pass
+
+    db.execute("UPDATE users SET is_admin = 1 WHERE lower(username) = lower(?)", ("testtest",))
     db.commit()
+
+# ------- Batch resolver (call this from story_new) -------
+from nltk.stem import WordNetLemmatizer
+
+_lemmatizer = WordNetLemmatizer()
+def _insert_quiz_question(db, story_id: int, item: dict):
+    """
+    Normalizes and inserts a quiz question row.
+    Ensures choices_json is always a JSON string (never NULL).
+    """
+    t = (item.get("type") or "mcq").strip().lower()
+    q = (item.get("question") or "").strip()
+    if not q:
+        return  # skip empties
+
+    if t == "mcq":
+        choices = [str(c) for c in (item.get("choices") or [])][:4]
+        if len(choices) < 4:
+            choices += ["—"] * (4 - len(choices))
+        try:
+            ci = int(item.get("correct_index", 0))
+            if ci not in (0, 1, 2, 3):
+                ci = 0
+        except Exception:
+            ci = 0
+
+        db.execute(
+            """INSERT INTO quiz_questions
+               (story_id, qtype, question, choices_json, correct_index, answer_text, rubric)
+               VALUES (?, 'mcq', ?, ?, ?, NULL, NULL)""",
+            (story_id, q, json.dumps(choices, ensure_ascii=False), ci)
+        )
+    elif t == "short":
+        ans = (item.get("answer") or "").strip()
+        rub = (item.get("rubric") or "").strip() or "Short, story-consistent answer."
+        db.execute(
+            """INSERT INTO quiz_questions
+               (story_id, qtype, question, choices_json, correct_index, answer_text, rubric)
+               VALUES (?, 'short', ?, '[]', -1, ?, ?)""",
+            (story_id, q, ans, rub)
+        )
+    else:  # long (or anything else)
+        rub = (item.get("rubric") or "").strip() or "Clear structure; uses story details; coherent."
+        db.execute(
+            """INSERT INTO quiz_questions
+               (story_id, qtype, question, choices_json, correct_index, answer_text, rubric)
+               VALUES (?, 'long', ?, '[]', -1, NULL, ?)""",
+            (story_id, q, rub)
+        )
+
+def _lemmatize_en(token: str) -> str:
+    """
+    Light lemmatization for English to reduce lookup misses.
+    Try noun -> verb -> adj -> adv order.
+    """
+    w = token
+    for pos in ("n", "v", "a", "r"):
+        candidate = nltk.corpus.wordnet.morphy(w, pos=pos)
+        if candidate:
+            w = candidate
+            break
+    # WordNetLemmatizer as last pass
+    w = _lemmatizer.lemmatize(w)
+    return w
+# ------- Batch resolver (call this from story_new) -------
+from nltk.stem import WordNetLemmatizer
+
+_lemmatizer = WordNetLemmatizer()
+
+def _lemmatize_en(token: str) -> str:
+    """
+    Light lemmatization for English to reduce lookup misses.
+    Try noun -> verb -> adj -> adv order.
+    """
+    w = token
+    for pos in ("n", "v", "a", "r"):
+        candidate = nltk.corpus.wordnet.morphy(w, pos=pos)
+        if candidate:
+            w = candidate
+            break
+    # WordNetLemmatizer as last pass
+    w = _lemmatizer.lemmatize(w)
+    return w
+
+def bulk_resolve_kid_definitions_bilingual(words: list[str]) -> list[dict]:
+    """
+    Clean tokens, lemmatize English where helpful, resolve EN+KO kid-friendly defs.
+    Returns a list like:
+    [{word, definition_en, example_en, definition_ko, example_ko}, ...]
+    """
+    if not words:
+        return []
+
+    clean: list[str] = []
+    seen = set()
+
+    for raw in words:
+        w = (raw or "").strip().lower()
+        if not w:
+            continue
+
+        # Accept simple EN or KO tokens only
+        if re.match(r"^[a-z']+$", w):
+            # strip surrounding apostrophes (e.g., children's -> children’s already cleaned upstream)
+            w = w.strip("'")
+            # basic length filter
+            if not (2 <= len(w) <= 24):
+                continue
+            # lemmatize to reduce misses (cats -> cat, running -> run)
+            w = _lemmatize_en(w)
+        elif re.match(r"^[가-힣]+$", w):
+            # short heuristic length filter for KO
+            if not (1 <= len(w) <= 8):
+                continue
+        else:
+            # skip mixed/complex tokens
+            continue
+
+        if w and w not in seen:
+            seen.add(w)
+            clean.append(w)
+
+    out: list[dict] = []
+    for w in clean:
+        try:
+            item = resolve_kid_definition_bilingual(w)
+        except Exception:
+            # absolute safety net: never crash vocab build
+            de, ee = kid_def_fallback(w, "en")
+            dk, ek = kid_def_fallback(w, "ko")
+            item = {
+                "word": w,
+                "definition_en": de, "example_en": ee,
+                "definition_ko": dk, "example_ko": ek,
+            }
+        out.append(item)
+
+    return out
+
+
 
 # Create DB on first run
 with app.app_context():
+
     init_db()
 
 # ------------------------------------------------------------------------------------
-# Auth helpers
+# Auth helpers + current_user injection
 # ------------------------------------------------------------------------------------
 def get_user_by_identifier(identifier: str):
     """Allow login with either email or username (case-insensitive)."""
     db = get_db()
     ident = (identifier or "").strip().lower()
-    # try email first
-    row = db.execute(
-        "SELECT * FROM users WHERE lower(email)=?",
-        (ident,)
-    ).fetchone()
+    row = db.execute("SELECT * FROM users WHERE lower(email)=?", (ident,)).fetchone()
     if row:
         return row
-    # then username
-    row = db.execute(
-        "SELECT * FROM users WHERE lower(username)=?",
-        (ident,)
-    ).fetchone()
+    row = db.execute("SELECT * FROM users WHERE lower(username)=?", (ident,)).fetchone()
     return row
 
 @app.before_request
@@ -193,11 +447,109 @@ def inject_user():
     return {"current_user": g.get("current_user")}
 
 # ------------------------------------------------------------------------------------
-# Generators
+# NEW: login_required decorator
+# ------------------------------------------------------------------------------------
+def is_safe_url(target: str) -> bool:
+    try:
+        ref = urlparse(request.host_url)
+        test = urlparse(urljoin(request.host_url, target))
+        return test.scheme in ("http", "https") and ref.netloc == test.netloc
+    except Exception:
+        return False
+def _gpt_bilingual_kid_defs(words: list[str]) -> dict[str, dict]:
+    """
+    Return {word: {definition_en, example_en, definition_ko, example_ko}} for each word,
+    using strict JSON. Examples must be natural usages (no meta talk like "I can use...").
+    """
+    if client is None or not words:
+        return {}
+
+    schema = {
+        "name": "kid_bilingual_defs",
+        "strict": True,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "word": {"type": "string", "minLength": 1},
+                            "definition_en": {"type": "string", "minLength": 1},
+                            "example_en": {"type": "string", "minLength": 1},
+                            "definition_ko": {"type": "string", "minLength": 1},
+                            "example_ko": {"type": "string", "minLength": 1}
+                        },
+                        "required": ["word","definition_en","example_en","definition_ko","example_ko"],
+                        "additionalProperties": False
+                    },
+                    "minItems": 1
+                }
+            },
+            "required": ["items"],
+            "additionalProperties": False
+        }
+    }
+
+    instr = (
+        "You are a children's dictionary. For each WORD, produce:\n"
+        "- definition_en: ≤16 words, simple, concrete, natural English.\n"
+        "- example_en: ≤12 words, NATURAL sentence using the word in context (no meta talk).\n"
+        "- definition_ko: ≤16 words, natural Korean for kids (use 쉬운 말, avoid loanwords if possible).\n"
+        "- example_ko: ≤12 words, NATURAL sentence using the word in context (no meta talk).\n"
+        "Do not define with circular wording; avoid dictionary jargon; no quotes around the word.\n"
+        "Examples must read like normal sentences (e.g., “The lemonade feels cool.” / “레몬에이드는 시원했어.”)."
+    )
+
+    out: dict[str, dict] = {}
+    BATCH = 20
+    chunks = [words[i:i+BATCH] for i in range(0, len(words), BATCH)]
+    for chunk in chunks:
+        user_msg = "WORDS:\n" + "\n".join(f"- {w}" for w in chunk)
+        try:
+            resp = client.responses.create(
+                model=os.getenv("LINGOPLAY_MODEL","gpt-4o-mini"),
+                input=[{"role":"system","content": instr},
+                       {"role":"user","content": user_msg}],
+                temperature=0.2,
+                max_output_tokens=1500,
+                response_format={"type": "json_schema", "json_schema": schema},
+            )
+            raw = (getattr(resp, "output_text", "") or "").strip()
+            data = json.loads(raw) if raw else {}
+            items = data.get("items") or []
+            for it in items:
+                w = (it.get("word") or "").strip().lower()
+                if not w:
+                    continue
+                out[w] = {
+                    "word": w,
+                    "definition_en": (it.get("definition_en") or "").strip(),
+                    "example_en": (it.get("example_en") or "").strip(),
+                    "definition_ko": (it.get("definition_ko") or "").strip(),
+                    "example_ko": (it.get("example_ko") or "").strip(),
+                }
+        except Exception:
+            # fall through; caller will provide fallback
+            pass
+    return out
+
+def login_required(view_func):
+    @wraps(view_func)
+    def _wrapped(*args, **kwargs):
+        if not (g.get("current_user") and g.current_user.get("id")):
+            next_url = request.full_path if request.query_string else request.path
+            return redirect(url_for("login", next=next_url))
+        return view_func(*args, **kwargs)
+    return _wrapped
+
+# ------------------------------------------------------------------------------------
+# Generators & utilities (unchanged logic)
 # ------------------------------------------------------------------------------------
 def naive_story_from_prompt(prompt: str, language: str = "en") -> str:
     if language == "ko":
-        return (f"{prompt} 단어를 활용한 이야기를 길게 써 볼게요. 주인공은 쉬운 말과 짧한 문장으로 생각을 나누고, "
+        return (f"{prompt} 단어를 활용한 이야기를 길게 써 볼게요. 주인공은 쉬운 말과 짧은 문장으로 생각을 나누고, "
                 "친구들과 소리를 연습하며 장면이 천천히 이어집니다. 날씨가 바뀌고, 작은 실수가 나오고, "
                 "다시 시도하며 표현이 점점 또렷해집니다. 마지막에는 스스로 읽고 말하며 오늘 배운 소리를 "
                 "일상에서 써 보기로 다짐합니다.")
@@ -211,27 +563,45 @@ def naive_story_from_prompt(prompt: str, language: str = "en") -> str:
         return ("We’ll write a longer, simple story using your words. The hero practices sounds with friends, "
                 "tries again after small mistakes, and speaks more clearly with each step. The day changes, "
                 "little goals appear, and confidence grows. In the end, the hero uses today’s sounds in real life.")
-
-def llm_story_from_prompt(prompt: str, language: str, level: str, author: str) -> str:
+def llm_story_from_prompt(prompt: str, language: str, level: str, author: str, learner_profile: dict | None = None) -> str:
     if client is None:
         return naive_story_from_prompt(prompt, language)
 
+    profile = learner_profile or {}
+    level, pref_notes = _reading_prefs_from_profile(profile, level)
+
+    gender = (profile.get("gender") or "").lower()
+    if gender == "male":
+        pronoun_hint = "Use neutral narration; if pronouns appear, 'he/him' is acceptable but keep inclusive tone."
+    elif gender == "female":
+        pronoun_hint = "Use neutral narration; if pronouns appear, 'she/her' is acceptable but keep inclusive tone."
+    elif gender == "nonbinary":
+        pronoun_hint = "Use neutral narration; if pronouns appear, prefer 'they/them' without making gender a theme."
+    else:
+        pronoun_hint = "Use neutral narration; avoid making gender a theme."
+
     level_note = {
-        "phonics": "Use very short sentences where possible; repeat key phonics and vocabulary naturally.",
-        "early-reader": "Simple sentences (8–12 words); concrete, decodable vocabulary.",
+        "phonics": "Very short sentences; repeat target sounds; decodable words; high pictureability.",
+        "early-reader": "Simple sentences (8–12 words); concrete vocabulary; mild variety.",
         "custom": "Neutral elementary reading level unless the prompt implies otherwise."
     }.get(level, "Use simple sentences.")
 
     lang_note = (
         "Write entirely in Korean." if language == "ko"
-        else "Write each sentence in English, then its Korean translation on the next line." if language == "en-ko"
+        else "Write each sentence in English, then the Korean translation on the next line." if language == "en-ko"
         else "Write entirely in English."
     )
 
+    extra_scaffold = ""
+    if language == "en" and profile.get("is_english_native") is False:
+        extra_scaffold = (
+            "Use Tier-1/Tier-2 vocabulary; define any rare word in-line via easy context, not parentheses. "
+        )
+
     system = (
         "You are a children's story generator for phonics & early readers. "
-        "IMPORTANT: Do not use labels like [Beginning], [Middle], or [End]. "
-        "Write a single continuous story without section headings or extra commentary."
+        "IMPORTANT: Do not use labels like [Beginning] or section headings. "
+        "Write a single continuous story without metadata."
     )
 
     user = (
@@ -240,38 +610,26 @@ def llm_story_from_prompt(prompt: str, language: str, level: str, author: str) -
         f"Level: {level}\n"
         f"{level_note}\n"
         f"{lang_note}\n"
-        "Length: 180–260 words (or equivalent in Korean/en-ko). "
-        "Keep sentences short and decodable; use gentle repetition; keep a warm tone; end with a hopeful note."
+        f"{pronoun_hint}\n"
+        f"{extra_scaffold}"
+        "Length: 180–260 words (or Korean equivalent).\n"
+        "Keep sentences short and decodable; use gentle repetition; warm tone; hopeful ending.\n"
+        "Personalization notes:\n- " + "\n- ".join(pref_notes)
     )
 
     resp = client.responses.create(
         model=DEFAULT_MODEL,
-        input=[
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
+        input=[{"role": "system", "content": system},{"role": "user", "content": user}],
         temperature=0.4,
         max_output_tokens=800,
     )
+    text = getattr(resp, "output_text", "") or ""
+    return text.strip() or naive_story_from_prompt(prompt, language)
 
-    text = getattr(resp, "output_text", None)
-    if not text:
-        try:
-            parts = []
-            for item in resp.output:
-                if hasattr(item, "content"):
-                    for c in item.content:
-                        if c["type"] == "output_text":
-                            parts.append(c["text"])
-            text = "".join(parts).strip()
-        except Exception:
-            text = None
-    return text or naive_story_from_prompt(prompt, language)
+
 def generate_quiz_via_gpt(story_text: str, language: str = "en", level: str = "phonics") -> list[dict]:
     TARGET_QS = 10
-
     if client is None:
-        # Simple fallback: 10 generic Qs
         base = [
             {"question": "What did the hero practice?", "choices": ["Math", "New sounds", "Running", "Cooking"], "correct_index": 1},
             {"question": "Who supported the hero?", "choices": ["Friends", "A doctor", "A pilot", "A chef"], "correct_index": 0},
@@ -279,38 +637,27 @@ def generate_quiz_via_gpt(story_text: str, language: str = "en", level: str = "p
             {"question": "What is the main idea?", "choices": ["Cooking", "Reading together", "Racing", "Sleeping"], "correct_index": 1},
             {"question": "What happens near the start?", "choices": ["They sleep", "They share words", "They cook", "They race"], "correct_index": 1},
         ]
-        # pad to 10
         while len(base) < TARGET_QS:
             base.append({"question":"Which choice matches the story?", "choices":["Option A","Option B","Option C","Option D"], "correct_index":0})
         return base[:TARGET_QS]
-
     lang_note = "Write questions in English." if language != "ko" else "Write questions in Korean."
     level_note = {
         "phonics": "Use very simple, concrete wording; early-reader friendly; decodable vocabulary.",
         "early-reader": "Simple sentences (8–12 words) and concrete vocabulary.",
         "custom": "General elementary level."
     }.get(level, "Simple sentences.")
-
     system = (
         "You create multiple-choice questions for short children's stories.\n"
         "Return STRICT JSON ONLY (no markdown, no commentary):\n"
         "{ \"questions\": [ {\"question\": str, \"choices\": [str, str, str, str], \"correct_index\": int} ] }"
     )
-
     user = (
         f"{lang_note}\n{level_note}\n"
         "Make EXACTLY 10 questions aimed at early learners:\n"
-        "- 5 vocabulary-in-context (pick common or decodable words from the story);\n"
-        "- 3 detail questions (who/what/where/when);\n"
-        "- 1 sequence/order question;\n"
-        "- 1 main idea question.\n"
-        "Rules:\n"
-        "- 4 answer choices per question; only one correct.\n"
-        "- Keep wording short and unambiguous; no trick answers; child-friendly.\n"
-        "- Reference only information in the story.\n"
+        "- 5 vocabulary-in-context; - 3 detail; - 1 sequence; - 1 main idea.\n"
+        "Rules: 4 choices, one correct; short, unambiguous; reference only the story.\n"
         "STORY:\n" + story_text
     )
-
     resp = client.responses.create(
         model=DEFAULT_MODEL,
         input=[{"role": "system", "content": system},
@@ -318,15 +665,12 @@ def generate_quiz_via_gpt(story_text: str, language: str = "en", level: str = "p
         temperature=0.35,
         max_output_tokens=1200,
     )
-
     raw = (getattr(resp, "output_text", "") or "").strip()
     raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw, flags=re.I | re.M)
-
     try:
         data = json.loads(raw)
     except Exception:
         data = {"questions": []}
-
     out: list[dict] = []
     for q in (data.get("questions") or []):
         question = str(q.get("question", "")).strip()
@@ -341,16 +685,9 @@ def generate_quiz_via_gpt(story_text: str, language: str = "en", level: str = "p
             ci = 0
         if question:
             out.append({"question": question, "choices": choices[:4], "correct_index": ci})
-
-    # Enforce exactly 10
-    while len(out) < TARGET_QS:
-        out.append({
-            "question": "Which choice best matches the story?",
-            "choices": ["A", "B", "C", "D"],
-            "correct_index": 0
-        })
-    return out[:TARGET_QS]
-
+    while len(out) < 10:
+        out.append({"question": "Which choice best matches the story?","choices": ["A","B","C","D"],"correct_index": 0})
+    return out[:10]
 
 def simple_questions_from_story(text: str):
     return [
@@ -369,7 +706,6 @@ def parse_vocab_from_prompt(prompt: str) -> list[str]:
         if len(t) <= 1 and not re.search(r"[A-Za-z]{2,}", t):
             continue
         words.append(t.lower())
-
     seen, out = set(), []
     for w in words:
         if w not in seen:
@@ -393,47 +729,137 @@ def kid_def_fallback(word: str, language: str) -> tuple[str, str]:
         d = "a simple word used in this story"
         e = f"I can read the word '{word}' in the story."
     return d, e
-
-def generate_kid_definitions(words: list[str], language: str="en") -> list[dict]:
-    out = []
+def _llm_json_kid_defs(words: list[str], language: str = "en") -> list[dict]:
+    """
+    Calls OpenAI Responses with strict JSON Schema to get
+    [{word, definition, example}...] in the requested language.
+    Returns a best-effort validated list; never raises.
+    """
     if client is None or not words:
+        # local fallback path
+        out = []
         for w in words:
             d, e = kid_def_fallback(w, language)
             out.append({"word": w, "definition": d, "example": e})
         return out
 
-    lang_note = "Write in English." if language != "ko" else "Write in Korean."
-    prompt = (
-        f"{lang_note} For each WORD, return a one-sentence kid-friendly DEFINITION "
-        f"(≤16 words) and a short EXAMPLE sentence (≤12 words). "
-        "Return STRICT JSON only: {\"items\":[{\"word\":\"\",\"definition\":\"\",\"example\":\"\"},...]}\n"
-        "WORDS:\n" + "\n".join(f"- {w}" for w in words)
-    )
-    try:
-        resp = client.responses.create(
-            model=DEFAULT_MODEL,
-            input=[{"role": "user", "content": prompt}],
-            temperature=0.3,
-            max_output_tokens=600,
-        )
-        raw = (getattr(resp, "output_text", "") or "").strip()
-        raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw, flags=re.I|re.M)
-        data = json.loads(raw)
-        for item in data.get("items", []):
-            w = str(item.get("word", "")).lower().strip()
-            if not w:
-                continue
-            d = str(item.get("definition", "")).strip()
-            e = str(item.get("example", "")).strip()
-            if not d or not e:
-                d, e = kid_def_fallback(w, language)
-            out.append({"word": w, "definition": d, "example": e})
-    except Exception:
-        for w in words:
-            d, e = kid_def_fallback(w, language)
-            out.append({"word": w, "definition": d, "example": e})
-    return out
+    # Keep batches small (models tend to be more consistent)
+    BATCH = 20
+    chunks = [words[i:i+BATCH] for i in range(0, len(words), BATCH)]
+    results: list[dict] = []
 
+    # JSON schema to strictly enforce shape & non-empty strings
+    schema = {
+        "name": "kid_defs",
+        "strict": True,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "word": {"type": "string", "minLength": 1},
+                            "definition": {"type": "string", "minLength": 1},
+                            "example": {"type": "string", "minLength": 1}
+                        },
+                        "required": ["word", "definition", "example"],
+                        "additionalProperties": False
+                    },
+                    "minItems": 1
+                }
+            },
+            "required": ["items"],
+            "additionalProperties": False
+        }
+    }
+
+    lang_note = "Write in English only." if language != "ko" else "Write in Korean only."
+    instruction = (
+        f"{lang_note} For each WORD, return a one-sentence kid-friendly DEFINITION (≤16 words) "
+        f"and a short EXAMPLE sentence (≤12 words). Keep it concrete and early-reader friendly."
+    )
+
+    for chunk in chunks:
+        # Build a plain list; keep words in lower-case to match your storage
+        chunk = [w.lower() for w in chunk if w]
+        if not chunk:
+            continue
+
+        # Compose the prompt
+        user_msg = instruction + "\n\nWORDS:\n" + "\n".join(f"- {w}" for w in chunk)
+
+        try:
+            resp = client.responses.create(
+                model=DEFAULT_MODEL,
+                input=[{"role": "user", "content": user_msg}],
+                temperature=0.1,
+                max_output_tokens=800,
+                response_format={"type": "json_schema", "json_schema": schema},
+            )
+            raw = (getattr(resp, "output_text", "") or "").strip()
+            data = {}
+            try:
+                data = json.loads(raw)
+            except Exception:
+                # If somehow not JSON, force fallback for this batch
+                data = {}
+
+            items = data.get("items") if isinstance(data, dict) else None
+            if not isinstance(items, list) or not items:
+                # strict fallback: fill this whole chunk locally
+                for w in chunk:
+                    d, e = kid_def_fallback(w, language)
+                    results.append({"word": w, "definition": d, "example": e})
+                continue
+
+            # Validate each item and fill any gap with fallback
+            seen = set()
+            for it in items:
+                w = (it.get("word") or "").strip().lower()
+                d = (it.get("definition") or "").strip()
+                e = (it.get("example") or "").strip()
+                if not w or w not in chunk or w in seen or not d or not e:
+                    continue
+                seen.add(w)
+                results.append({"word": w, "definition": d, "example": e})
+
+            # Any missing words in this chunk -> fallback individually
+            for w in chunk:
+                if w not in {x["word"] for x in results}:
+                    d, e = kid_def_fallback(w, language)
+                    results.append({"word": w, "definition": d, "example": e})
+
+        except Exception:
+            # Total failure for this batch -> fallback for the whole chunk
+            for w in chunk:
+                d, e = kid_def_fallback(w, language)
+                results.append({"word": w, "definition": d, "example": e})
+
+    return results
+
+
+def generate_kid_definitions(words: list[str], language: str = "en") -> list[dict]:
+
+    # Clean + dedupe in a stable order
+    clean = []
+    seen = set()
+    for w in (words or []):
+        lw = (w or "").strip().lower()
+        if not lw or lw in seen:
+            continue
+        # Keep simple tokens: english letters or korean blocks
+        if not (re.match(r"^[a-z']+$", lw) or re.match(r"^[가-힣]+$", lw)):
+            continue
+        seen.add(lw)
+        clean.append(lw)
+
+    if not clean:
+        return []
+
+    return _llm_json_kid_defs(clean, language=language)
+# replace your current make_partial_from_story with this:
 def make_partial_from_story(full_text: str) -> str:
     sentences = re.split(r'(?<=[.!?。！？])\s+', full_text.strip())
     if len(sentences) < 4:
@@ -443,7 +869,8 @@ def make_partial_from_story(full_text: str) -> str:
     partial = " ".join(keep).strip()
     if partial and not partial.endswith(('.', '!', '?', '。', '！', '？')):
         partial += "."
-    partial += "\n\nYour Turn: Write the ending."
+    # exact style you asked for:
+    partial += "\n\n"
     return partial
 
 def log_input(action: str, payload: dict):
@@ -453,6 +880,297 @@ def log_input(action: str, payload: dict):
         (action, json.dumps(payload)),
     )
     db.commit()
+def generate_content_questions_via_gpt(story_text, language="en", level="phonics", n=5):
+
+    prompt = f"""
+You are an expert children's reading educator. Create {n} unique comprehension questions
+for the following story written for {level}-level learners.
+
+Story:
+\"\"\"{story_text}\"\"\"
+
+Please mix question types creatively:
+- ~50% should focus on story events, emotions, reasoning, or predictions.
+- ~50% should relate to the meanings or usage of key words from the story.
+- Include a mix of multiple-choice, "what if", and sequencing questions.
+- Each question must have 4 answer options and indicate the correct choice.
+
+Return the output in strict JSON format:
+[
+  {{
+    "question": "...",
+    "choices": ["A", "B", "C", "D"],
+    "correct_index": 0
+  }},
+  ...
+]
+    """
+
+    r = client.responses.create(
+        model="gpt-4o-mini",
+        input=prompt,
+        temperature=0.9,  # encourage creative variation
+    )
+
+    try:
+        data = json.loads(r.output_text.strip())
+        return data if isinstance(data, list) else []
+    except Exception:
+        return []
+def generate_definition_questions_from_vocab(db, story_id: int, language: str = "en", count: int = 5) -> list[dict]:
+    """
+    Builds 'what does WORD mean?' questions from precomputed vocab_items for this story.
+    Uses EN defs unless language == 'ko' -> uses KO defs.
+    """
+    rows = db.execute(
+        "SELECT word, definition, definition_ko FROM vocab_items WHERE story_id = ? ORDER BY id ASC",
+        (story_id,)
+    ).fetchall()
+
+    if not rows:
+        return []
+
+    # Choose definition field
+    use_ko = (language == "ko")
+    items = []
+    for r in rows:
+        w = (r.get("word") or "").strip().lower()
+        d_en = (r.get("definition") or "").strip()
+        d_ko = (r.get("definition_ko") or "").strip()
+        # fallback if missing
+        if use_ko and not d_ko:
+            d_ko, _ = kid_def_fallback(w, "ko")
+        if (not use_ko) and not d_en:
+            d_en, _ = kid_def_fallback(w, "en")
+        items.append({"word": w, "def": (d_ko if use_ko else d_en)})
+
+    # filter out empties
+    items = [it for it in items if it["word"] and it["def"]]
+    if not items:
+        return []
+
+    # Build distractor pool
+    defs_pool = [it["def"] for it in items]
+
+    qs = []
+    for idx, it in enumerate(items):
+        if len(qs) >= count:
+            break
+        correct = it["def"]
+
+        # pick 3 distractors from other defs
+        dists = []
+        for d in defs_pool:
+            if d != correct and d not in dists:
+                dists.append(d)
+            if len(dists) == 3:
+                break
+        # If pool too small, backfill generic distractors
+        generic = [
+            "A kind of animal.",
+            "A place to buy things.",
+            "A feeling you have.",
+            "A tool people use."
+        ]
+        while len(dists) < 3:
+            dists.append(generic[len(dists) % len(generic)])
+
+        # Compose choices; put correct in a stable position (index 1)
+        choices = [dists[0], correct, dists[1], dists[2]]
+        if use_ko:
+            qtext = f"‘{it['word']}’의 뜻으로 가장 알맞은 것은?"
+        else:
+            qtext = f"What does “{it['word']}” mean?"
+
+        qs.append({
+            "question": qtext,
+            "choices": choices,
+            "correct_index": 1
+        })
+
+    # pad if fewer than requested
+    while len(qs) < count:
+        qs.append({
+            "question": "Choose the best meaning.",
+            "choices": ["Thing", "Place", "Feeling", "Animal"],
+            "correct_index": 0
+        })
+    return qs[:count]
+def _resp_to_text(resp) -> str:
+    """
+    Extract best-effort text from OpenAI SDK Responses objects across versions.
+    """
+    # Newer SDKs often expose .output_text
+    if hasattr(resp, "output_text") and resp.output_text:
+        return resp.output_text
+
+    # Fallback: walk .output -> .content -> .text (object-y variants)
+    try:
+        parts = []
+        for out in getattr(resp, "output", []) or []:
+            content = getattr(out, "content", []) or []
+            for c in content:
+                # some SDKs use dicts, others small objs
+                if isinstance(c, dict):
+                    t = c.get("text")
+                else:
+                    t = getattr(c, "text", None)
+                if t:
+                    parts.append(t)
+        if parts:
+            return "".join(parts)
+    except Exception:
+        pass
+
+    # Very old fallback
+    return str(resp or "").strip()
+
+
+def _strip_md_fences(s: str) -> str:
+    """
+    Remove single leading/trailing triple-backtick fences (``` or ```json).
+    Keeps everything else untouched.
+    """
+    if not s:
+        return s
+    return re.sub(r'^```(?:json)?\s*|\s*```$', '', s.strip(), flags=re.I | re.M)
+
+
+def _extract_first_json(s: str) -> str | None:
+    """
+    Return the first top-level JSON object/array substring ({...} or [...]) from s, or None.
+    Pure Python, no recursive regex (compatible with Python 3.13).
+    Strategy:
+      1) Strip code fences.
+      2) Scan for the first '{' or '['.
+      3) At each candidate, try JSONDecoder.raw_decode; on success, return the slice.
+    """
+    if not s:
+        return None
+    s = _strip_md_fences(s)
+
+    dec = json.JSONDecoder()
+    # Find earliest plausible JSON start
+    starts = [i for i, ch in enumerate(s) if ch in "{["]
+    for i in starts:
+        try:
+            _, end = dec.raw_decode(s[i:])
+            return s[i:i + end]
+        except json.JSONDecodeError:
+            continue
+    return None
+
+def generate_mixed_questions_via_gpt(
+    story_text: str,
+    language: str = "en",
+    level: str = "phonics",
+    target_total: int = 10,
+    breakdown: dict | None = None
+) -> list[dict]:
+    if client is None or not story_text:
+        base = [
+            {"type":"mcq","question":"What does the hero practice?","choices":["Math","New sounds","Cooking","Running"],"correct_index":1},
+            {"type":"mcq","question":"Who helps the hero?","choices":["Chef","Friends","Pilot","Doctor"],"correct_index":1},
+            {"type":"mcq","question":"How does it end?","choices":["Sadly","No ending","Hopeful","Stormy"],"correct_index":2},
+        ]
+        while len(base) < target_total:
+            base.append({"type":"mcq","question":"Which choice best matches the story?","choices":["A","B","C","D"],"correct_index":0})
+        random.shuffle(base)
+        return base[:target_total]
+
+    breakdown = breakdown or {"mcq": 6, "short": 3, "long": 1}
+    # Be defensive instead of assert (prod-safe)
+    total_requested = sum(int(breakdown.get(k, 0)) for k in ("mcq","short","long"))
+    if total_requested != target_total:
+        # normalize to target_total with default mix
+        breakdown = {"mcq": min(target_total, 6), "short": 3 if target_total >= 9 else 1, "long": 1}
+        # final clamp
+        s = sum(breakdown.values())
+        if s != target_total:
+            breakdown["mcq"] = max(0, target_total - (breakdown.get("short",0)+breakdown.get("long",0)))
+
+    lang_note = "Write in English." if language != "ko" else "Write in Korean."
+    level_note = {
+        "phonics": "Use very simple, decodable wording and concrete ideas.",
+        "early-reader": "Use simple sentences (8–12 words) and concrete vocabulary.",
+        "custom": "General elementary level."
+    }.get(level, "Simple sentences.")
+
+    import time
+    nonce = f"[regen_nonce:{time.time()}]"
+
+    instructions = f"""
+{lang_note} {level_note}
+Make EXACTLY {target_total} questions from the STORY with this mix:
+- {breakdown.get('mcq',0)} multiple-choice (4 options, one correct; clear, unambiguous).
+- {breakdown.get('short',0)} short-answer (include concise expected "answer" and brief "rubric").
+- {breakdown.get('long',0)} long-answer (no "answer"; include a short "rubric" with 2–3 grading points).
+
+Keep questions concrete and tied ONLY to the story content. Avoid repeating the same wording.
+
+Return STRICT JSON as a single object like:
+{{ "items": [
+  {{"type":"mcq","question":"...","choices":["A","B","C","D"],"correct_index":0}},
+  {{"type":"short","question":"...","answer":"...","rubric":"..."}},
+  {{"type":"long","question":"...","rubric":"..."}}
+] }}
+
+STORY:
+{story_text}
+
+{nonce}
+""".strip()
+
+    raw = ""
+    try:
+        resp = client.responses.create(
+            model=os.getenv("LINGOPLAY_MODEL","gpt-4o-mini"),
+            input=[{"role":"user","content": instructions}],
+            temperature=0.6,
+            max_output_tokens=1500
+        )
+        raw = _resp_to_text(resp)
+        blob = _extract_first_json(raw) or "{}"
+        data = json.loads(blob)
+        items = data.get("items") or []
+    except Exception as e:
+        log_input("gpt_questions_error", {"error": str(e), "raw": raw[:1000]})
+        items = []
+
+    out = []
+    for it in items:
+        t = (it.get("type") or "").strip().lower()
+        q = (it.get("question") or "").strip()
+        if not q:
+            continue
+        if t == "mcq":
+            choices = [str(c) for c in (it.get("choices") or [])][:4]
+            if len(choices) < 4:
+                choices += ["—"]*(4-len(choices))
+            try:
+                ci = int(it.get("correct_index", 0))
+                if ci not in (0,1,2,3):
+                    ci = 0
+            except Exception:
+                ci = 0
+            out.append({"type":"mcq","question":q,"choices":choices,"correct_index":ci})
+            continue
+
+        if t == "short":
+            ans = (it.get("answer") or "").strip()
+            rub = (it.get("rubric") or "").strip() or "Short, story-consistent answer."
+            out.append({"type":"short","question":q,"answer":ans,"rubric":rub})
+            continue
+
+        # long (or unknown -> treat as long)
+        rub = (it.get("rubric") or "").strip() or "Clear structure; uses story details; coherent."
+        out.append({"type":"long","question":q,"rubric":rub})
+
+    while len(out) < target_total:
+        out.append({"type":"mcq","question":"Which choice best matches the story?","choices":["A","B","C","D"],"correct_index":0})
+
+    random.shuffle(out)
+    return out[:target_total]
 
 # ------------------------------------------------------------------------------------
 # Routes
@@ -478,7 +1196,33 @@ def register():
         password = request.form.get("password") or ""
         confirm = request.form.get("confirm") or ""
 
-        # Basic validation
+        # New optional fields
+        # radio: 'yes' / 'no' -> 1 / 0 / None
+        native_en_raw = (request.form.get("is_english_native") or "").strip().lower()
+        if native_en_raw not in ("yes", "no", ""):
+            flash("Invalid value for 'Is English your first language?'", "warning")
+            return redirect(url_for("register"))
+        is_english_native = 1 if native_en_raw == "yes" else (0 if native_en_raw == "no" else None)
+
+        # age is optional
+        age_raw = (request.form.get("age") or "").strip()
+        age = None
+        if age_raw:
+            if not age_raw.isdigit():
+                flash("Please enter a valid age (number).", "warning")
+                return redirect(url_for("register"))
+            age = int(age_raw)
+            if age < 5 or age > 120:
+                flash("Please enter an age between 5 and 120.", "warning")
+                return redirect(url_for("register"))
+
+        # gender is optional
+        gender = (request.form.get("gender") or "").strip().lower() or None
+        if gender and gender not in ("female", "male", "nonbinary", "prefer_not"):
+            flash("Please choose a valid gender option.", "warning")
+            return redirect(url_for("register"))
+
+        # Existing validations
         if not username or not email or not password:
             flash("Please fill in all required fields.", "warning")
             return redirect(url_for("register"))
@@ -498,8 +1242,12 @@ def register():
         try:
             pwd_hash = generate_password_hash(password)
             db.execute(
-                "INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)",
-                (username, email, pwd_hash)
+                """
+                INSERT INTO users
+                (username, email, password_hash, is_english_native, age, gender)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (username, email, pwd_hash, is_english_native, age, gender)
             )
             db.commit()
             flash("Registration successful. You can now sign in.", "success")
@@ -514,66 +1262,140 @@ def register():
             return redirect(url_for("register"))
 
     return render_template("register.html")
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
+    error = None
+    next_url = request.args.get("next") or request.form.get("next")
+
     if request.method == "POST":
         username = (request.form.get("username") or "").strip().lower()
         password = request.form.get("password") or ""
 
         if not username or not password:
-            flash("Please enter your username and password.", "warning")
-            return redirect(url_for("login"))
+            error = "Please enter both username and password."
+        else:
+            db = get_db()
+            user = db.execute(
+                "SELECT * FROM users WHERE lower(username)=?",
+                (username,)
+            ).fetchone()
 
-        db = get_db()
-        user = db.execute(
-            "SELECT * FROM users WHERE lower(username)=?",
-            (username,)
-        ).fetchone()
+            if not user or not check_password_hash(user["password_hash"], password):
+                error = "Wrong username or password."
+            else:
+                session["user_id"] = user["id"]
+                flash(f"Welcome back, {user['username']}!", "success")
+                if next_url and is_safe_url(next_url):
+                    if next_url.endswith("?"):
+                        next_url = next_url[:-1]
+                    return redirect(next_url)
+                return redirect(url_for("index"))
 
-        if not user or not check_password_hash(user["password_hash"], password):
-            flash("Invalid username or password.", "danger")
-            return redirect(url_for("login"))
+    return render_template("login.html", next=next_url or "", error=error)
 
-        session["user_id"] = user["id"]
-        flash(f"Welcome back, {user['username']}!", "success")
-        return redirect(url_for("index"))
-
-    return render_template("login.html")
-
+def current_user_is_admin() -> bool:
+    try:
+        return bool(g.get("current_user") and g.current_user.get("is_admin"))
+    except Exception:
+        return False
 
 @app.post("/logout")
 def logout():
     session.pop("user_id", None)
     flash("You have been signed out.", "info")
     return redirect(url_for("index"))
-@app.route("/story/new", methods=["GET", "POST"])
-def story_new():
-    if request.method == "POST":
-        db = get_db()
+def extract_vocab_candidates(text: str, language: str = "en", exclude_names: set[str] | None = None, max_words: int = 25) -> list[str]:
+    """
+    Heuristic vocab extractor for early readers.
+    - Filters pronouns/particles/stopwords.
+    - Filters likely human names (capitalized tokens that never appear lowercase).
+    - Keeps short, decodable tokens. EN + basic KO handling.
+    - Returns up to `max_words` sorted by frequency (desc), then alpha.
+    """
+    if not text:
+        return []
+    exclude_names = {w.lower() for w in (exclude_names or set())}
 
+    # --- Tokenization
+    en_tokens = re.findall(r"[A-Za-z']+", text)
+    ko_tokens = re.findall(r"[가-힣]+", text)
+
+    # --- Stopwords (compact)
+    en_stop = {
+        # articles/conjunctions/aux
+        "a","an","and","the","to","in","on","at","of","for","from","with","by","as","is","are","was","were",
+        "be","been","being","or","but","so","if","then","than","that","this","these","those","there","here",
+        "up","down","out","over","under","again","once","just","not","no","do","did","does","have","has","had",
+        # pronouns/dets
+        "i","you","he","she","we","they","it","me","him","her","us","them",
+        "my","your","his","her","our","their","mine","yours","hers","ours","theirs",
+        "himself","herself","itself","ourselves","themselves","yourself","yourselves",
+        # common time words that add little for early readers
+        "day","today","yesterday","tomorrow"
+    }
+    ko_stop = {"은","는","이","가","을","를","에","에서","으로","와","과","도","만","보다","처럼","요","다","의","한","하고","그","이것","저것","것",
+               "나","너","그","그녀","우리","너희","그들","내","네","우리의","너희의","그들의"}
+
+    # --- Name filter (English):
+    # Names: capitalized words that NEVER appear lowercase anywhere in text
+    # Build sets for lowercase occurrences and titlecase occurrences
+    en_lower_occurs = set([t.lower().strip("'") for t in en_tokens if t and t[0].islower()])
+    en_title_occurs = set([t for t in en_tokens if t and t[0].isupper() and t[1:].islower() and len(t) >= 3])
+    likely_names = {t for t in en_title_occurs if t.lower() not in en_lower_occurs}
+    # Exclusion set includes detected names + explicitly provided character names
+    exclude_proper = {t.lower() for t in likely_names} | exclude_names
+
+    # --- Frequency
+    freq: dict[str,int] = {}
+
+    for t in en_tokens:
+        w = t.lower().strip("'")
+        if not w or w in en_stop or w in exclude_proper:
+            continue
+        if not re.match(r"^[a-z]+$", w):
+            continue
+        if not (2 <= len(w) <= 12):
+            continue
+        freq[w] = freq.get(w, 0) + 1
+
+    for t in ko_tokens:
+        w = t.strip()
+        if not w or w in ko_stop or w in exclude_proper:
+            continue
+        if not (1 <= len(w) <= 6):
+            continue
+        freq[w] = freq.get(w, 0) + 1
+
+    items = sorted(freq.items(), key=lambda kv: (-kv[1], kv[0]))
+    out = [w for (w, c) in items if w]  # all lowercase for EN, original for KO (already fine)
+    return out[:max_words]
+@app.route("/story/new", methods=["GET", "POST"])
+@login_required
+def story_new():
+    db = get_db()
+    if request.method == "POST":
         # Core fields
         title = (request.form.get("title") or "").strip() or "My Story"
         prompt = (request.form.get("prompt") or "").strip()
-        language = request.form.get("language", "en")
-        level = request.form.get("level", "phonics")
+        language = (request.form.get("language") or "en").strip().lower()
+        level = (request.form.get("level") or "phonics").strip().lower()
 
-        # Prefer the signed-in username as the author if present
         author = (g.current_user["username"] if (g.current_user and g.current_user.get("username")) else None) \
                  or (request.form.get("author_name") or "guest")
 
         want_image = bool(request.form.get("gen_image"))
 
-        # New optional controls
         theme = (request.form.get("theme") or "").strip()
         characters = (request.form.get("characters") or "").strip()
         tone = (request.form.get("tone") or "").strip()
-        bme = bool(request.form.get("bme"))  # Beginning–Middle–End toggle
+        bme = bool(request.form.get("bme"))
 
         if not prompt:
             flash("Please provide phonics letters or vocabulary.", "warning")
             return redirect(url_for("story_new"))
 
-        # Build a style/meta directive for the generator (keeps vocab parsing clean)
+        # Build a richer prompt for the LLM
         meta_bits = []
         if theme:
             meta_bits.append(f"Theme: {theme}")
@@ -583,18 +1405,18 @@ def story_new():
             meta_bits.append(f"Tone: {tone}")
         if bme:
             meta_bits.append("Follow a clear Beginning–Middle–End arc.")
-        # Enrich the generator prompt without changing the user-entered phonics/vocab
         gen_prompt = prompt if not meta_bits else (prompt + "\n\n" + " ".join(meta_bits))
 
-        # ----- Generate story text -----
+        # 1) Generate story
         try:
-            content = llm_story_from_prompt(gen_prompt, language, level, author)
+            profile = get_learner_profile()
+            content = llm_story_from_prompt(gen_prompt, language, level, author, learner_profile=profile)
         except Exception as e:
             content = naive_story_from_prompt(prompt, language)
             flash("AI generator had an issue; used a fallback story.", "warning")
             log_input("generate_story_error", {"error": str(e)})
 
-        # ----- Optional cover image -----
+        # 2) Optional cover image
         visuals_data_url = None
         if want_image and client is not None:
             try:
@@ -616,7 +1438,7 @@ def story_new():
                 log_input("generate_image_error", {"error": str(e)})
                 flash("Story created, but image generation had an issue.", "warning")
 
-        # ----- Save story -----
+        # 3) Persist story
         slug = f"{slugify(title)}-{int(datetime.utcnow().timestamp())}"
         db.execute(
             """INSERT INTO stories (title, slug, prompt, language, level, content, author_name, visuals)
@@ -627,14 +1449,54 @@ def story_new():
         story_row = db.execute("SELECT id FROM stories WHERE slug = ?", (slug,)).fetchone()
         story_id = story_row["id"]
 
-        # ----- Vocab + kid definitions (based on original prompt only) -----
-        vocab = parse_vocab_from_prompt(prompt)
-        defs = generate_kid_definitions(vocab, language=language)
-        for item in defs:
+        # ---------- 4) Precompute & cache bilingual vocab (skip names/pronouns) ----------
+        # 4a) Exclude explicit character names (if provided)
+        exclude_names = set()
+        if characters:
+            raw_names = re.split(r"[,\n;]+", characters)
+            for n in raw_names:
+                n = re.sub(r"[^A-Za-z가-힣'-]+", " ", n).strip()
+                if not n:
+                    continue
+                for tok in re.findall(r"[A-Za-z]+|[가-힣]+", n):
+                    exclude_names.add(tok.lower())
+
+        # 4b) Auto-extract (uses your existing extract_vocab_candidates helper)
+        #     This already filters pronouns, particles, and likely proper names.
+        auto_candidates = extract_vocab_candidates(
+            text=content,
+            language=language,
+            exclude_names=exclude_names,
+            max_words=25
+        )
+
+        # 4c) Merge with prompt-derived words (dedup)
+        prompt_words = parse_vocab_from_prompt(prompt)
+        merged_words = []
+        seen = set()
+        for w in (prompt_words + auto_candidates):
+            lw = (w or "").strip().lower()
+            if not lw or lw in seen:
+                continue
+            seen.add(lw)
+            merged_words.append(lw)
+
+        # 4d) Resolve bilingual kid-friendly definitions from multiple sources
+        defs_bi = bulk_resolve_kid_definitions_bilingual(merged_words)
+
+        # 4e) Save to DB (so future loads read instantly)
+        for item in defs_bi:
             db.execute(
-                """INSERT INTO vocab_items (story_id, word, definition, example, picture_url)
-                   VALUES (?, ?, ?, ?, NULL)""",
-                (story_id, item["word"], item["definition"], item["example"])
+                """INSERT INTO vocab_items (story_id, word, definition, example, definition_ko, example_ko, picture_url)
+                   VALUES (?, ?, ?, ?, ?, ?, NULL)""",
+                (
+                    story_id,
+                    item["word"].lower(),
+                    item.get("definition_en") or "",
+                    item.get("example_en") or "",
+                    item.get("definition_ko") or "",
+                    item.get("example_ko") or "",
+                )
             )
         db.commit()
 
@@ -644,7 +1506,7 @@ def story_new():
             "level": level,
             "author": author,
             "model": DEFAULT_MODEL,
-            "vocab_count": len(defs),
+            "vocab_count": len(defs_bi),
             "with_image": want_image,
             "theme": theme,
             "characters": characters,
@@ -652,7 +1514,7 @@ def story_new():
             "bme": bme,
         })
 
-        # ----- Create a Finish Draft tied to this story -----
+        # 5) Create finish draft for the author to complete later
         partial = make_partial_from_story(content)
         db.execute(
             """INSERT INTO finish_drafts (seed_prompt, partial_text, learner_name, language)
@@ -666,19 +1528,333 @@ def story_new():
             "story_id": story_id, "slug": slug, "draft_id": draft_id
         })
 
-        # ----- Redirect back here so the success modal pops, with a finish_url to that draft -----
-        # The template you updated will auto-show the modal when ?generated=1.
-        # The "Finish the Story" button will use this finish_url.
         return redirect(url_for("story_new", generated=1,
                                 finish_url=url_for('finish_view', draft_id=draft_id)))
-
     # GET
     return render_template("story_new.html")
 
+# ------- EXTRA IMPORTS (ensure at top of file) -------
+import requests
+import html
+import nltk
+from nltk.corpus import wordnet as wn
 
+# One-time WordNet download on first run
+def _ensure_wordnet():
+    try:
+        wn.synsets("tree")
+    except LookupError:
+        nltk.download("wordnet")
+        nltk.download("omw-1.4")
+
+# ------- Kid-friendly format helpers -------
+def _truncate_words(s: str, limit: int) -> str:
+    s = re.sub(r'\s+', ' ', (s or '').strip())
+    if not s:
+        return s
+    toks = s.split(' ')
+    if len(toks) <= limit:
+        return s
+    return ' '.join(toks[:limit]).rstrip(",;: ") + "."
+
+def _kidify_en(defn: str) -> str:
+    defn = re.sub(r"\(.*?\)", "", defn or "")
+    defn = re.sub(r";.*", "", defn)
+    defn = defn.strip()
+    if defn and defn[0].isupper():
+        defn = defn[0].lower() + defn[1:]
+    return _truncate_words(defn, 16)
+
+def _kidify_example_en(word: str) -> str:
+    return _truncate_words(f"I can use the word '{word}' in a sentence.", 12)
+
+def _kidify_ko(defn_ko: str) -> str:
+    defn_ko = re.sub(r"\(.*?\)", "", defn_ko or "")
+    defn_ko = re.sub(r";.*", "", defn_ko)
+    defn_ko = defn_ko.strip()
+    return _truncate_words(defn_ko, 16)
+
+def _kidify_example_ko(word: str) -> str:
+    return _truncate_words(f"나는 '{word}'라는 말을 문장에 쓸 수 있어요.", 12)
+
+# ------- Sources: WordNet (offline), Datamuse (free), Wiktionary (free) -------
+def _wordnet_def(word: str) -> str | None:
+    _ensure_wordnet()
+    for pos in ('n', 'v', 'a', 'r'):
+        syns = wn.synsets(word, pos=pos)
+        if syns:
+            gloss = syns[0].definition()
+            if gloss:
+                return gloss
+    syns = wn.synsets(word)
+    if syns:
+        return syns[0].definition()
+    return None
+
+def _datamuse_defs(word: str, timeout=4) -> list[str]:
+    try:
+        r = requests.get(
+            "https://api.datamuse.com/words",
+            params={"sp": word, "md": "d", "max": 1},
+            timeout=timeout,
+        )
+        if r.status_code != 200:
+            return []
+        arr = r.json() or []
+        if not arr:
+            return []
+        defs = arr[0].get("defs") or []
+        out = []
+        for d in defs:
+            parts = d.split("\t", 1)
+            out.append(parts[1] if len(parts) > 1 else d)
+        return out
+    except Exception:
+        return []
+
+_WIKI_ENDPOINT = "https://en.wiktionary.org/w/api.php"
+
+def _wiktionary_first_def(word: str, lang_header="English", timeout=6) -> str | None:
+    """
+    Parse raw wikitext; return first '# ' definition under ==Language== section.
+    """
+    try:
+        r = requests.get(_WIKI_ENDPOINT, params={
+            "action": "parse",
+            "page": word,
+            "prop": "wikitext",
+            "format": "json",
+            "redirects": 1
+        }, timeout=timeout)
+        if r.status_code != 200:
+            return None
+        data = r.json()
+        wikitext = data.get("parse", {}).get("wikitext", {}).get("*", "")
+        if not wikitext:
+            return None
+
+        patt = rf"==\s*{re.escape(lang_header)}\s*==(.+?)(\n==|$)"
+        m = re.search(patt, wikitext, flags=re.S)
+        if not m:
+            return None
+        block = m.group(1)
+
+        for line in block.splitlines():
+            line = line.strip()
+            if line.startswith("# ") and not line.startswith("# {{"):
+                # strip templates/links
+                line = re.sub(r"\{\{.*?\}\}", "", line)
+                line = re.sub(r"\[\[(?:[^|\]]*\|)?([^\]]+)\]\]", r"\1", line)
+                return html.unescape(line[2:].strip())
+        return None
+    except Exception:
+        return None
+
+# ------- Optional translators (set env vars to enable) -------
+NAVER_CLIENT_ID  = os.getenv("NAVER_CLIENT_ID")
+NAVER_CLIENT_SECRET = os.getenv("NAVER_CLIENT_SECRET")
+GOOGLE_API_KEY = "AIzaSyCG14vrQaBjCyidFq_xZKClZCe1U7CdkWA"
+
+def _translate_word_en_to_ko(word: str) -> str | None:
+    """
+    Prefer Papago/Google to translate the WORD itself to a concise Korean headword.
+    Returns None if unavailable.
+    """
+    # Try Papago first (usually crisper dictionary headwords)
+    t = _papago_translate_en_to_ko(word)
+    if t:
+        return t.strip()
+
+    # Fallback: Google Translate the *word* (not the definition)
+    t = _google_translate_en_to_ko(word)
+    return t.strip() if t else None
+
+
+def _papago_translate_en_to_ko(text: str, timeout=6) -> str | None:
+    if not (NAVER_CLIENT_ID and NAVER_CLIENT_SECRET):
+        return None
+    try:
+        r = requests.post(
+            "https://openapi.naver.com/v1/papago/n2mt",
+            headers={
+                "X-Naver-Client-Id": NAVER_CLIENT_ID,
+                "X-Naver-Client-Secret": NAVER_CLIENT_SECRET,
+            },
+            data={"source": "en", "target": "ko", "text": text},
+            timeout=timeout
+        )
+        if r.status_code != 200:
+            return None
+        data = r.json()
+        return data.get("message", {}).get("result", {}).get("translatedText")
+    except Exception:
+        return None
+# --- dictionary output style toggles ---
+DICT_MODE_MINIMAL = True       # no example sentences
+KO_HEADWORD_MODE = True        # ko = translate the WORD itself (not the en definition)
+
+def _google_translate_en_to_ko(text: str, timeout=6) -> str | None:
+    if not GOOGLE_API_KEY:
+        return None
+    try:
+        r = requests.post(
+            f"https://translation.googleapis.com/language/translate/v2?key={GOOGLE_API_KEY}",
+            json={"q": text, "source": "en", "target": "ko", "format": "text"},
+            timeout=timeout
+        )
+        if r.status_code != 200:
+            return None
+        data = r.json()
+        arr = data.get("data", {}).get("translations", [])
+        print("no eerror")
+        if arr:
+            return arr[0].get("translatedText")
+
+        return None
+    except Exception:
+        print("error")
+        return None
+def resolve_kid_definition_bilingual(word: str) -> dict:
+    """
+    Returns dict with EN definition + KO headword-style 'definition'.
+    - EN: short kid-friendly definition (your existing chain), examples optional.
+    - KO: DO NOT translate the EN definition. Instead, map the WORD -> concise Korean headword.
+          If the word is already Korean, keep it as-is.
+    - If DICT_MODE_MINIMAL, blank out example fields.
+    """
+    w = (word or "").strip().lower()
+    out = {
+        "word": w,
+        "definition_en": "",
+        "example_en": "",
+        "definition_ko": "",
+        "example_ko": "",
+    }
+    if not w:
+        return out
+
+    # ---------- English definition (same chain as before) ----------
+    en_def = _wordnet_def(w)
+    if not en_def:
+        dm_defs = _datamuse_defs(w)
+        if dm_defs:
+            en_def = dm_defs[0]
+    if not en_def:
+        en_def = _wiktionary_first_def(w, lang_header="English")
+    if not en_def:
+        en_def, _ = kid_def_fallback(w, "en")
+
+    en_def = _kidify_en(en_def)
+    out["definition_en"] = en_def
+
+    # Examples (disable if minimal)
+    if DICT_MODE_MINIMAL:
+        out["example_en"] = ""
+    else:
+        out["example_en"] = _kidify_example_en(w)
+
+    # ---------- Korean "definition" as headword ----------
+    if re.match(r"^[가-힣]+$", w):
+        # already Korean; keep the headword as the 'definition'
+        ko_def = w
+    else:
+        if KO_HEADWORD_MODE:
+            # translate the WORD itself (not the English definition)
+            ko_def = _translate_word_en_to_ko(w)
+        else:
+            # legacy path: translate EN definition -> KO
+            ko_def = _papago_translate_en_to_ko(en_def) or _google_translate_en_to_ko(en_def)
+
+        if not ko_def:
+            # last-resort fallback: keep Korean fallback phrase short
+            # (You can customize this further if you like)
+            ko_def, _ = kid_def_fallback(w, "ko")
+
+    # keep it concise (no examples in minimal mode)
+    out["definition_ko"] = _kidify_ko(ko_def)
+    out["example_ko"] = "" if DICT_MODE_MINIMAL else _kidify_example_ko(w)
+
+    return out
+
+
+# ------- Batch resolver (call this from story_new) -------
+from nltk.stem import WordNetLemmatizer
+
+_lemmatizer = WordNetLemmatizer()
+
+def _lemmatize_en(token: str) -> str:
+    """
+    Light lemmatization for English to reduce lookup misses.
+    Try noun -> verb -> adj -> adv order.
+    """
+    w = token
+    for pos in ("n", "v", "a", "r"):
+        candidate = nltk.corpus.wordnet.morphy(w, pos=pos)
+        if candidate:
+            w = candidate
+            break
+    # WordNetLemmatizer as last pass
+    w = _lemmatizer.lemmatize(w)
+    return w
+
+def bulk_resolve_kid_definitions_bilingual(words: list[str]) -> list[dict]:
+    """
+    Clean tokens, lemmatize English where helpful, resolve EN+KO kid-friendly defs.
+    Returns a list like:
+    [{word, definition_en, example_en, definition_ko, example_ko}, ...]
+    """
+    if not words:
+        return []
+
+    clean: list[str] = []
+    seen = set()
+
+    for raw in words:
+        w = (raw or "").strip().lower()
+        if not w:
+            continue
+
+        # Accept simple EN or KO tokens only
+        if re.match(r"^[a-z']+$", w):
+            # strip surrounding apostrophes (e.g., children's -> children’s already cleaned upstream)
+            w = w.strip("'")
+            # basic length filter
+            if not (2 <= len(w) <= 24):
+                continue
+            # lemmatize to reduce misses (cats -> cat, running -> run)
+            w = _lemmatize_en(w)
+        elif re.match(r"^[가-힣]+$", w):
+            # short heuristic length filter for KO
+            if not (1 <= len(w) <= 8):
+                continue
+        else:
+            # skip mixed/complex tokens
+            continue
+
+        if w and w not in seen:
+            seen.add(w)
+            clean.append(w)
+
+    out: list[dict] = []
+    for w in clean:
+        try:
+            item = resolve_kid_definition_bilingual(w)
+        except Exception:
+            # absolute safety net: never crash vocab build
+            de, ee = kid_def_fallback(w, "en")
+            dk, ek = kid_def_fallback(w, "ko")
+            item = {
+                "word": w,
+                "definition_en": de, "example_en": ee,
+                "definition_ko": dk, "example_ko": ek,
+            }
+        out.append(item)
+
+    return out
 
 
 @app.get("/story/<slug>")
+@login_required
 def story_view(slug):
     db = get_db()
     s = db.execute("SELECT * FROM stories WHERE slug = ?", (slug,)).fetchone()
@@ -694,61 +1870,47 @@ def story_view(slug):
     ).fetchall()
 
     return render_template("story_view.html", story=s, has_quiz=has_quiz, vocab_items=vocab_items)
-
-@app.post("/story/<slug>/build-worksheet")
-def build_worksheet(slug):
-    db = get_db()
-    s = db.execute("SELECT * FROM stories WHERE slug = ?", (slug,)).fetchone()
-    if not s:
-        return ("Story not found", 404)
-
-    db.execute("DELETE FROM quiz_questions WHERE story_id = ?", (s["id"],))
-    for q, choices, correct in simple_questions_from_story(s["content"]):
-        db.execute(
-            """INSERT INTO quiz_questions (story_id, question, choices_json, correct_index)
-               VALUES (?, ?, ?, ?)""",
-            (s["id"], q, json.dumps(choices), correct),
-        )
-    db.commit()
-    log_input("build_worksheet", {"story_id": s["id"], "slug": s["slug"]})
-    flash("Worksheet & quiz generated (simple).", "success")
-    return redirect(url_for("quiz_take", slug=slug))
-
 @app.post("/story/<slug>/build-worksheet-ai")
+@login_required
 def build_worksheet_ai(slug):
+    import time
     db = get_db()
     s = db.execute("SELECT * FROM stories WHERE slug = ?", (slug,)).fetchone()
     if not s:
         return ("Story not found", 404)
 
-    questions = generate_quiz_via_gpt(s["content"], language=s["language"], level=s["level"])
+    try:
+        questions = generate_mixed_questions_via_gpt(
+            story_text=s["content"],
+            language=s["language"],
+            level=s["level"],
+            target_total=10,
+            breakdown={"mcq":6,"short":3,"long":1}
+        )
+    except Exception as e:
+        log_input("build_worksheet_ai_gpt_only_error", {"story_id": s["id"], "error": str(e)})
+        flash("AI had an issue generating the quiz. Please try again.", "danger")
+        return redirect(url_for("story_view", slug=slug))
+
     db.execute("DELETE FROM quiz_questions WHERE story_id = ?", (s["id"],))
     for item in questions:
-        db.execute(
-            """INSERT INTO quiz_questions (story_id, question, choices_json, correct_index)
-               VALUES (?, ?, ?, ?)""",
-            (s["id"], item["question"], json.dumps(item["choices"]), int(item["correct_index"]))
-        )
+        _insert_quiz_question(db, s["id"], item)
     db.commit()
 
-    log_input("build_worksheet_ai", {
-        "story_id": s["id"], "slug": s["slug"], "qcount": len(questions), "model": DEFAULT_MODEL
-    })
-    flash("Worksheet & quiz generated by AI.", "success")
-    return redirect(url_for("quiz_take", slug=slug))
+    log_input("build_worksheet_ai_gpt_only", {"story_id": s["id"], "slug": s["slug"], "count": len(questions)})
+    flash("Worksheet generated (GPT-only).", "success")
+    return redirect(url_for("quiz_take", slug=slug, _=int(time.time())))
+
+
 @app.route("/quiz/<slug>", methods=["GET", "POST"])
+@login_required
 def quiz_take(slug):
     db = get_db()
-
-    # Load the story
-    s = db.execute(
-        "SELECT * FROM stories WHERE slug = ?",
-        (slug,)
-    ).fetchone()
+    s = db.execute("SELECT * FROM stories WHERE slug = ?", (slug,)).fetchone()
     if not s:
         return ("Story not found", 404)
 
-    # 🔗 NEW: find a matching finish_draft so we can link to /finish/<id>
+    # Draft link (if any) to show on result page
     draft_row = db.execute(
         """
         SELECT id
@@ -763,7 +1925,6 @@ def quiz_take(slug):
     ).fetchone()
     draft_id = draft_row["id"] if draft_row else None
 
-    # Pull questions
     qs = db.execute(
         "SELECT * FROM quiz_questions WHERE story_id = ? ORDER BY id ASC",
         (s["id"],)
@@ -773,34 +1934,63 @@ def quiz_take(slug):
         flash("No quiz yet. Build the worksheet first.", "warning")
         return redirect(url_for("story_view", slug=slug))
 
-    # POST: grade/save attempt
+    # Ensure qtype defaults for older rows
+    for q in qs:
+        if not q.get("qtype"):
+            q["qtype"] = "mcq"
+
     if request.method == "POST":
         taker = request.form.get(
             "taker_name",
             g.current_user["username"] if (g.current_user and g.current_user.get("username")) else "guest"
         )
-        total = len(qs)
-        score = 0
-        details = []
-        chosen_map = {}
+
+        total, score = len(qs), 0
+        details, chosen_map = [], {}
+        short_long_answers = {}  # qid -> user text
 
         for q in qs:
-            ans = request.form.get(f"q{q['id']}")
-            try:
-                chosen = int(ans)
-            except Exception:
-                chosen = -1
-            correct = (chosen == q["correct_index"])
-            if correct:
-                score += 1
-            details.append({
-                "qid": q["id"],
-                "chosen": chosen,
-                "correct": q["correct_index"]
-            })
-            chosen_map[q["id"]] = chosen
+            qtype = (q.get("qtype") or "mcq").lower()
+            field = f"q{q['id']}"
+            raw = request.form.get(field)
 
-        # Save attempt
+            if qtype == "mcq":
+                try:
+                    chosen = int(raw)
+                except Exception:
+                    chosen = -1
+                correct = (chosen == q["correct_index"])
+                if correct:
+                    score += 1
+                details.append({
+                    "qid": q["id"],
+                    "type": "mcq",
+                    "chosen": chosen,
+                    "correct": q["correct_index"]
+                })
+                chosen_map[q["id"]] = chosen
+
+            elif qtype == "short":
+                ans = (raw or "").strip()
+                details.append({
+                    "qid": q["id"],
+                    "type": "short",
+                    "answer": ans,
+                    "ref_answer": q.get("answer_text") or "",
+                    "rubric": q.get("rubric") or ""
+                })
+                short_long_answers[q["id"]] = ans
+
+            else:  # long
+                essay = (raw or "").strip()
+                details.append({
+                    "qid": q["id"],
+                    "type": "long",
+                    "answer": essay,
+                    "rubric": q.get("rubric") or ""
+                })
+                short_long_answers[q["id"]] = essay
+
         db.execute(
             """INSERT INTO quiz_attempts (story_id, taker_name, score, total, detail_json)
                VALUES (?, ?, ?, ?, ?)""",
@@ -809,56 +1999,76 @@ def quiz_take(slug):
         db.commit()
 
         pct = round((score / total) * 100) if total else 0
-        log_input("take_quiz", {
-            "story_id": s["id"], "taker": taker, "score": score, "total": total, "percent": pct
-        })
+        log_input("take_quiz", {"story_id": s["id"], "taker": taker, "score": score, "total": total, "percent": pct})
 
-        # Build normalized question list
+        # Build view model
         q_for_view = []
         for q in qs:
-            choices = q["choices_json"]
-            if isinstance(choices, str):
-                try:
-                    choices = json.loads(choices) if choices else []
-                except Exception:
-                    choices = []
-            q_for_view.append({
+            qtype = (q.get("qtype") or "mcq").lower()
+            row = {
                 "id": q["id"],
+                "type": qtype,
                 "question": q["question"],
-                "choices": choices,
-                "correct_index": q["correct_index"],
-                "chosen_index": chosen_map.get(q["id"], -1)
-            })
+                "rubric": q.get("rubric") or ""
+            }
+            if qtype == "mcq":
+                choices = q["choices_json"]
+                if isinstance(choices, str):
+                    try:
+                        choices = json.loads(choices) if choices else []
+                    except Exception:
+                        choices = []
+                row.update({
+                    "choices": choices,
+                    "correct_index": q["correct_index"],
+                    "chosen_index": chosen_map.get(q["id"], -1)
+                })
+            elif qtype == "short":
+                row.update({
+                    "user_answer": short_long_answers.get(q["id"], ""),
+                    "ref_answer": q.get("answer_text") or ""
+                })
+            else:  # long
+                row.update({
+                    "user_answer": short_long_answers.get(q["id"], "")
+                })
+            q_for_view.append(row)
 
-        # Explanations
-        explanations = explain_answers_via_gpt(
-            story_text=s["content"],
-            questions=[{"question": x["question"], "choices": x["choices"], "correct_index": x["correct_index"]} for x in q_for_view]
-        )
+        # Explanations for MCQs only (optional)
+        mcq_items_for_explain = [
+            {"question": x["question"], "choices": x.get("choices") or [], "correct_index": x.get("correct_index", 0)}
+            for x in q_for_view if x["type"] == "mcq"
+        ]
+        explanations = []
+        if mcq_items_for_explain:
+            explanations = explain_answers_via_gpt(
+                story_text=s["content"],
+                questions=mcq_items_for_explain
+            )
 
-        # 👉 Pass draft_id through so results page can also link back to Finish
         return render_template(
             "quiz_result.html",
-            story=s,
-            taker=taker,
-            score=score,
-            total=total,
-            percent=pct,
-            questions=q_for_view,
-            explanations=explanations,
-            draft_id=draft_id
+            story=s, taker=taker, score=score, total=total, percent=pct,
+            questions=q_for_view, explanations=explanations, draft_id=draft_id
         )
 
-    # GET: render the quiz
+    # GET: parse MCQ choices for the template
+    for q in qs:
+        if q["qtype"] == "mcq":
+            ch = q["choices_json"]
+            if isinstance(ch, str):
+                try:
+                    q["choices"] = json.loads(ch) if ch else []
+                except Exception:
+                    q["choices"] = []
+            else:
+                q["choices"] = ch or []
+        else:
+            q["choices"] = []
+
     return render_template("quiz_take.html", story=s, questions=qs, draft_id=draft_id)
 
-
 def explain_answers_via_gpt(story_text: str, questions: list[dict]) -> list[str]:
-    """
-    Returns a list of short explanations for each question index.
-    Falls back to simple generic lines if the model fails.
-    """
-    # Fallback first (in case client is None)
     fallback = [
         "This answer matches a clear detail stated in the story.",
         "The story describes this event directly in that order.",
@@ -866,11 +2076,8 @@ def explain_answers_via_gpt(story_text: str, questions: list[dict]) -> list[str]
         "This is the main idea repeated across the story.",
         "Sequence is supported by the order of events."
     ]
-
     if client is None or not questions:
         return (fallback * ((len(questions) // len(fallback)) + 1))[:len(questions)]
-
-    # Pack questions into JSON for the model
     qpack = []
     for i, q in enumerate(questions):
         qpack.append({
@@ -879,21 +2086,13 @@ def explain_answers_via_gpt(story_text: str, questions: list[dict]) -> list[str]
             "choices": q.get("choices") or json.loads(q.get("choices_json") or "[]"),
             "correct_index": q["correct_index"],
         })
-
     system = (
         "You explain quiz answers for a short children's story. "
         "Return STRICT JSON ONLY (no markdown): "
         "{ \"explanations\": [\"...\", \"...\", ...] } with one short reason per question, "
         "each ≤18 words, concrete and child-friendly."
     )
-    user = (
-        "STORY:\n"
-        + story_text
-        + "\n\nQUESTIONS:\n"
-        + json.dumps(qpack, ensure_ascii=False)
-        + "\n\nGive one simple reason per question in order."
-    )
-
+    user = "STORY:\n" + story_text + "\n\nQUESTIONS:\n" + json.dumps(qpack, ensure_ascii=False) + "\n\nGive one simple reason per question in order."
     try:
         resp = client.responses.create(
             model=DEFAULT_MODEL,
@@ -913,16 +2112,12 @@ def explain_answers_via_gpt(story_text: str, questions: list[dict]) -> list[str]
         return (fallback * ((len(questions) // len(fallback)) + 1))[:len(questions)]
 
 @app.post("/story/<slug>/to-finish")
+@login_required
 def story_to_finish(slug):
     db = get_db()
     s = db.execute("SELECT * FROM stories WHERE slug = ?", (slug,)).fetchone()
     if not s:
         return ("Story not found", 404)
-
-    # Require login
-    if not (g.current_user and g.current_user.get("username")):
-        flash("Please sign in to use Finish the Story.", "warning")
-        return redirect(url_for("login"))
 
     # Only the original author can start a finish draft
     current_username = g.current_user["username"]
@@ -941,26 +2136,442 @@ def story_to_finish(slug):
 
     log_input("finish_seed_from_story", {"story_id": s["id"], "draft_id": draft_id})
     return redirect(url_for("finish_view", draft_id=draft_id))
-@app.route("/finish", methods=["GET", "POST"])
-def finish_new():
+def admin_required(view_func):
+    @wraps(view_func)
+    def _wrapped(*args, **kwargs):
+        u = g.get("current_user")
+        if not (u and u.get("is_admin")):
+            flash("Admins only.", "danger")
+            return redirect(url_for("index"))
+        return view_func(*args, **kwargs)
+    return _wrapped
+# ------------------------ ADMIN ANALYTICS UI ------------------------
+@app.get("/admin/analytics")
+@login_required
+@admin_required
+def admin_analytics():
+    return render_template("admin_analytics.html")
+
+from collections import defaultdict
+
+def _parse_dt(s: str):
+    try:
+        s = (s or "").replace("Z","")
+        if "." in s: s = s.split(".",1)[0]
+        return datetime.fromisoformat(s)
+    except Exception:
+        return None
+
+@app.get("/api/admin/overview")
+@login_required
+@admin_required
+def api_admin_overview():
+    """
+    Totals + 30-day time series for stories, finishes, quiz attempts; mean quiz score.
+    """
     db = get_db()
 
+    total_users = db.execute("SELECT COUNT(*) AS c FROM users").fetchone()["c"]
+    total_stories = db.execute("SELECT COUNT(*) AS c FROM stories").fetchone()["c"]
+    total_finishes = db.execute("""
+        SELECT COUNT(*) AS c FROM finish_drafts
+        WHERE completion_text IS NOT NULL AND TRIM(completion_text) <> ''
+    """).fetchone()["c"]
+    total_attempts = db.execute("SELECT COUNT(*) AS c FROM quiz_attempts").fetchone()["c"]
+    avg_score_row = db.execute("""
+        SELECT AVG(CAST(score AS FLOAT)/NULLIF(total,0)) AS p
+        FROM quiz_attempts WHERE total > 0
+    """).fetchone()
+    avg_score = round((avg_score_row["p"] or 0)*100, 1)
+
+    # 30-day buckets (UTC naive)
+    def daily_counts(query):
+        rows = db.execute(query).fetchall()
+        buckets = defaultdict(int)
+        for r in rows:
+            t = _parse_dt(r["created_at"])
+            if not t: continue
+            d = t.date().isoformat()
+            buckets[d] += 1
+        return buckets
+
+    s_b = daily_counts("SELECT created_at FROM stories WHERE created_at >= DATETIME('now','-30 day')")
+    f_b = daily_counts("""
+        SELECT created_at FROM finish_drafts
+        WHERE completion_text IS NOT NULL AND TRIM(completion_text) <> ''
+          AND created_at >= DATETIME('now','-30 day')
+    """)
+    q_b = daily_counts("SELECT created_at FROM quiz_attempts WHERE created_at >= DATETIME('now','-30 day')")
+
+    # build continuous date axis
+    days = []
+    today = datetime.utcnow().date()
+    for i in range(29, -1, -1):
+        d = (today).fromordinal(today.toordinal() - i)
+        iso = d.isoformat()
+        days.append(iso)
+
+    return {
+        "totals": {
+            "users": total_users,
+            "stories": total_stories,
+            "finishes": total_finishes,
+            "attempts": total_attempts,
+            "avg_score_pct": avg_score
+        },
+        "series": {
+            "labels": days,
+            "stories": [s_b.get(d,0) for d in days],
+            "finishes": [f_b.get(d,0) for d in days],
+            "attempts": [q_b.get(d,0) for d in days],
+        }
+    }
+
+@app.get("/api/admin/l1l2")
+@login_required
+@admin_required
+def api_admin_l1l2():
+    """
+    Compare L1 (native EN) vs L2 across production metrics.
+    uses users.is_english_native: 1=L1, 0=L2, NULL=unknown
+    """
+    db = get_db()
+
+    def summarize(group_sql):
+        # stories authored
+        s = db.execute(f"""
+          SELECT COUNT(*) AS c FROM stories
+          WHERE author_name IN ({group_sql})
+        """).fetchone()["c"]
+
+        # completed finishes written
+        f = db.execute(f"""
+          SELECT COUNT(*) AS c FROM finish_drafts
+          WHERE completion_text IS NOT NULL AND TRIM(completion_text) <> ''
+            AND learner_name IN ({group_sql})
+        """).fetchone()["c"]
+
+        # quiz attempts + average
+        row = db.execute(f"""
+          SELECT COUNT(*) AS n, AVG(CAST(score AS FLOAT)/NULLIF(total,0)) AS p
+          FROM quiz_attempts
+          WHERE taker_name IN ({group_sql}) AND total > 0
+        """).fetchone()
+        attempts = row["n"] or 0
+        avg_pct = round((row["p"] or 0)*100, 1) if attempts else 0.0
+        return s, f, attempts, avg_pct
+
+    # build subqueries (usernames by group)
+    l1_users_sql = "SELECT username FROM users WHERE is_english_native=1"
+    l2_users_sql = "SELECT username FROM users WHERE is_english_native=0"
+    unk_users_sql = "SELECT username FROM users WHERE is_english_native IS NULL"
+
+    l1 = summarize(l1_users_sql)
+    l2 = summarize(l2_users_sql)
+    uk = summarize(unk_users_sql)
+
+    return {
+        "groups": ["L1", "L2", "Unknown"],
+        "stories": [l1[0], l2[0], uk[0]],
+        "finishes": [l1[1], l2[1], uk[1]],
+        "attempts": [l1[2], l2[2], uk[2]],
+        "avg_scores": [l1[3], l2[3], uk[3]]
+    }
+@app.get("/api/admin/users")
+@login_required
+@admin_required
+def api_admin_users():
+    db = get_db()
+    rows = db.execute("""
+      SELECT
+        u.id, u.username, u.email, u.is_english_native, u.age, u.gender, u.created_at,
+        (SELECT COUNT(*) FROM stories s WHERE s.author_name = u.username) AS story_count,
+        (SELECT COUNT(*) FROM finish_drafts fd
+          WHERE fd.learner_name = u.username
+            AND fd.completion_text IS NOT NULL AND TRIM(fd.completion_text) <> ''
+        ) AS finish_count,
+        (SELECT COUNT(*) FROM quiz_attempts qa WHERE qa.taker_name = u.username) AS attempt_count,
+        (SELECT MAX(x.dt) FROM (
+            SELECT MAX(s.created_at) AS dt FROM stories s WHERE s.author_name=u.username
+            UNION ALL
+            SELECT MAX(fd.created_at) FROM finish_drafts fd WHERE fd.learner_name=u.username
+            UNION ALL
+            SELECT MAX(qa.created_at) FROM quiz_attempts qa WHERE qa.taker_name=u.username
+        ) AS x) AS last_activity
+      FROM users u
+      ORDER BY LOWER(u.username) ASC
+    """).fetchall()
+
+    def as_bool(v):
+        return None if v is None else bool(int(v))
+
+    out = []
+    for r in rows:
+        out.append({
+            "id": r["id"],
+            "username": r["username"],
+            "email": r["email"],
+            "l1": as_bool(r["is_english_native"]),
+            "age": r["age"],
+            "gender": r["gender"],
+            "created_at": r["created_at"],
+            "story_count": r["story_count"],
+            "finish_count": r["finish_count"],
+            "attempt_count": r["attempt_count"],
+            "last_activity": r["last_activity"]
+        })
+    return {"items": out}
+@app.get("/api/admin/user/<int:user_id>")
+@login_required
+@admin_required
+def api_admin_user_detail(user_id):
+    """
+    Detailed time-series for a single user (last 60 days)
+    """
+    db = get_db()
+    u = db.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+    if not u:
+        return {"ok": False, "error": "user not found"}, 404
+
+    uname = u["username"]
+
+    def ts(query):
+        rows = db.execute(query, (uname,)).fetchall()
+        buckets = defaultdict(int)
+        for r in rows:
+            t = _parse_dt(r["created_at"])
+            if not t: continue
+            buckets[t.date().isoformat()] += 1
+        return buckets
+
+    s_b = ts("SELECT created_at FROM stories WHERE author_name=? AND created_at>=DATETIME('now','-60 day')")
+    f_b = ts("""
+        SELECT created_at FROM finish_drafts
+        WHERE learner_name=? AND created_at>=DATETIME('now','-60 day')
+          AND completion_text IS NOT NULL AND TRIM(completion_text) <> ''
+    """)
+    q_b = ts("SELECT created_at FROM quiz_attempts WHERE taker_name=? AND created_at>=DATETIME('now','-60 day')")
+
+    labels = []
+    today = datetime.utcnow().date()
+    for i in range(59, -1, -1):
+        d = (today).fromordinal(today.toordinal() - i)
+        labels.append(d.isoformat())
+
+    # last 10 attempts w/ percent
+    last_attempts = db.execute("""
+        SELECT created_at, score, total
+        FROM quiz_attempts
+        WHERE taker_name = ?
+        ORDER BY datetime(created_at) DESC LIMIT 10
+    """, (uname,)).fetchall()
+    last_attempts = [
+        {"when": r["created_at"], "percent": (round((r["score"]/r["total"])*100,1) if r["total"] else 0)}
+        for r in last_attempts
+    ]
+
+    return {
+        "ok": True,
+        "user": {"id": u["id"], "username": uname, "l1": u["is_english_native"]},
+        "series": {
+            "labels": labels,
+            "stories": [s_b.get(d,0) for d in labels],
+            "finishes": [f_b.get(d,0) for d in labels],
+            "attempts": [q_b.get(d,0) for d in labels],
+        },
+        "attempts_recent": last_attempts
+    }
+
+from datetime import datetime, timedelta
+import json
+
+@app.post("/api/admin/user_reflection/<int:user_id>")
+@login_required
+def api_admin_user_reflection(user_id: int):
+    if not (g.current_user and g.current_user.get("is_admin")):
+        return jsonify({"ok": False, "error": "forbidden"}), 403
+
+    db = get_db()
+
+    # Look up user
+    user_row = db.execute(
+        "SELECT id, username, created_at FROM users WHERE id = ?",
+        (user_id,)
+    ).fetchone()
+    if not user_row:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+
+    username = user_row["username"]
+
+    # Basic story stats
+    story_row = db.execute(
+        "SELECT COUNT(*) AS cnt FROM stories WHERE author_name = ?",
+        (username,)
+    ).fetchone()
+    story_count = (story_row["cnt"] if story_row else 0) or 0
+
+    # Quiz attempts (last ~50, newest first)
+    attempts = db.execute(
+        """
+        SELECT score, total, created_at
+        FROM quiz_attempts
+        WHERE taker_name = ?
+        ORDER BY created_at DESC
+        LIMIT 50
+        """,
+        (username,)
+    ).fetchall()
+
+    attempt_count = len(attempts)
+    percents = []
+    for row in attempts:
+        total = row["total"] or 0
+        if total > 0:
+            pct = round(row["score"] * 100.0 / total)
+            percents.append(pct)
+
+    avg_percent = round(sum(percents) / len(percents), 1) if percents else None
+    best_percent = max(percents) if percents else None
+    worst_percent = min(percents) if percents else None
+    recent_percents = percents[:5]
+
+    # Simple "activity last 30d" measure from attempts
+    cutoff = (datetime.utcnow() - timedelta(days=30)).strftime("%Y-%m-%d %H:%M:%S")
+    active_days_30 = 0
+    if attempts:
+        days = set()
+        for row in attempts:
+            ts = row["created_at"]  # TEXT "YYYY-MM-DD HH:MM:SS"
+            if ts >= cutoff:
+                days.add(ts[:10])
+        active_days_30 = len(days)
+
+    payload = {
+        "username": username,
+        "story_count": story_count,
+        "attempt_count": attempt_count,
+        "avg_percent": avg_percent,
+        "best_percent": best_percent,
+        "worst_percent": worst_percent,
+        "recent_percents": recent_percents,
+        "active_days_30": active_days_30,
+    }
+
+    # Build a short, structured prompt for the model
+    prompt = (
+        "You are an encouraging English teacher writing a brief feedback note "
+        "for one learner, based on their story writing and quiz performance.\n\n"
+        "Use 3–5 sentences. Be specific but kind. Mention:\n"
+        "- Overall effort and participation (stories written, quiz attempts).\n"
+        "- Typical quiz performance level.\n"
+        "- 1–2 concrete strengths.\n"
+        "- 1–2 gentle suggestions for next steps.\n"
+        "Avoid technical terms and percentages overload; keep it student-friendly.\n\n"
+        f"Data (JSON):\n{json.dumps(payload, ensure_ascii=False)}"
+    )
+
+    try:
+        resp = client.responses.create(
+            model=DEFAULT_MODEL,
+            input=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a supportive EFL (English as a Foreign Language) teacher. "
+                        "Write short, friendly feedback notes that a middle or high school "
+                        "student can easily understand."
+                    ),
+                },
+                {"role": "user", "content": prompt},
+            ],
+        )
+
+        # Helper that matches your other uses of responses API
+        def extract_text(r):
+            try:
+                return r.output_text
+            except Exception:
+                try:
+                    # fallback for older-style responses
+                    return "".join(
+                        block.text.value
+                        for block in r.output[0].content
+                        if getattr(block, "type", None) == "output_text"
+                        or getattr(getattr(block, "text", None), "value", None)
+                    )
+                except Exception:
+                    return ""
+
+        text = (extract_text(resp) or "").strip()
+        if not text:
+            return jsonify({"ok": False, "text": ""})
+
+        # Front-end supports either `feedback` or plain `text`
+        return jsonify({"ok": True, "text": text})
+
+    except Exception as e:
+        app.logger.exception("user_reflection failed for user %s: %s", user_id, e)
+        return jsonify({"ok": False, "error": "model_error"}), 500
+
+@app.post("/api/admin/research/reflection")
+@login_required
+@admin_required
+def api_admin_research_reflection():
+    """
+    Summarize L1 vs L2 characteristics + possible teaching actions from current aggregates.
+    Returns plain text for display/clipboard.
+    """
+    try:
+        l1l2 = api_admin_l1l2()[0] if isinstance(api_admin_l1l2(), tuple) else api_admin_l1l2()
+    except Exception:
+        l1l2 = {}
+
+    try:
+        overview = api_admin_overview()[0] if isinstance(api_admin_overview(), tuple) else api_admin_overview()
+    except Exception:
+        overview = {}
+
+    prompt = (
+        "You are an educational researcher. Based on the following JSON aggregates, write a concise analysis "
+        "comparing L1 (native English) vs L2 learners in terms of production (stories/finishes), quiz participation, and mean scores. "
+        "Suggest 3 actionable teaching adjustments tailored for L2 without disadvantaging L1, and 2 fair assessment ideas.\n\n"
+        f"OVERVIEW:\n{json.dumps(overview, ensure_ascii=False)}\n\n"
+        f"L1L2:\n{json.dumps(l1l2, ensure_ascii=False)}\n\n"
+        "Output 3 sections with short bullets:\n"
+        "1) Observations\n2) Teaching adjustments\n3) Assessment ideas\n"
+        "Avoid hedging language; keep under 220 words."
+    )
+
+    txt = "No model configured."
+    try:
+        resp = client.responses.create(
+            model=DEFAULT_MODEL,
+            input=[{"role":"user","content":prompt}],
+            temperature=0.3,
+            max_output_tokens=700
+        )
+        txt = (getattr(resp, "output_text", "") or "").strip()
+    except Exception as e:
+        txt = f"Could not run analysis: {e}"
+
+    return {"text": txt}
+
+@app.route("/finish", methods=["GET", "POST"])
+@login_required
+def finish_new():
+    db = get_db()
     if request.method == "POST":
         seed = (request.form.get("seed_prompt") or "").strip()
         language = request.form.get("language", "en")
 
-        # Prefer the logged-in username if available; otherwise use the form value or "guest"
-        if g.current_user and g.current_user.get("username"):
-            learner = g.current_user["username"]
-        else:
-            learner = (request.form.get("learner_name") or "guest").strip() or "guest"
+        learner = g.current_user["username"]
 
         if not seed:
             flash("Please add a short seed (phonics/vocab).", "warning")
             return redirect(url_for("finish_new"))
 
         try:
-            full = llm_story_from_prompt(seed, language, "phonics", learner)
+            full = llm_story_from_prompt(seed, language, "phonics", learner, learner_profile=get_learner_profile())
         except Exception:
             full = naive_story_from_prompt(seed, language)
 
@@ -979,13 +2590,8 @@ def finish_new():
         resp.headers["Cache-Control"] = "no-store"
         return resp
 
-    # -------- GET: list unfinished drafts for the current user ----------
-    if g.current_user and g.current_user.get("username"):
-        learner = g.current_user["username"]
-    else:
-        learner = "guest"
-
-    # Pull unfinished drafts + derive a matching story title (if any) via subquery
+    # GET: list unfinished drafts for the current user
+    learner = g.current_user["username"]
     drafts = db.execute(
         """
         SELECT
@@ -1009,25 +2615,52 @@ def finish_new():
         """,
         (learner,)
     ).fetchall()
-
     return render_template("finish_new.html", drafts=drafts)
+@app.post("/finish/<int:draft_id>/comment")
+@login_required
+def finish_comment(draft_id):
+    db = get_db()
+    d = db.execute("SELECT id FROM finish_drafts WHERE id = ?", (draft_id,)).fetchone()
+    if not d:
+        flash("Draft not found.", "danger")
+        return redirect(url_for("finish_new"))
+
+    if not (g.current_user and g.current_user.get("is_admin")):
+        flash("Only admins can post comments.", "danger")
+        return redirect(url_for("finish_view", draft_id=draft_id))
+
+    body = (request.form.get("body") or "").strip()
+    if not body:
+        flash("Comment cannot be empty.", "warning")
+        return redirect(url_for("finish_view", draft_id=draft_id))
+
+    author = g.current_user.get("username") or "admin"
+    db.execute(
+        "INSERT INTO finish_comments (draft_id, author_name, body) VALUES (?, ?, ?)",
+        (draft_id, author, body)
+    )
+    db.commit()
+    flash("Comment posted.", "success")
+    return redirect(url_for("finish_view", draft_id=draft_id))
+
 @app.route("/finish/<int:draft_id>", methods=["GET", "POST"])
+@login_required
 def finish_view(draft_id):
     db = get_db()
+
+    # Load draft
     d = db.execute("SELECT * FROM finish_drafts WHERE id = ?", (draft_id,)).fetchone()
     if not d:
         return ("Draft not found", 404)
 
-    # Who's logged in?
-    current_username = g.current_user["username"] if (g.current_user and g.current_user.get("username")) else None
-    is_owner = (current_username is not None and d["learner_name"] == current_username)
+    current_username = g.current_user["username"]
+    is_owner = (d["learner_name"] == current_username)
 
-    # Handle save (only author can modify)
+    # Save completion
     if request.method == "POST":
         if not is_owner:
             flash("Only the author can edit this ending.", "danger")
             return redirect(url_for("finish_view", draft_id=draft_id))
-
         completion = (request.form.get("completion_text") or "").strip()
         db.execute("UPDATE finish_drafts SET completion_text = ? WHERE id = ?", (completion, draft_id))
         db.commit()
@@ -1035,10 +2668,10 @@ def finish_view(draft_id):
         flash("Your ending has been saved.", "success")
         return redirect(url_for("finish_view", draft_id=draft_id, saved=1))
 
-    # Link back to the original story (so we can build/take a quiz)
+    # Find linked story
     story_row = db.execute(
         """
-        SELECT id, title, slug
+        SELECT id, title, slug, content, language, level
         FROM stories
         WHERE prompt = ?
           AND author_name = ?
@@ -1053,7 +2686,6 @@ def finish_view(draft_id):
     d["story_slug"]  = story_row["slug"] if story_row else None
     d["story_id"]    = story_row["id"] if story_row else None
 
-    # Does a quiz already exist?
     has_quiz = False
     if story_row:
         qcount = db.execute(
@@ -1062,22 +2694,89 @@ def finish_view(draft_id):
         ).fetchone()["cnt"]
         has_quiz = (qcount > 0)
 
-    # Viewing rules
+    # Non-owner cannot view unfinished
     if (not is_owner) and (not d["completion_text"] or not d["completion_text"].strip()):
         flash("This story isn’t finished yet. Check back later!", "info")
         return redirect(url_for("library"))
+
+    # Load precomputed vocab (bilingual)
+    vocab_words = []
+    if story_row:
+        vrows = db.execute(
+            "SELECT word, definition, example, definition_ko, example_ko FROM vocab_items WHERE story_id = ? ORDER BY id ASC",
+            (story_row["id"],)
+        ).fetchall()
+        for r in vrows:
+            vocab_words.append({
+                "word": (r.get("word") or "").lower(),
+                "definition_en": r.get("definition") or "",
+                "example_en":    r.get("example") or "",
+                "definition_ko": r.get("definition_ko") or "",
+                "example_ko":    r.get("example_ko") or "",
+            })
+    # Load comments for everyone
+    comments = db.execute(
+        """
+        SELECT author_name, body, created_at
+        FROM finish_comments
+        WHERE draft_id = ?
+        ORDER BY datetime(created_at) ASC
+        """,
+        (draft_id,)
+    ).fetchall()
+
+    is_admin = bool(g.current_user and g.current_user.get("is_admin"))
 
     return render_template(
         "finish_view.html",
         draft=d,
         can_edit=is_owner,
-        has_quiz=has_quiz
+        has_quiz=has_quiz,
+        vocab_words=vocab_words,
+        comments=comments,
+        is_admin=is_admin
     )
 
+@app.post("/library/delete/<int:draft_id>")
+@login_required
+def library_delete_draft(draft_id: int):
+    if not current_user_is_admin():
+        return ("Forbidden", 403)
+
+    db = get_db()
+    # Make sure it exists and is completed (matches what shows up in Library)
+    d = db.execute(
+        """
+        SELECT id, seed_prompt, learner_name, language, completion_text
+        FROM finish_drafts
+        WHERE id = ?
+        """,
+        (draft_id,)
+    ).fetchone()
+
+    if not d:
+        flash("Draft not found.", "warning")
+        return redirect(url_for("library"))
+
+    if not d.get("completion_text") or not str(d.get("completion_text")).strip():
+        # Not in Library anyway, but still guard
+        flash("This item is not a completed story.", "warning")
+        return redirect(url_for("library"))
+
+    # Delete just the completed finish_draft “article”
+    db.execute("DELETE FROM finish_drafts WHERE id = ?", (draft_id,))
+    db.commit()
+
+    log_input("library_delete_draft", {"draft_id": draft_id, "by": g.current_user["username"]})
+    flash("The story was deleted.", "success")
+    return redirect(url_for("library"))
+
+
+
 @app.get("/library")
+@login_required
 def library():
     db = get_db()
-    # Completed drafts + derived story title (if we can find a matching story)
     completes = db.execute(
         """
         SELECT
@@ -1101,12 +2800,13 @@ def library():
         ORDER BY datetime(fd.created_at) DESC
         """
     ).fetchall()
-
     return render_template("library.html", completes=completes)
+
 @app.get("/dashboard")
+@login_required
 def dashboard():
     db = get_db()
-    learner = (g.current_user.get("username") if g.current_user and g.current_user.get("username") else "guest")
+    learner = g.current_user["username"]
 
     story_count = db.execute(
         "SELECT COUNT(*) AS c FROM stories WHERE author_name = ?",
@@ -1185,7 +2885,6 @@ def dashboard():
         (learner,)
     ).fetchall()
 
-    # NEW: stories by this author that already have quizzes
     quizzes_ready = db.execute(
         """
         SELECT
@@ -1228,8 +2927,8 @@ def dashboard():
         quizzes_ready=quizzes_ready,
     )
 
-
 @app.get("/dashboard/export.csv")
+@login_required
 def dashboard_export():
     db = get_db()
     output = io.StringIO()
@@ -1245,36 +2944,85 @@ def dashboard_export():
     mem = io.BytesIO(output.getvalue().encode("utf-8"))
     mem.seek(0)
     return send_file(mem, mimetype="text/csv", as_attachment=True, download_name="lingoplay_export.csv")
+@app.post("/dashboard/delete-finish/<int:draft_id>")
+@login_required
+def dashboard_delete_finish(draft_id: int):
+    db = get_db()
+    d = db.execute(
+        "SELECT id, learner_name, completion_text FROM finish_drafts WHERE id = ?",
+        (draft_id,)
+    ).fetchone()
+
+    if not d:
+        flash("Draft not found.", "warning")
+        return redirect(url_for("dashboard"))
+
+    # Only the owner can delete on Dashboard
+    if d["learner_name"] != g.current_user["username"]:
+        flash("You can only delete your own drafts.", "danger")
+        return redirect(url_for("dashboard"))
+
+    # Delete the draft (unfinished or finished—Dashboard shows both lists)
+    db.execute("DELETE FROM finish_drafts WHERE id = ?", (draft_id,))
+    db.commit()
+    log_input("dashboard_delete_finish", {
+        "draft_id": draft_id,
+        "by": g.current_user["username"],
+        "finished": bool(d.get("completion_text") and str(d.get("completion_text")).strip())
+    })
+    flash("The draft was deleted.", "success")
+    return redirect(url_for("dashboard"))
+
+
+@app.post("/dashboard/delete-story/<int:story_id>")
+@login_required
+def dashboard_delete_story(story_id: int):
+    db = get_db()
+    s = db.execute(
+        "SELECT id, title, author_name FROM stories WHERE id = ?",
+        (story_id,)
+    ).fetchone()
+
+    if not s:
+        flash("Story not found.", "warning")
+        return redirect(url_for("dashboard"))
+
+    # Only the owner can delete their story
+    if s["author_name"] != g.current_user["username"]:
+        flash("You can only delete your own stories.", "danger")
+        return redirect(url_for("dashboard"))
+
+    # Delete story; quiz_questions/vocab_items cascade by FK
+    db.execute("DELETE FROM stories WHERE id = ?", (story_id,))
+    db.commit()
+    log_input("dashboard_delete_story", {"story_id": story_id, "by": g.current_user["username"]})
+    flash("The story was deleted.", "success")
+    return redirect(url_for("dashboard"))
+
+# keep the choices-json template filter used in quiz rendering
 @app.template_filter("load_json")
-def load_json_filter(s):
+def load_json_filter_choices(s):
     try:
         val = json.loads(s) if s else []
-        # always return a list for choices_json use
         return val if isinstance(val, list) else []
     except Exception:
         return []
-
 @app.post("/finish/<int:draft_id>/build-worksheet-ai")
+@login_required
 def finish_build_worksheet_ai(draft_id):
+    import time
     db = get_db()
-
-    # 1) Load the draft
-    d = db.execute(
-        "SELECT * FROM finish_drafts WHERE id = ?",
-        (draft_id,)
-    ).fetchone()
+    d = db.execute("SELECT * FROM finish_drafts WHERE id = ?", (draft_id,)).fetchone()
     if not d:
         flash("Draft not found.", "danger")
         return redirect(url_for("finish_new"))
 
-    # 2) Find the matching story (same prompt/author/lang)
+    # Find or create story bound to this draft
     story = db.execute(
         """
-        SELECT id, title, slug, content, language, level
+        SELECT id, title, slug, content, language, level, prompt, author_name
         FROM stories
-        WHERE prompt = ?
-          AND author_name = ?
-          AND language = ?
+        WHERE prompt = ? AND author_name = ? AND language = ?
         ORDER BY datetime(created_at) DESC
         LIMIT 1
         """,
@@ -1282,39 +3030,100 @@ def finish_build_worksheet_ai(draft_id):
     ).fetchone()
 
     if not story:
-        flash(
-            "We couldn’t find the original story to build a worksheet from. "
-            "If you created this via “New Story,” the worksheet/quiz is available on that story’s page.",
-            "warning"
-        )
-        return redirect(url_for("finish_view", draft_id=draft_id))
+        partial = (d.get("partial_text") or "").replace("", "").strip()
+        completion = (d.get("completion_text") or "").strip()
+        content_text = (partial + (" " + completion if completion else "")).strip() or "A short learner story."
 
-    # 3) Build quiz with GPT and save questions
+        title = (d["seed_prompt"] or "My Story").strip()
+        if len(title) > 48:
+            title = title[:48].rstrip() + "…"
+        slug = f"{slugify(title)}-{int(datetime.utcnow().timestamp())}"
+
+        db.execute(
+            """INSERT INTO stories (title, slug, prompt, language, level, content, author_name, visuals)
+               VALUES (?, ?, ?, ?, ?, ?, ?, NULL)""",
+            (title, slug, d["seed_prompt"], d["language"] or "en", "phonics", content_text, d["learner_name"])
+        )
+        db.commit()
+        story = db.execute(
+            "SELECT id, title, slug, content, language, level FROM stories WHERE slug = ?",
+            (slug,)
+        ).fetchone()
+
     try:
-        questions = generate_quiz_via_gpt(
+        questions = generate_mixed_questions_via_gpt(
             story_text=story["content"],
             language=story["language"],
-            level=story["level"]
+            level=story["level"],
+            target_total=10,
+            breakdown={"mcq":6,"short":3,"long":1}
         )
     except Exception as e:
-        log_input("build_worksheet_ai_error", {"draft_id": draft_id, "error": str(e)})
+        log_input("finish_build_worksheet_ai_gpt_only_error", {"draft_id": draft_id, "error": str(e)})
         flash("AI had an issue generating the quiz. Please try again.", "danger")
         return redirect(url_for("finish_view", draft_id=draft_id))
 
     db.execute("DELETE FROM quiz_questions WHERE story_id = ?", (story["id"],))
     for item in questions:
-        db.execute(
-            """INSERT INTO quiz_questions (story_id, question, choices_json, correct_index)
-               VALUES (?, ?, ?, ?)""",
-            (story["id"], item["question"], json.dumps(item["choices"]), int(item["correct_index"]))
-        )
+        _insert_quiz_question(db, story["id"], item)
     db.commit()
 
-    log_input("build_worksheet_ai_from_finish", {
-        "draft_id": draft_id, "story_id": story["id"], "slug": story["slug"], "qcount": len(questions)
+    log_input("finish_build_worksheet_ai_gpt_only", {
+        "draft_id": draft_id, "story_id": story["id"], "slug": story.get("slug"), "count": len(questions)
     })
-    flash("Worksheet & quiz generated by AI.", "success")
-    return redirect(url_for("quiz_take", slug=story["slug"]))
+    flash("Worksheet & quiz generated (GPT-only).", "success")
+    return redirect(url_for("quiz_take", slug=story["slug"], _=int(time.time())))
+
+
+from flask import jsonify
+
+@app.get("/api/define")
+@login_required
+def api_define():
+    """
+    Resolve a word’s bilingual definition/example for a given story.
+    Order: vocab_items (precomputed) -> fallbacks.
+    Expect ?word=...&story_id=...  (language param not needed now)
+    """
+    word = (request.args.get("word") or "").strip().lower()
+    try:
+        story_id = int(request.args.get("story_id") or 0)
+    except Exception:
+        story_id = 0
+
+    if not word:
+        return jsonify({"ok": False, "error": "missing word"}), 400
+    if not story_id:
+        return jsonify({"ok": False, "error": "missing story_id"}), 400
+
+    db = get_db()
+
+    row = db.execute(
+        """SELECT definition, example, definition_ko, example_ko
+           FROM vocab_items
+           WHERE story_id = ? AND lower(word) = ?""",
+        (story_id, word)
+    ).fetchone()
+
+    if row:
+        return jsonify({
+            "ok": True,
+            "word": word,
+            "definition_en": row.get("definition") or "",
+            "example_en":    row.get("example") or "",
+            "definition_ko": row.get("definition_ko") or "",
+            "example_ko":    row.get("example_ko") or "",
+        })
+
+    # Fallbacks if somehow not saved (should be rare)
+    de, ee = kid_def_fallback(word, "en")
+    dk, ek = kid_def_fallback(word, "ko")
+    return jsonify({
+        "ok": True,
+        "word": word,
+        "definition_en": de, "example_en": ee,
+        "definition_ko": dk, "example_ko": ek
+    })
 
 # ------------------------------------------------------------------------------------
 # Main

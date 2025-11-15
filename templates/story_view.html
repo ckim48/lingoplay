@@ -1,14 +1,168 @@
 {% if story.visuals %}
-<section class="card border-0 lp-card mb-4">
-  <div class="card-body p-0">
+<section class="card border-0 lp-card-modern overflow-hidden mb-4">
+  <div class="lp-visual-wrap position-relative">
+
+    <!-- Skeleton while loading -->
+    <div class="lp-visual-skeleton" aria-hidden="true"></div>
+
+    <!-- Image -->
     <img
+      id="storyVisual"
       src="{{ story.visuals }}"
-      alt="Story illustration"
-      class="img-fluid rounded-3 w-100"
-      style="display:block; max-height:520px; object-fit:cover;"
+      alt="{{ story.visuals_alt or ('Illustration for ' ~ (story.title or 'story')) }}"
+      class="lp-visual-img img-fluid"
       loading="lazy"
       decoding="async"
-    >
+      referrerpolicy="no-referrer"
+    />
+
+    <!-- Error fallback -->
+    <div id="visualFallback" class="lp-visual-fallback d-none" role="status" aria-live="polite">
+      <i class="bi bi-image"></i>
+      <p class="mb-1">Illustration unavailable</p>
+      <small class="text-secondary">Try reloading or generating again.</small>
+    </div>
+
+    <!-- Top-right tools -->
+    <div class="lp-visual-tools">
+      <a class="btn btn-sm btn-sky-light" href="{{ story.visuals }}" download rel="noopener">
+        <i class="bi bi-download me-1"></i> Download
+      </a>
+      <button type="button" class="btn btn-sm btn-sky-solid" data-bs-toggle="modal" data-bs-target="#visualModal">
+        <i class="bi bi-arrows-fullscreen me-1"></i> View
+      </button>
+    </div>
   </div>
+
+  {% if story.title %}
+  <figcaption class="px-4 py-3 text-secondary small">
+    Illustration for “{{ story.title }}”
+  </figcaption>
+  {% endif %}
 </section>
+
+<!-- Fullscreen viewer (Bootstrap modal) -->
+<div class="modal fade" id="visualModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-xl">
+    <div class="modal-content border-0 rounded-4">
+      <div class="modal-header border-0">
+        <h5 class="modal-title">Story Illustration</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body pt-0">
+        <div class="lp-visual-modal-frame">
+          <img
+            src="{{ story.visuals }}"
+            alt="{{ story.visuals_alt or ('Illustration for ' ~ (story.title or 'story')) }}"
+            class="img-fluid rounded-3"
+            loading="eager"
+            decoding="async"
+          />
+        </div>
+      </div>
+      <div class="modal-footer border-0">
+        <a href="{{ story.visuals }}" download rel="noopener" class="btn btn-sky-solid">
+          <i class="bi bi-download me-1"></i> Download
+        </a>
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Styles (sky palette to match final_view) -->
+<style>
+  :root{
+    --sky-25:#f2f8ff; --sky-50:#e8f3ff; --sky-100:#d8ebff;
+    --sky-200:#c2e0ff; --sky-300:#a5d1ff; --sky-400:#7fbaff;
+    --sky-500:#4ea2ff; --sky-600:#2f8cea; --sky-700:#236fbb;
+    --lp-border:#e5eaf3;
+  }
+  .lp-card-modern{ border-radius:18px; box-shadow:0 10px 30px rgba(2,6,23,.06), 0 2px 6px rgba(2,6,23,.04) }
+
+  .lp-visual-wrap{
+    position:relative;
+    aspect-ratio: 16/9; /* keeps layout stable; image still responsive */
+    background: linear-gradient(180deg,#fff, #f9fbff);
+  }
+  .lp-visual-img{
+    position:absolute; inset:0; width:100%; height:100%;
+    object-fit:cover; border-radius:14px; display:block;
+  }
+
+  /* Skeleton shimmer */
+  .lp-visual-skeleton{
+    position:absolute; inset:0; border-radius:14px;
+    background:
+      linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.55) 50%, rgba(255,255,255,0) 100%) 0 0/200% 100%,
+      linear-gradient(180deg, var(--sky-50), var(--sky-100));
+    animation: lpShimmer 1.8s ease-in-out infinite;
+    border:1px solid var(--lp-border);
+  }
+  @keyframes lpShimmer{
+    0%{ background-position:-200% 0, 0 0 }
+    100%{ background-position:200% 0, 0 0 }
+  }
+  @media (prefers-reduced-motion: reduce){
+    .lp-visual-skeleton{ animation:none }
+  }
+
+  /* Tools */
+  .lp-visual-tools{
+    position:absolute; right:12px; top:12px; display:flex; gap:.4rem; z-index:3;
+  }
+  .btn-sky-solid{
+    --bs-btn-color:#fff; --bs-btn-bg:var(--sky-600); --bs-btn-border-color:var(--sky-600);
+    --bs-btn-hover-bg:var(--sky-700); --bs-btn-hover-border-color:var(--sky-700);
+    --bs-btn-focus-shadow-rgb:35,111,187;
+  }
+  .btn-sky-light{
+    --bs-btn-color:var(--sky-700); --bs-btn-bg:var(--sky-50); --bs-btn-border-color:var(--sky-200);
+    --bs-btn-hover-color:var(--sky-700); --bs-btn-hover-bg:var(--sky-100); --bs-btn-hover-border-color:var(--sky-300);
+    --bs-btn-focus-shadow-rgb:35,111,187;
+  }
+
+  /* Error fallback */
+  .lp-visual-fallback{
+    position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    border-radius:14px; border:1px dashed var(--lp-border);
+    background: repeating-linear-gradient(135deg, #fbfdff, #fbfdff 14px, #f6faff 14px, #f6faff 28px);
+    color:#355; text-align:center; padding:1rem;
+  }
+  .lp-visual-fallback i{ font-size:2rem; color:var(--sky-600); margin-bottom:.25rem }
+  .d-none{ display:none !important }
+
+  /* Modal image frame */
+  .lp-visual-modal-frame{
+    border:1px solid var(--lp-border); border-radius:16px; padding:10px;
+    background:linear-gradient(180deg, rgba(255,255,255,.95), rgba(255,255,255,.9));
+  }
+</style>
+
+<!-- Behavior -->
+<script>
+  (function(){
+    const img = document.getElementById('storyVisual');
+    const sk = img?.previousElementSibling; // skeleton
+    const fb = document.getElementById('visualFallback');
+
+    if(img){
+      img.addEventListener('load', () => {
+        sk && (sk.style.display = 'none');
+      }, { once:true });
+
+      img.addEventListener('error', () => {
+        sk && (sk.style.display = 'none');
+        img.style.display = 'none';
+        fb && fb.classList.remove('d-none');
+      }, { once:true });
+    }
+  })();
+</script>
+
+<noscript>
+  <section class="card border-0 lp-card-modern overflow-hidden mb-4">
+    <img src="{{ story.visuals }}" alt="{{ story.visuals_alt or ('Illustration for ' ~ (story.title or 'story')) }}" class="img-fluid">
+  </section>
+</noscript>
 {% endif %}

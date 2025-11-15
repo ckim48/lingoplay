@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}AI Story Generator · LingoPlay{% endblock %}
+{% block title %}AI Story Generator · EduWeaverPlay{% endblock %}
 
 {% block content %}
 
@@ -7,7 +7,7 @@
   <div class="card-body p-4 p-lg-5">
     <div class="d-flex align-items-center justify-content-between mb-3">
       <h3 class="mb-0 fw-semibold">AI Story Generator</h3>
-      <a href="{{ url_for('library') }}" class="btn btn-lime-light">Library</a>
+      <a href="{{ url_for('library') }}" class="btn btn-sky-light">Library</a>
     </div>
 
     <form method="post" id="storyForm">
@@ -100,9 +100,9 @@
         <div class="col-md-6">
           <label class="form-label small text-uppercase fw-bold text-muted">Language</label>
           <select name="language" class="form-select form-select-lg lp-input">
-            <option value="en">English</option>
-            <option value="ko">Korean</option>
-            <option value="en-ko">English + Korean</option>
+            <option value="en" selected>English</option>
+            <option value="ko" disabled>Korean (coming soon)</option>
+            <option value="en-ko" disabled>English + Korean (coming soon)</option>
           </select>
         </div>
 
@@ -130,16 +130,16 @@
         <div class="col-md-6">
           <label class="form-label small text-uppercase fw-bold text-muted d-block">Structure</label>
           <div class="form-check form-switch lp-switch">
-            <input class="form-check-input" type="checkbox" id="bmeSwitch" name="bme" value="1" checked>
-            <label class="form-check-label" for="bmeSwitch">Enforce Beginning–Middle–End structure</label>
+            <input class="form-check-input me-2" type="checkbox" id="bmeSwitch" name="bme" value="1" checked>
+            <label class="form-check-label mt-1" for="bmeSwitch">Enforce Beginning–Middle–End structure</label>
           </div>
           <div class="form-text">Stories will follow a clear arc for early readers.</div>
         </div>
 
         <div class="col-md-6">
           <div class="form-check form-switch lp-switch">
-            <input class="form-check-input" type="checkbox" id="genImage" name="gen_image" value="1">
-            <label class="form-check-label" for="genImage">Generate one cover illustration</label>
+            <input class="form-check-input me-2" type="checkbox" id="genImage" name="gen_image" value="1">
+            <label class="form-check-label mt-1" for="genImage">Generate one cover illustration</label>
           </div>
           <div class="form-text">Creates a text-free, kid-friendly cover image.</div>
         </div>
@@ -148,7 +148,7 @@
       <!-- Actions -->
       <div class="d-flex flex-wrap gap-2 justify-content-end mt-5">
         <a href="{{ url_for('library') }}" class="btn btn-outline-secondary btn-lg">Library</a>
-        <button type="submit" class="btn btn-lime btn-lg px-4" id="genBtn">
+        <button type="submit" class="btn btn-sky-solid btn-lg px-4" id="genBtn">
           <i class="bi bi-magic me-1"></i> Generate Story
         </button>
       </div>
@@ -170,7 +170,7 @@
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content rounded-4">
       <div class="modal-header border-0">
-        <h5 class="modal-title" id="generatedModalLabel">Story ready! 🎉</h5>
+        <h5 class="modal-title" id="generatedModalLabel">Story ready!</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body pt-0">
@@ -178,24 +178,19 @@
       </div>
       <div class="modal-footer border-0">
         <a href="{{ url_for('library') }}" class="btn btn-outline-secondary">Go to Library</a>
-        <a id="goFinishBtn" href="{{ url_for('finish_new') }}" class="btn btn-lime">Finish the Story</a>
+        <a id="goFinishBtn" href="{{ url_for('finish_new') }}" class="btn btn-sky-solid">Finish the Story</a>
       </div>
     </div>
   </div>
 </div>
 
 <style>
-  /* Lime palette */
+  /* Sky palette (shared with final_view) */
   :root{
-    --lp-lime-50:  #f7fee7;
-    --lp-lime-100: #ecfccb;
-    --lp-lime-200: #d9f99d;
-    --lp-lime-300: #bef264;
-    --lp-lime-400: #a3e635;
-    --lp-lime-500: #84cc16;
-    --lp-lime-600: #65a30d;
-    --lp-lime-700: #4d7c0f;
-    --lp-border:   #e5e7eb;
+    --sky-25:#f2f8ff; --sky-50:#e8f3ff; --sky-100:#d8ebff;
+    --sky-200:#c2e0ff; --sky-300:#a5d1ff; --sky-400:#7fbaff;
+    --sky-500:#4ea2ff; --sky-600:#2f8cea; --sky-700:#236fbb;
+    --lp-border:#e5eaf3;
   }
 
   .lp-card-modern{
@@ -203,27 +198,30 @@
     box-shadow: 0 10px 30px rgba(2,6,23,.06), 0 2px 6px rgba(2,6,23,.04);
   }
 
-  /* Inputs with subtle lime accents */
+  /* Inputs with subtle sky accents */
   .lp-input .input-group-text{
     border-radius: .8rem 0 0 .8rem;
     border-right: 0;
     background: #f8fafc;
-    color: var(--lp-lime-700);
+    color: var(--sky-700);
+    border:1px solid var(--lp-border);
   }
   .lp-input .form-control{
     border-left: 0;
     border-radius: 0 .8rem .8rem 0;
+    border:1px solid var(--lp-border);
   }
   .lp-input .form-control:focus,
   .form-select.lp-input:focus{
-    border-color: var(--lp-lime-400);
-    box-shadow: 0 0 0 .25rem rgba(132,204,22,.15);
+    border-color: var(--sky-300);
+    box-shadow: 0 0 0 .25rem rgba(127,186,255,.22);
   }
   .form-select.lp-input{
     border-radius: .8rem;
+    border:1px solid var(--lp-border);
   }
 
-  /* Lime chips */
+  /* Sky chips */
   .lp-chip{
     border: 1px solid var(--lp-border);
     background: #fff;
@@ -234,59 +232,66 @@
     box-shadow: 0 1px 0 rgba(2,6,23,.06);
   }
   .lp-chip:hover{
-    background: var(--lp-lime-50);
-    border-color: var(--lp-lime-200);
+    background: var(--sky-25);
+    border-color: var(--sky-200);
     transform: translateY(-1px);
   }
   .lp-chip:active{ transform: translateY(0); }
 
-  /* Lime step badge */
+  /* Step badge (sky) */
   .lp-badge-step{
-    background: var(--lp-lime-100);
-    color: var(--lp-lime-700);
-    border: 1px solid var(--lp-lime-200);
+    background: var(--sky-50);
+    color: var(--sky-700);
+    border: 1px solid var(--sky-200);
   }
 
   .lp-divider{ border-top: 1px dashed var(--lp-border); }
 
-  /* Switch (lime when checked) */
+  /* Switch (sky when checked) */
   .lp-switch .form-check-input{ width: 3rem; height: 1.5rem; cursor: pointer; }
   .lp-switch .form-check-input:checked{
-    background-color: var(--lp-lime-600);
-    border-color: var(--lp-lime-600);
+    background-color: var(--sky-600);
+    border-color: var(--sky-600);
   }
   .lp-switch .form-check-input:focus{
-    box-shadow: 0 0 0 .25rem rgba(132,204,22,.2);
-    border-color: var(--lp-lime-400);
+    box-shadow: 0 0 0 .25rem rgba(78,162,255,.22);
+    border-color: var(--sky-300);
   }
 
-  /* Lime buttons (solid + light) */
-  .btn-lime{
-    --bs-btn-color: #fff;
-    --bs-btn-bg: var(--lp-lime-600);
-    --bs-btn-border-color: var(--lp-lime-600);
-    --bs-btn-hover-bg: var(--lp-lime-700);
-    --bs-btn-hover-border-color: var(--lp-lime-700);
-    --bs-btn-focus-shadow-rgb: 132,204,22;
-    --bs-btn-active-bg: var(--lp-lime-700);
-    --bs-btn-active-border-color: var(--lp-lime-700);
+  /* Buttons (sky) */
+  .btn-sky-solid{
+    --bs-btn-color:#fff;
+    --bs-btn-bg:var(--sky-600);
+    --bs-btn-border-color:var(--sky-600);
+    --bs-btn-hover-bg:var(--sky-700);
+    --bs-btn-hover-border-color:var(--sky-700);
+    --bs-btn-focus-shadow-rgb:35,111,187;
+    --bs-btn-active-bg:var(--sky-700);
+    --bs-btn-active-border-color:var(--sky-700);
+    box-shadow: 0 10px 22px rgba(46,140,234,.22);
   }
-  .btn-lime-light{
-    --bs-btn-color: var(--lp-lime-700);
-    --bs-btn-bg: var(--lp-lime-100);
-    --bs-btn-border-color: var(--lp-lime-200);
-    --bs-btn-hover-color: var(--lp-lime-700);
-    --bs-btn-hover-bg: var(--lp-lime-200);
-    --bs-btn-hover-border-color: var(--lp-lime-300);
-    --bs-btn-focus-shadow-rgb: 132,204,22;
-    --bs-btn-active-bg: var(--lp-lime-300);
-    --bs-btn-active-border-color: var(--lp-lime-300);
+  .btn-sky-light{
+    --bs-btn-color:var(--sky-700);
+    --bs-btn-bg:var(--sky-50);
+    --bs-btn-border-color:var(--sky-200);
+    --bs-btn-hover-color:var(--sky-700);
+    --bs-btn-hover-bg:var(--sky-100);
+    --bs-btn-hover-border-color:var(--sky-300);
+    --bs-btn-focus-shadow-rgb:35,111,187;
+    --bs-btn-active-bg:var(--sky-200);
+    --bs-btn-active-border-color:var(--sky-300);
   }
 
   /* Overlay */
-  .gen-overlay{position:fixed;inset:0;display:none;place-items:center;background:rgba(15,23,42,.55);backdrop-filter:saturate(140%) blur(4px);z-index:1055}
+  .gen-overlay{
+    position:fixed; inset:0; display:none; place-items:center;
+    background:rgba(15,23,42,.55); backdrop-filter:saturate(140%) blur(4px); z-index:1055;
+  }
   .gen-overlay.show{display:grid}
-  .gen-box{background:#fff;border-radius:1rem;padding:2rem 2.25rem;box-shadow:0 10px 30px rgba(0,0,0,.15);text-align:center;min-width:260px}
+  .gen-box{
+    background:#fff; border-radius:1rem; padding:2rem 2.25rem;
+    box-shadow:0 10px 30px rgba(0,0,0,.15); text-align:center; min-width:260px
+  }
 </style>
 
 <script>

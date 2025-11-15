@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Quiz Results · LingoPlay{% endblock %}
+{% block title %}Quiz Results · EduWeaver{% endblock %}
 
 {% block content %}
 
@@ -9,7 +9,7 @@
     <div class="d-flex align-items-center gap-3">
       <span class="badge lp-badge-step">Results</span>
       <div>
-        <h3 class="mb-0 fw-semibold lp-title-lime">Results: {{ story.title }}</h3>
+        <h3 class="mb-0 fw-semibold lp-title-sky">Results: {{ story.title }}</h3>
         <div class="text-muted small mt-1">
           Taken by {{ taker }} · {{ total }} questions · {{ story.language|upper }}
         </div>
@@ -17,7 +17,7 @@
     </div>
 
     <div class="d-flex align-items-center gap-2">
-      <div class="lp-score-chip">
+      <div class="lp-score-chip" aria-label="Score">
         <div class="lp-score">{{ score }}/{{ total }}</div>
         <div class="lp-score-sub">{{ percent }}%</div>
       </div>
@@ -55,7 +55,7 @@
         <article class="lp-result-card border rounded-4 p-3 p-md-4 {% if is_right %}is-correct{% elif you != -1 %}is-incorrect{% endif %}">
           <header class="d-flex justify-content-between align-items-start mb-2">
             <div class="lp-result-title">
-              <span class="lp-q-number">{{ loop.index }}</span>
+              <span class="lp-q-number" aria-hidden="true">{{ loop.index }}</span>
               <span>{{ q.question }}</span>
             </div>
             {% if is_right %}
@@ -74,7 +74,7 @@
               {% set is_chosen  = (i == you) %}
               <li class="lp-choice-line d-flex align-items-center gap-2">
                 <span class="lp-dot
-                  {% if is_correct %}dot-correct{% elif is_chosen and not is_correct %}dot-wrong{% else %}dot-neutral{% endif %}"></span>
+                  {% if is_correct %}dot-correct{% elif is_chosen and not is_correct %}dot-wrong{% else %}dot-neutral{% endif %}" aria-hidden="true"></span>
 
                 <div class="flex-grow-1">{{ c }}</div>
 
@@ -102,16 +102,16 @@
         <i class="bi bi-graph-up-arrow me-1"></i> Try again to improve your score.
       </div>
       <div class="d-flex flex-wrap gap-2">
-        <a href="{{ url_for('quiz_take', slug=story.slug) }}" class="btn btn-lime-light">
+        <a href="{{ url_for('quiz_take', slug=story.slug) }}" class="btn btn-sky-light">
           <i class="bi bi-arrow-repeat me-1"></i> Retake Quiz
         </a>
 
         {% if draft_id %}
-          <a href="{{ url_for('finish_view', draft_id=draft_id) }}" class="btn btn-lime">
+          <a href="{{ url_for('finish_view', draft_id=draft_id) }}" class="btn btn-sky-solid">
             <i class="bi bi-pencil-square me-1"></i> Back to Draft
           </a>
         {% else %}
-          <a href="{{ url_for('story_view', slug=story.slug) }}" class="btn btn-lime">
+          <a href="{{ url_for('story_view', slug=story.slug) }}" class="btn btn-sky-solid">
             <i class="bi bi-book me-1"></i> Back to Story
           </a>
         {% endif %}
@@ -127,29 +127,22 @@
 
 <!-- Theme CSS -->
 <style>
-  /* Lime palette */
+  /* Sky palette (shared) */
   :root{
-    --lp-lime-50:#f7fee7; --lp-lime-100:#ecfccb; --lp-lime-200:#d9f99d;
-    --lp-lime-300:#bef264; --lp-lime-400:#a3e635; --lp-lime-500:#84cc16;
-    --lp-lime-600:#65a30d; --lp-lime-700:#4d7c0f; --lp-border:#e5e7eb;
+    --sky-25:#f2f8ff; --sky-50:#e8f3ff; --sky-100:#d8ebff;
+    --sky-200:#c2e0ff; --sky-300:#a5d1ff; --sky-400:#7fbaff;
+    --sky-500:#4ea2ff; --sky-600:#2f8cea; --sky-700:#236fbb;
+    --ink:#0f172a; --muted:#667085;
+    --lp-border:#e5eaf3;
   }
 
-  .lp-card-modern{
-    border-radius:18px;
-    box-shadow:0 10px 30px rgba(2,6,23,.06), 0 2px 6px rgba(2,6,23,.04);
-  }
-
-  .lp-title-lime{
-    color:var(--lp-lime-700);
-    letter-spacing:.2px;
-  }
+  .lp-card-modern{ border-radius:18px; box-shadow:0 10px 30px rgba(2,6,23,.06), 0 2px 6px rgba(2,6,23,.04); }
+  .lp-title-sky{ color:var(--sky-700); letter-spacing:.2px; }
 
   /* Step badge */
   .lp-badge-step{
-    background:var(--lp-lime-100);
-    color:var(--lp-lime-700);
-    border:1px solid var(--lp-lime-200);
-    font-weight:600;
+    background:var(--sky-50); color:var(--sky-700);
+    border:1px solid var(--sky-200); font-weight:600;
   }
 
   /* Score chip */
@@ -158,8 +151,8 @@
     width:84px; height:64px; border:1px solid var(--lp-border); border-radius:12px;
     background:#fff; box-shadow:0 2px 6px rgba(2,6,23,.06);
   }
-  .lp-score{ font-weight:700; font-size:1.125rem; line-height:1; color:#0f172a; }
-  .lp-score-sub{ font-size:.8rem; color:var(--lp-lime-700); font-weight:600; }
+  .lp-score{ font-weight:700; font-size:1.125rem; line-height:1; color:var(--ink); }
+  .lp-score-sub{ font-size:.8rem; color:var(--sky-700); font-weight:600; }
 
   /* Result cards with left accent */
   .lp-result-card{ position:relative; border:1px solid var(--lp-border); background:#fff; }
@@ -167,88 +160,69 @@
     content:""; position:absolute; left:-1px; top:-1px; bottom:-1px; width:6px;
     border-radius:10px 0 0 10px; background:transparent;
   }
-  .lp-result-card.is-correct::before{ background:var(--lp-lime-400); }
+  .lp-result-card.is-correct::before{ background:var(--sky-400); }
   .lp-result-card.is-incorrect::before{ background:#fecaca; } /* soft red */
 
-  .lp-result-title{
-    font-weight:600; color:#0f172a; display:flex; align-items:center; gap:.6rem;
-  }
+  .lp-result-title{ font-weight:600; color:var(--ink); display:flex; align-items:center; gap:.6rem; }
   .lp-q-number{
     display:inline-flex; align-items:center; justify-content:center;
     width:32px; height:32px; border-radius:999px;
-    background:var(--lp-lime-100); color:var(--lp-lime-700);
-    border:1px solid var(--lp-lime-200); font-weight:700; flex:0 0 32px;
+    background:var(--sky-50); color:var(--sky-700);
+    border:1px solid var(--sky-200); font-weight:700; flex:0 0 32px;
   }
 
   /* Choice lines */
   .lp-choice-line{ padding:.4rem .5rem; border-radius:.5rem; }
-  .lp-choice-line:hover{ background:var(--lp-lime-50); }
+  .lp-choice-line:hover{ background:var(--sky-25); }
 
   .lp-dot{ width:10px; height:10px; border-radius:999px; display:inline-block; }
-  .dot-correct{ background:var(--lp-lime-500); }
+  .dot-correct{ background:var(--sky-600); }
   .dot-wrong{ background:#ef4444; }
   .dot-neutral{ background:#cbd5e1; }
 
   /* Chips */
-  .lp-chip-correct{
-    background:var(--lp-lime-100); color:var(--lp-lime-700);
-    border:1px solid var(--lp-lime-200); font-weight:600;
-  }
-  .lp-chip-your{
-    background:#e0f2fe; color:#075985; border:1px solid #bae6fd; font-weight:600;
-  }
-  .lp-chip-opt{
-    background:#f8fafc; color:#334155; border:1px solid var(--lp-border);
-  }
-  .lp-chip-wrong{
-    background:#fee2e2; color:#7f1d1d; border:1px solid #fecaca; font-weight:600;
-  }
-  .lp-chip-skip{
-    background:#f1f5f9; color:#334155; border:1px solid #e2e8f0; font-weight:600;
-  }
+  .lp-chip-correct{ background:var(--sky-50); color:var(--sky-700); border:1px solid var(--sky-200); font-weight:600; }
+  .lp-chip-your{ background:#e0f2fe; color:#075985; border:1px solid #bae6fd; font-weight:600; }
+  .lp-chip-opt{ background:#f8fafc; color:#334155; border:1px solid var(--lp-border); }
+  .lp-chip-wrong{ background:#fee2e2; color:#7f1d1d; border:1px solid #fecaca; font-weight:600; }
+  .lp-chip-skip{ background:#f1f5f9; color:#334155; border:1px solid #e2e8f0; font-weight:600; }
 
   /* Praise badges */
-  .lp-badge-good{
-    background:var(--lp-lime-200);
-    color:var(--lp-lime-700);
-    border:1px solid var(--lp-lime-300);
-    font-weight:700;
-  }
-  .lp-badge-okay{
-    background:#fef3c7; color:#92400e; border:1px solid #fde68a; font-weight:700;
-  }
-  .lp-badge-bad{
-    background:#fee2e2; color:#991b1b; border:1px solid #fecaca; font-weight:700;
-  }
+  .lp-badge-good{ background:var(--sky-100); color:var(--sky-700); border:1px solid var(--sky-200); font-weight:700; }
+  .lp-badge-okay{ background:#fef3c7; color:#92400e; border:1px solid #fde68a; font-weight:700; }
+  .lp-badge-bad{ background:#fee2e2; color:#991b1b; border:1px solid #fecaca; font-weight:700; }
 
-  /* Buttons */
-  .btn-lime{
-    --bs-btn-color:#fff;
-    --bs-btn-bg:var(--lp-lime-600);
-    --bs-btn-border-color:var(--lp-lime-600);
-    --bs-btn-hover-bg:var(--lp-lime-700);
-    --bs-btn-hover-border-color:var(--lp-lime-700);
-    --bs-btn-focus-shadow-rgb:132,204,22;
-    --bs-btn-active-bg:var(--lp-lime-700);
-    --bs-btn-active-border-color:var(--lp-lime-700);
+  /* Buttons (sky) */
+  .btn-sky-solid{
+    --bs-btn-color:#fff; --bs-btn-bg:var(--sky-600); --bs-btn-border-color:var(--sky-600);
+    --bs-btn-hover-bg:var(--sky-700); --bs-btn-hover-border-color:var(--sky-700);
+    --bs-btn-focus-shadow-rgb:35,111,187; --bs-btn-active-bg:var(--sky-700); --bs-btn-active-border-color:var(--sky-700);
   }
-  .btn-lime-light{
-    --bs-btn-color:var(--lp-lime-700);
-    --bs-btn-bg:var(--lp-lime-100);
-    --bs-btn-border-color:var(--lp-lime-200);
-    --bs-btn-hover-color:var(--lp-lime-700);
-    --bs-btn-hover-bg:var(--lp-lime-200);
-    --bs-btn-hover-border-color:var(--lp-lime-300);
-    --bs-btn-focus-shadow-rgb:132,204,22;
-    --bs-btn-active-bg:var(--lp-lime-300);
-    --bs-btn-active-border-color:var(--lp-lime-300);
+  .btn-sky-light{
+    --bs-btn-color:var(--sky-700); --bs-btn-bg:var(--sky-50); --bs-btn-border-color:var(--sky-200);
+    --bs-btn-hover-color:var(--sky-700); --bs-btn-hover-bg:var(--sky-100); --bs-btn-hover-border-color:var(--sky-300);
+    --bs-btn-focus-shadow-rgb:35,111,187; --bs-btn-active-bg:var(--sky-200); --bs-btn-active-border-color:var(--sky-300);
   }
 
   /* Sticky action bar */
   .lp-sticky-actions{
-    position:sticky; bottom:0;
-    background:linear-gradient(to top,#fff 85%,rgba(255,255,255,0));
-    padding-top:1rem;
+    position:sticky; bottom:0; background:linear-gradient(to top,#fff 85%,rgba(255,255,255,0)); padding-top:1rem;
+  }
+
+  /* Focus visibility */
+  :focus-visible{ outline:3px solid color-mix(in oklab, var(--sky-400) 55%, white); outline-offset:2px; border-radius:.5rem; }
+
+  /* Compact on mobile */
+  @media (max-width: 576px){
+    .lp-score-chip{ width:74px; height:58px; }
+    .lp-q-number{ width:28px; height:28px; font-size:.9rem; }
+    .lp-result-card{ padding:1rem !important; }
+  }
+
+  /* Print-friendly: hide sticky bar & badges background tint */
+  @media print{
+    .lp-sticky-actions{ display:none !important; }
+    .lp-chip-correct,.lp-chip-your,.lp-chip-opt,.lp-chip-wrong,.lp-chip-skip{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }
   }
 </style>
 
