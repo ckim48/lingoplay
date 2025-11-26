@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block title %}{{ class_info.name }} · Class · EduWeaver{% endblock %}
+
+{% block content %}
+<div class="card border-0 lp-card-modern mt-3 mb-4">
+  <div class="card-body p-4 p-lg-5">
+    <div class="d-flex flex-wrap justify-content-between align-items-center">
+      <div>
+        <h3 class="mb-1 fw-semibold">{{ class_info.name }}</h3>
+        <div class="text-muted small">
+          Created by {{ class_info.owner_name }} · {{ class_info.created_at }}
+          {% if is_teacher %}
+            · Code: <strong>{{ class_info.code }}</strong>
+          {% endif %}
+        </div>
+      </div>
+      <a href="{{ url_for('classes_home') }}" class="btn btn-sky-light">All Classes</a>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-4">
+    <section class="card border-0 lp-card-modern">
+      <div class="card-body p-4">
+        <h6 class="text-muted text-uppercase small mb-2">Roster</h6>
+        <ul class="list-group list-group-flush">
+          {% for m in members %}
+            <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+              <div>
+                <div class="fw-semibold">{{ m.username }}</div>
+                <div class="small text-muted">{{ m.role|capitalize }}</div>
+              </div>
+            </li>
+          {% endfor %}
+        </ul>
+      </div>
+    </section>
+  </div>
+
+  <div class="col-lg-8">
+    <section class="card border-0 lp-card-modern mb-4">
+      <div class="card-body p-4">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h6 class="text-muted text-uppercase small mb-0">In-progress stories</h6>
+          {% if not unfinished %}
+            <span class="small text-muted">None yet</span>
+          {% endif %}
+        </div>
+
+        {% if unfinished %}
+        <div class="table-responsive">
+          <table class="table align-middle mb-0">
+            <thead class="small text-muted">
+              <tr>
+                <th>Title</th>
+                <th>Student</th>
+                <th>Language</th>
+                <th>Started</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for d in unfinished %}
+              <tr>
+                <td>{{ d.story_title or 'Untitled' }}</td>
+                <td>{{ d.learner_name }}</td>
+                <td>{{ d.language|upper }}</td>
+                <td>{{ d.created_at }}</td>
+                <td class="text-end">
+                  <a href="{{ url_for('finish_view', draft_id=d.id) }}" class="btn btn-sm btn-outline-sky">
+                    View &amp; feedback
+                  </a>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% endif %}
+      </div>
+    </section>
+
+    <section class="card border-0 lp-card-modern">
+      <div class="card-body p-4">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h6 class="text-muted text-uppercase small mb-0">Completed stories</h6>
+          {% if not completed %}
+            <span class="small text-muted">None yet</span>
+          {% endif %}
+        </div>
+
+        {% if completed %}
+        <div class="table-responsive">
+          <table class="table align-middle mb-0">
+            <thead class="small text-muted">
+              <tr>
+                <th>Title</th>
+                <th>Student</th>
+                <th>Language</th>
+                <th>Finished</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for d in completed %}
+              <tr>
+                <td>{{ d.story_title or 'Untitled' }}</td>
+                <td>{{ d.learner_name }}</td>
+                <td>{{ d.language|upper }}</td>
+                <td>{{ d.created_at }}</td>
+                <td class="text-end">
+                  <a href="{{ url_for('finish_view', draft_id=d.id) }}" class="btn btn-sm btn-sky-light">
+                    Open story
+                  </a>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% endif %}
+      </div>
+    </section>
+  </div>
+</div>
+
+<style>
+  .lp-card-modern{
+    border-radius:18px;
+    box-shadow:0 10px 30px rgba(2,6,23,.06),0 2px 6px rgba(2,6,23,.04);
+  }
+  .btn-sky-light{
+    --bs-btn-color:#236fbb;
+    --bs-btn-bg:#e8f3ff;
+    --bs-btn-border-color:#c2e0ff;
+    --bs-btn-hover-bg:#d8ebff;
+    --bs-btn-hover-border-color:#a5d1ff;
+  }
+</style>
+{% endblock %}

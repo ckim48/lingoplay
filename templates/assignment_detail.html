@@ -1,0 +1,328 @@
+{% extends "base.html" %}
+{% block title %}{{ assignment.title }} · Assignment{% endblock %}
+{% block content %}
+
+<div class="mt-4 mb-3 d-flex align-items-center justify-content-between">
+  <div>
+    <h3 class="mb-1 lp-section-title">{{ assignment.title }}</h3>
+    <div class="text-secondary small">
+      <span class="badge rounded-pill lp-badge-soft me-2">{{ assignment.classroom_name }}</span>
+      Created {{ assignment.created_at | dt }}
+      {% if assignment.due_at %}
+        · <strong>Due {{ assignment.due_at | dt }}</strong>
+      {% endif %}
+    </div>
+  </div>
+  <a href="{{ url_for('classroom_detail', classroom_id=assignment.classroom_id) }}"
+     class="btn btn-sky-outline">
+    Back to Class
+  </a>
+</div>
+
+<div class="card border-0 shadow-sm rounded-4 lp-card-modern mb-4">
+  <div class="card-body p-4 p-lg-5">
+    {% if assignment.description %}
+      <h6 class="lp-section-title small text-uppercase mb-2">Teacher Instructions</h6>
+      <p class="mb-4">{{ assignment.description }}</p>
+    {% endif %}
+
+    {% if assignment.story_content %}
+      <h6 class="lp-section-title small text-uppercase mb-2">Partial Story</h6>
+      <pre class="lp-seed-story mb-0" style="white-space:pre-wrap">{{ assignment.story_content }}</pre>
+    {% endif %}
+  </div>
+</div>
+
+{% if is_teacher %}
+  {# ================= TEACHER VIEW ================= #}
+  <div class="card border-0 shadow-sm rounded-4 lp-card-modern">
+    <div class="card-body p-4 p-lg-5">
+      <h5 class="mb-3 lp-section-title">Submissions</h5>
+      <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+          <thead class="lp-table-head">
+            <tr>
+              <th>Student</th>
+              <th>Status</th>
+              <th class="text-end">Review</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in roster %}
+              <tr>
+                <td>{{ r.username }}</td>
+                <td>
+                  {% if r.submission_id %}
+                    {% if r.completion_text %}
+                      <span class="badge lp-badge-status-submitted">Submitted</span>
+                    {% else %}
+                      <span class="badge lp-badge-status-progress">In progress</span>
+                    {% endif %}
+                  {% else %}
+                    <span class="badge lp-badge-status-notstarted">Not started</span>
+                  {% endif %}
+                </td>
+                <td class="text-end">
+                  {% if r.draft_id %}
+                    <button
+                      type="button"
+                      class="btn btn-sky-primary btn-sm"
+                      data-bs-toggle="collapse"
+                      data-bs-target="#story-{{ r.draft_id }}"
+                    >
+                      Review story
+                    </button>
+                  {% else %}
+                    <button type="button" class="btn btn-secondary btn-sm" disabled>
+                      No story
+                    </button>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      {# Story + comment panels #}
+      {% for r in roster %}
+        {% if r.draft_id %}
+          <div class="collapse mt-4" id="story-{{ r.draft_id }}">
+            <div class="border rounded-3 p-3 p-md-4 bg-light">
+              <h6 class="fw-semibold mb-3">
+                {{ r.username }}'s Story
+              </h6>
+
+              <div class="mb-2 small text-muted">Partial story</div>
+              <div class="lp-seed-story mb-3" style="white-space:pre-wrap;">
+                {{ r.partial_text or 'No partial story.' }}
+              </div>
+
+              <div class="mb-2 small text-muted">Student ending</div>
+              <div class="lp-seed-story mb-3" style="white-space:pre-wrap;">
+                {{ r.completion_text or 'No ending yet.' }}
+              </div>
+
+              <hr class="my-3">
+
+              <div class="mb-2 small text-muted">Teacher comments</div>
+              {% set comments = comments_by_draft.get(r.draft_id) if comments_by_draft is defined else [] %}
+              {% if comments %}
+                <div class="mb-3">
+                  {% for c in comments %}
+                    <div class="border rounded-3 p-2 mb-2 bg-white">
+                      <div class="small text-muted">
+                        <strong>{{ c.author_name }}</strong> · {{ c.created_at }}
+                      </div>
+                      <div>{{ c.body }}</div>
+                    </div>
+                  {% endfor %}
+                </div>
+              {% else %}
+                <p class="text-muted small mb-3">No comments yet.</p>
+              {% endif %}
+
+              <form method="post"
+                    action="{{ url_for('assignment_comment', assignment_id=assignment.id, draft_id=r.draft_id) }}">
+                <div class="mb-2">
+                  <label class="form-label small text-uppercase text-muted">
+                    Add a comment
+                  </label>
+                  <textarea
+                    name="body"
+                    class="form-control"
+                    rows="3"
+                    placeholder="Write feedback for {{ r.username }}…"
+                  ></textarea>
+                </div>
+                <button type="submit" class="btn btn-sky-solid btn-sm">
+                  Add Comment
+                </button>
+              </form>
+            </div>
+          </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+
+{% else %}
+  {# ================= STUDENT VIEW ================= #}
+  <div class="card border-0 shadow-sm rounded-4 lp-card-modern">
+    <div class="card-body p-4 p-lg-5">
+
+      {% if submission %}
+        {% if submission.completion_text %}
+          <p class="text-success mb-3 small">
+            You submitted your story. You can still edit your ending here.
+          </p>
+        {% else %}
+          <p class="text-secondary mb-3 small">
+            You started this story. Finish the ending below and click <strong>Save Ending</strong>.
+          </p>
+        {% endif %}
+
+        <form method="post">
+          <label class="form-label small text-uppercase fw-bold text-muted">
+            Your Ending
+          </label>
+          <div class="lp-editor">
+            <textarea
+              name="completion_text"
+              class="form-control lp-editor-area"
+              rows="7"
+              placeholder="Write your ending here…"
+            >{{ submission.completion_text or '' }}</textarea>
+          </div>
+
+          <div class="d-flex justify-content-end gap-2 mt-3">
+            <button type="submit" class="btn btn-sky-solid">
+              <i class="bi bi-pencil-square me-1"></i> Save Ending
+            </button>
+          </div>
+        </form>
+
+        {# === Teacher feedback visible to students === #}
+        {% if comments %}
+          <hr class="my-4">
+          <h6 class="lp-section-title small text-uppercase mb-2">Teacher Feedback</h6>
+          <div>
+            {% for c in comments %}
+              <div class="border rounded-3 p-2 mb-2 bg-light">
+                <div class="small text-muted">
+                  <strong>{{ c.author_name }}</strong> · {{ c.created_at }}
+                </div>
+                <div>{{ c.body }}</div>
+              </div>
+            {% endfor %}
+          </div>
+        {% endif %}
+
+      {% else %}
+        <p class="text-secondary mb-3 small">
+          You haven’t started this story yet. Click the button below to create your own copy.
+        </p>
+        <a href="{{ url_for('assignment_write', assignment_id=assignment.id) }}"
+           class="btn btn-sky-solid">
+          Start writing
+        </a>
+      {% endif %}
+    </div>
+  </div>
+{% endif %}
+
+<style>
+  :root{
+    --sky-25:#f2f8ff; --sky-50:#e8f3ff; --sky-100:#d8ebff;
+    --sky-200:#c2e0ff; --sky-300:#a5d1ff; --sky-400:#7fbaff;
+    --sky-500:#4ea2ff; --sky-600:#2f8cea; --sky-700:#236fbb;
+    --border:#e5eaf3;
+  }
+
+  body{ background:#f6f9ff; }
+
+  .lp-card-modern{
+    border-radius:18px;
+    box-shadow:0 10px 30px rgba(2,6,23,.06), 0 2px 6px rgba(2,6,23,.04);
+  }
+
+  .lp-section-title{
+    color:var(--sky-700);
+    font-weight:700;
+  }
+
+  .lp-badge-soft{
+    background:var(--sky-50);
+    color:var(--sky-700);
+    border:1px solid var(--sky-200);
+    font-weight:600;
+  }
+
+  .lp-seed-story{
+    background:var(--sky-25);
+    border-radius:12px;
+    padding:1rem 1.25rem;
+    border:1px solid var(--border);
+    font-size:.9rem;
+  }
+
+  .lp-table-head{
+    background:var(--sky-50);
+    border-bottom:1px solid var(--border);
+  }
+
+  /* Status badges */
+  .lp-badge-status-submitted{
+    background:#dcfce7;
+    color:#166534;
+    border:1px solid #86efac;
+    font-weight:600;
+  }
+  .lp-badge-status-progress{
+    background:#fef9c3;
+    color:#854d0e;
+    border:1px solid #fde68a;
+    font-weight:600;
+  }
+  .lp-badge-status-notstarted{
+    background:#e5e7eb;
+    color:#374151;
+    border:1px solid #d1d5db;
+    font-weight:600;
+  }
+
+  .btn-sky-outline{
+    --bs-btn-color:var(--sky-700);
+    --bs-btn-bg:transparent;
+    --bs-btn-border-color:var(--sky-300);
+    --bs-btn-hover-bg:var(--sky-50);
+    --bs-btn-hover-border-color:var(--sky-400);
+    --bs-btn-active-bg:var(--sky-100);
+  }
+
+  .btn-sky-primary{
+    --bs-btn-color:#0b1224;
+    --bs-btn-bg:var(--sky-300);
+    --bs-btn-border-color:var(--sky-400);
+    --bs-btn-hover-bg:var(--sky-400);
+    --bs-btn-hover-border-color:var(--sky-500);
+    --bs-btn-active-bg:var(--sky-500);
+    --bs-btn-active-border-color:var(--sky-600);
+  }
+
+  .btn-sky-solid{
+    --bs-btn-color:#fff;
+    --bs-btn-bg:var(--sky-600);
+    --bs-btn-border-color:var(--sky-600);
+    --bs-btn-hover-bg:var(--sky-700);
+    --bs-btn-hover-border-color:var(--sky-700);
+    --bs-btn-focus-shadow-rgb:35,111,187;
+    --bs-btn-active-bg:var(--sky-700);
+    --bs-btn-active-border-color:var(--sky-700);
+    box-shadow:0 10px 22px rgba(46,140,234,.22);
+  }
+
+  /* Editor */
+  .lp-editor{
+    border:2px dashed var(--sky-200);
+    border-radius:12px;
+    background:#fff;
+    box-shadow:inset 0 1px 0 rgba(0,0,0,.03);
+  }
+  .lp-editor-area{
+    border:0!important;
+    resize:vertical;
+    min-height:160px;
+    padding:14px 16px;
+    font-size:1rem;
+    line-height:1.65;
+    color:#0f172a;
+    background:transparent;
+  }
+  .lp-editor-area:focus{
+    outline:none;
+    box-shadow:0 0 0 .3rem rgba(78,162,255,.20);
+  }
+</style>
+
+{% endblock %}

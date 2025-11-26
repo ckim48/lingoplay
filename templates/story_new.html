@@ -68,7 +68,7 @@
         <span class="badge rounded-pill lp-badge-step">2</span>
         <span class="fw-medium">Style & Language</span>
         <span class="vr mx-2"></span>
-        <span class="text-secondary small">Guide tone, theme, and structure. You can also set bilingual output.</span>
+        <span class="text-secondary small">Guide tone, theme, and structure. You can also set bilingual output and who finishes the ending.</span>
       </div>
 
       <!-- Theme / Characters -->
@@ -127,6 +127,7 @@
           </select>
         </div>
 
+        <!-- Story structure -->
         <div class="col-md-6">
           <label class="form-label small text-uppercase fw-bold text-muted d-block">Structure</label>
           <div class="form-check form-switch lp-switch">
@@ -134,6 +135,20 @@
             <label class="form-check-label mt-1" for="bmeSwitch">Enforce Beginning–Middle–End structure</label>
           </div>
           <div class="form-text">Stories will follow a clear arc for early readers.</div>
+        </div>
+
+        <!-- NEW: Ending mode -->
+        <div class="col-md-6">
+          <label class="form-label small text-uppercase fw-bold text-muted d-block">Ending Mode</label>
+          <div class="form-check form-switch lp-switch">
+            <input class="form-check-input me-2" type="checkbox" id="studentFinish" name="student_finish" value="1" checked>
+            <label class="form-check-label mt-1" for="studentFinish">
+              Let students finish the ending
+            </label>
+          </div>
+          <div class="form-text">
+            When this is off, the AI writes the full ending and no “finish the story” activity is created.
+          </div>
         </div>
 
         <div class="col-md-6">
@@ -165,7 +180,7 @@
   </div>
 </div>
 
-<!-- Success Modal -->
+<!-- Success Modal (used only when student_finish is ON) -->
 <div class="modal fade" id="generatedModal" tabindex="-1" aria-labelledby="generatedModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content rounded-4">
@@ -333,7 +348,7 @@
       });
     }
 
-    // Auto-show the success modal if ?generated=1 (optionally with &finish_url=...)
+    // Auto-show the success modal if ?generated=1 (only used when student_finish is on)
     const params = new URLSearchParams(window.location.search);
     if (params.get('generated') === '1') {
       const el = document.getElementById('generatedModal');

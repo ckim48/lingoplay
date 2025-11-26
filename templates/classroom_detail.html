@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+{% block title %}{{ classroom.name }} · Classroom{% endblock %}
+{% block content %}
+
+<div class="mt-4 mb-3 d-flex align-items-center justify-content-between">
+  <div>
+    <h3 class="mb-1 lp-section-title">{{ classroom.name }}</h3>
+    <div class="text-secondary small">
+      Class code: <strong>{{ classroom.code }}</strong>
+    </div>
+  </div>
+  <a href="{{ url_for('classrooms') }}" class="btn btn-sky-outline">
+    All Classrooms
+  </a>
+</div>
+
+<div class="row g-4">
+  <!-- Left: Assignments -->
+  <div class="col-lg-8">
+    <div class="card border-0 shadow-sm rounded-4 lp-card-modern mb-4">
+      <div class="card-body p-4 p-lg-5">
+        <div class="d-flex align-items-center mb-3">
+          <h5 class="mb-0 lp-section-title">Assignments</h5>
+          {% if is_teacher %}
+            <a href="{{ url_for('assignment_new', classroom_id=classroom.id) }}"
+               class="btn btn-sky-primary btn-sm ms-auto">
+              New Assignment
+            </a>
+          {% endif %}
+        </div>
+
+        {% if assignments %}
+          <ul class="list-group list-group-flush">
+            {% for a in assignments %}
+              <li class="list-group-item d-flex justify-content-between align-items-center">
+                <div class="me-3">
+                  <div class="fw-semibold">
+                    {{ a.title }}
+
+                    {# Student-only status + reviewed badges #}
+                    {% if not is_teacher and a.my_status %}
+                      <span class="badge ms-2
+                                   {% if a.my_status == 'submitted' %}
+                                     lp-badge-status-submitted
+                                   {% else %}
+                                     lp-badge-status-progress
+                                   {% endif %}">
+                        {{ a.my_status|replace('_',' ')|capitalize }}
+                      </span>
+                    {% endif %}
+
+                    {% if not is_teacher and a.has_review %}
+                      <span class="badge ms-1 lp-badge-reviewed">
+                        Reviewed
+                      </span>
+                    {% endif %}
+                  </div>
+
+                  <div class="text-secondary small">
+                    {% if a.story_title %}
+                      Story: {{ a.story_title }} ·
+                    {% endif %}
+                    Created {{ a.created_at | dt }}
+                    {% if a.due_at %}
+                      · Due <strong>{{ a.due_at | dt }}</strong>
+                    {% endif %}
+                  </div>
+                </div>
+
+                <a href="{{ url_for('assignment_detail', assignment_id=a.id) }}"
+                   class="btn btn-sky-light btn-sm">
+                  Open
+                </a>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="text-secondary mb-0">No assignments yet.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: Roster -->
+  <div class="col-lg-4">
+    <div class="card border-0 shadow-sm rounded-4 lp-card-modern">
+      <div class="card-body p-4 p-lg-4">
+        <h6 class="text-muted text-uppercase small mb-2">Class roster</h6>
+        {% for m in members %}
+          <div class="d-flex justify-content-between align-items-center mb-1 small">
+            <span>{{ m.username }}</span>
+            <span class="text-secondary">{{ m.role|capitalize }}</span>
+          </div>
+        {% else %}
+          <div class="text-secondary small">No members yet.</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  :root{
+    --sky-25:#f2f8ff; --sky-50:#e8f3ff; --sky-100:#d8ebff;
+    --sky-200:#c2e0ff; --sky-300:#a5d1ff; --sky-400:#7fbaff;
+    --sky-500:#4ea2ff; --sky-600:#2f8cea; --sky-700:#236fbb;
+    --border:#e5eaf3;
+  }
+
+  body{ background:#f6f9ff; }
+
+  .lp-card-modern{
+    border-radius:18px;
+    box-shadow:0 10px 30px rgba(2,6,23,.06), 0 2px 6px rgba(2,6,23,.04);
+  }
+
+  .lp-section-title{
+    color:var(--sky-700);
+    font-weight:700;
+  }
+
+  .lp-badge-soft{
+    background:var(--sky-50);
+    color:var(--sky-700);
+    border:1px solid var(--sky-200);
+    font-weight:600;
+  }
+
+  .list-group-item{
+    border-color:var(--border);
+    transition:background .15s ease;
+  }
+  .list-group-item:hover{
+    background:var(--sky-50);
+  }
+
+  .btn-sky-outline{
+    --bs-btn-color:var(--sky-700);
+    --bs-btn-bg:transparent;
+    --bs-btn-border-color:var(--sky-300);
+    --bs-btn-hover-bg:var(--sky-50);
+    --bs-btn-hover-border-color:var(--sky-400);
+    --bs-btn-active-bg:var(--sky-100);
+  }
+
+  .btn-sky-primary{
+    --bs-btn-color:#0b1224;
+    --bs-btn-bg:var(--sky-300);
+    --bs-btn-border-color:var(--sky-400);
+    --bs-btn-hover-bg:var(--sky-400);
+    --bs-btn-hover-border-color:var(--sky-500);
+    --bs-btn-active-bg:var(--sky-500);
+    --bs-btn-active-border-color:var(--sky-600);
+  }
+
+  .btn-sky-light{
+    --bs-btn-color:#0b1224;
+    --bs-btn-bg:var(--sky-50);
+    --bs-btn-border-color:var(--sky-100);
+    --bs-btn-hover-bg:var(--sky-100);
+    --bs-btn-hover-border-color:var(--sky-200);
+  }
+
+  /* Status + reviewed badges (reuse from assignment_detail) */
+  .lp-badge-status-submitted{
+    background:#dcfce7;
+    color:#166534;
+    border:1px solid #86efac;
+    font-weight:600;
+  }
+  .lp-badge-status-progress{
+    background:#fef9c3;
+    color:#854d0e;
+    border:1px solid #fde68a;
+    font-weight:600;
+  }
+  .lp-badge-reviewed{
+    background:#e0ecff;
+    color:#1d4ed8;
+    border:1px solid #93c5fd;
+    font-weight:600;
+  }
+</style>
+
+{% endblock %}

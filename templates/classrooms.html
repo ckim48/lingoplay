@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+{% block title %}Classrooms · EduWeaver{% endblock %}
+{% block content %}
+
+<div class="row g-4 mt-4">
+  <!-- LEFT: My Classrooms -->
+  <div class="col-lg-8">
+    <div class="card border-0 shadow-sm rounded-4 lp-card-modern">
+      <div class="card-body p-4 p-lg-5">
+
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h3 class="mb-0 lp-section-title">My Classrooms</h3>
+          {% if classes %}
+            <span class="text-secondary small">{{ classes|length }} class{% if classes|length != 1 %}es{% endif %}</span>
+          {% else %}
+            <span class="text-secondary small">No classes yet</span>
+          {% endif %}
+        </div>
+
+        {% if classes %}
+          <ul class="list-group list-group-flush">
+            {% for c in classes %}
+              <li class="list-group-item d-flex align-items-center justify-content-between lp-list-item">
+                <div class="me-3">
+                  <div class="fw-semibold lp-link">{{ c.name }}</div>
+                  <div class="small text-secondary mt-1">
+                    <span class="badge rounded-pill lp-badge-soft me-2">
+                      Code: {{ c.code }}
+                    </span>
+                    <span class="badge rounded-pill lp-badge-lang">
+                      {% if c.is_owner %}Teacher{% else %}{{ c.member_role|capitalize }}{% endif %}
+                    </span>
+                  </div>
+                </div>
+
+                <a href="{{ url_for('classroom_detail', classroom_id=c.id) }}"
+                   class="btn btn-sky-primary btn-sm">
+                  Open
+                </a>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="text-secondary mb-0">You’re not in any classrooms yet.</p>
+        {% endif %}
+
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: Join + Create -->
+  <div class="col-lg-4">
+
+    <!-- Join Class -->
+    <div class="card border-0 shadow-sm rounded-4 lp-card-modern mb-4">
+      <div class="card-body p-4">
+        <h6 class="mb-2 lp-section-title">Join a Class</h6>
+        <p class="text-secondary small mb-3">
+          Enter a class code to join a classroom.
+        </p>
+
+        <form method="post" action="{{ url_for('classroom_join') }}">
+          <div class="mb-3">
+            <input name="code" class="form-control" placeholder="Enter class code">
+          </div>
+          <button class="btn btn-sky-outline w-100" type="submit">
+            Join
+          </button>
+        </form>
+      </div>
+    </div>
+
+    {% if current_user and current_user.is_admin %}
+    <!-- Create Class -->
+    <div class="card border-0 shadow-sm rounded-4 lp-card-modern">
+      <div class="card-body p-4">
+        <h6 class="mb-2 lp-section-title">Create a Class</h6>
+        <p class="text-secondary small mb-3">
+          Create a new class for your students.
+        </p>
+
+        <form method="post" action="{{ url_for('classrooms') }}">
+          <div class="mb-3">
+            <input name="name" class="form-control" placeholder="Class name">
+          </div>
+          <button class="btn btn-sky-soft w-100" type="submit">
+            Create
+          </button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+
+  </div>
+</div>
+
+<!-- STYLE OVERRIDES -->
+<style>
+  :root{
+    --sky-25:#f2f8ff; --sky-50:#e8f3ff; --sky-100:#d8ebff; --sky-200:#c2e0ff;
+    --sky-300:#a5d1ff; --sky-400:#7fbaff; --sky-500:#4ea2ff; --sky-600:#2f8cea; --sky-700:#236fbb;
+    --border:#e5eaf3;
+  }
+
+  body{ background:#f6f9ff; }
+
+  .lp-card-modern{
+    border-radius:18px;
+    box-shadow:0 10px 30px rgba(2,6,23,.06), 0 2px 6px rgba(2,6,23,.04);
+  }
+
+  .lp-section-title{
+    color:var(--sky-700);
+    font-weight:700;
+  }
+
+  .lp-link{ color:var(--sky-700); text-decoration:none; }
+  .lp-link:hover{ color:var(--sky-600); }
+
+  .lp-badge-soft, .lp-badge-lang{
+    background:var(--sky-50);
+    color:var(--sky-700);
+    border:1px solid var(--sky-200);
+    font-weight:600;
+  }
+
+  .list-group-item{
+    border-color:var(--border);
+    transition:background .15s ease;
+  }
+
+  .lp-list-item:hover{
+    background:var(--sky-50);
+  }
+
+  /* BUTTON THEMES */
+  .btn-sky-primary{
+    --bs-btn-color:#0b1224;
+    --bs-btn-bg:var(--sky-300);
+    --bs-btn-border-color:var(--sky-400);
+    --bs-btn-hover-bg:var(--sky-400);
+    --bs-btn-hover-border-color:var(--sky-500);
+    --bs-btn-active-bg:var(--sky-500);
+    --bs-btn-active-border-color:var(--sky-600);
+  }
+
+  .btn-sky-outline{
+    --bs-btn-color:var(--sky-700);
+    --bs-btn-bg:transparent;
+    --bs-btn-border-color:var(--sky-300);
+    --bs-btn-hover-bg:var(--sky-50);
+    --bs-btn-hover-border-color:var(--sky-400);
+    --bs-btn-active-bg:var(--sky-100);
+  }
+
+  .btn-sky-soft{
+    --bs-btn-color:#0b1224;
+    --bs-btn-bg:var(--sky-100);
+    --bs-btn-border-color:var(--sky-200);
+    --bs-btn-hover-bg:var(--sky-200);
+    --bs-btn-hover-border-color:var(--sky-300);
+    --bs-btn-active-bg:var(--sky-300);
+  }
+</style>
+
+{% endblock %}

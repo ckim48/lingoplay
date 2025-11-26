@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Classes · EduWeaver{% endblock %}
+
+{% block content %}
+<div class="row g-4 mt-3">
+  <div class="col-lg-8">
+    <div class="card border-0 lp-card-modern mb-4">
+      <div class="card-body p-4 p-lg-5">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h3 class="mb-0 fw-semibold">Your Classes</h3>
+        </div>
+
+        {% if teaching %}
+          <h6 class="text-muted text-uppercase small mb-2">Teaching</h6>
+          <div class="list-group mb-4">
+            {% for c in teaching %}
+              <a href="{{ url_for('class_detail', class_id=c.id) }}"
+                 class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                <div>
+                  <div class="fw-semibold">{{ c.name }}</div>
+                  <div class="small text-muted">Code: {{ c.code }}</div>
+                </div>
+                <span class="badge lp-badge-soft">Teacher</span>
+              </a>
+            {% endfor %}
+          </div>
+        {% endif %}
+
+        {% if learning %}
+          <h6 class="text-muted text-uppercase small mb-2">Learning</h6>
+          <div class="list-group">
+            {% for c in learning %}
+              <a href="{{ url_for('class_detail', class_id=c.id) }}"
+                 class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                <div>
+                  <div class="fw-semibold">{{ c.name }}</div>
+                  <div class="small text-muted">Joined class</div>
+                </div>
+                <span class="badge bg-light text-muted border">Student</span>
+              </a>
+            {% endfor %}
+          </div>
+        {% endif %}
+
+        {% if not teaching and not learning %}
+          <p class="text-muted mb-0">No classes yet. Join a class with a code or create one below.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-4">
+    <div class="card border-0 lp-card-modern mb-4">
+      <div class="card-body p-4">
+        <h6 class="text-muted text-uppercase small mb-2">Join a class</h6>
+        <form method="post">
+          <input type="hidden" name="action" value="join">
+          <div class="mb-3">
+            <label class="form-label small text-uppercase fw-bold text-muted">Class code</label>
+            <input name="code" class="form-control" placeholder="e.g., AB3FQ9">
+          </div>
+          <button type="submit" class="btn btn-sky w-100">Join</button>
+        </form>
+      </div>
+    </div>
+
+    {% if is_admin %}
+    <div class="card border-0 lp-card-modern">
+      <div class="card-body p-4">
+        <h6 class="text-muted text-uppercase small mb-2">Create a class</h6>
+        <form method="post">
+          <input type="hidden" name="action" value="create">
+          <div class="mb-3">
+            <label class="form-label small text-uppercase fw-bold text-muted">Class name</label>
+            <input name="name" class="form-control" placeholder="e.g., Grade 4 Phonics A">
+          </div>
+          <button type="submit" class="btn btn-sky w-100">
+            <i class="bi bi-plus-lg me-1"></i> Create class
+          </button>
+          <div class="form-text mt-2">Only admins can create classes.</div>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<style>
+  .lp-card-modern{
+    border-radius:18px;
+    box-shadow:0 10px 30px rgba(2,6,23,.06),0 2px 6px rgba(2,6,23,.04);
+  }
+  .lp-badge-soft{
+    background:#e8f3ff;
+    color:#236fbb;
+    border:1px solid #c2e0ff;
+    border-radius:999px;
+  }
+</style>
+{% endblock %}

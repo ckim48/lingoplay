@@ -103,6 +103,7 @@
               {% if current_user and current_user.is_admin %}
   <li class="nav-item"><a class="dropdown-item" href="{{ url_for('admin_analytics') }}">Admin</a></li>
 {% endif %}
+                            <li><a class="dropdown-item" href="{{ url_for('classrooms') }}">Classroom</a></li>
               <li><a class="dropdown-item" href="{{ url_for('finish_new') }}">Your drafts</a></li>
               <li><a class="dropdown-item" href="{{ url_for('library') }}">Community library</a></li>
               <li><hr class="dropdown-divider"></li>

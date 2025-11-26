@@ -31,10 +31,11 @@ DEFAULT_MODEL = os.getenv("LINGOPLAY_MODEL", "gpt-4.1-mini")
 app = Flask(__name__, instance_relative_config=True)
 app.config["SECRET_KEY"] = os.getenv("FLASK_SECRET_KEY", "dev-secret")
 
-# Ensure instance folder exists
+# Ensure instance folder exists (DB goes here)
 os.makedirs(app.instance_path, exist_ok=True)
 DB_PATH = os.path.join(app.instance_path, "lingoplay.db")
 
+# NOTE: Keeping your existing client initialization exactly as provided
 
 # ------------------------------------------------------------------------------------
 # Helpers: DB, JSON, datetime
@@ -249,6 +250,57 @@ def init_db():
             author_name TEXT NOT NULL,
             body TEXT NOT NULL,
             created_at TEXT DEFAULT (DATETIME('now')),
+            FOREIGN KEY (draft_id) REFERENCES finish_drafts(id) ON DELETE CASCADE
+        );
+        """
+    )
+    db.executescript(
+        """
+        PRAGMA foreign_keys = ON;
+
+        CREATE TABLE IF NOT EXISTS classrooms (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            code TEXT NOT NULL UNIQUE,
+            owner_id INTEGER NOT NULL,
+            created_at TEXT DEFAULT (DATETIME('now')),
+            FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS classroom_members (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            classroom_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            role TEXT DEFAULT 'student', -- 'teacher' or 'student'
+            joined_at TEXT DEFAULT (DATETIME('now')),
+            UNIQUE (classroom_id, user_id),
+            FOREIGN KEY (classroom_id) REFERENCES classrooms(id) ON DELETE CASCADE,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS classroom_assignments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            classroom_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            description TEXT,
+            story_id INTEGER,  -- seed story created by teacher (optional)
+            due_at TEXT,
+            created_at TEXT DEFAULT (DATETIME('now')),
+            FOREIGN KEY (classroom_id) REFERENCES classrooms(id) ON DELETE CASCADE,
+            FOREIGN KEY (story_id) REFERENCES stories(id) ON DELETE SET NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS assignment_submissions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            assignment_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            draft_id INTEGER NOT NULL,  -- link to finish_drafts.id
+            status TEXT DEFAULT 'in_progress', -- 'in_progress' / 'submitted'
+            created_at TEXT DEFAULT (DATETIME('now')),
+            updated_at TEXT DEFAULT (DATETIME('now')),
+            UNIQUE (assignment_id, user_id),
+            FOREIGN KEY (assignment_id) REFERENCES classroom_assignments(id) ON DELETE CASCADE,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
             FOREIGN KEY (draft_id) REFERENCES finish_drafts(id) ON DELETE CASCADE
         );
         """
@@ -570,6 +622,7 @@ def llm_story_from_prompt(prompt: str, language: str, level: str, author: str, l
     profile = learner_profile or {}
     level, pref_notes = _reading_prefs_from_profile(profile, level)
 
+    # Gender is NOT used to stereotype; we only allow neutral/inclusive pronouns guidance.
     gender = (profile.get("gender") or "").lower()
     if gender == "male":
         pronoun_hint = "Use neutral narration; if pronouns appear, 'he/him' is acceptable but keep inclusive tone."
@@ -592,6 +645,7 @@ def llm_story_from_prompt(prompt: str, language: str, level: str, author: str, l
         else "Write entirely in English."
     )
 
+    # Extra scaffolding for non-native readers with EN output
     extra_scaffold = ""
     if language == "en" and profile.get("is_english_native") is False:
         extra_scaffold = (
@@ -841,7 +895,10 @@ def _llm_json_kid_defs(words: list[str], language: str = "en") -> list[dict]:
 
 
 def generate_kid_definitions(words: list[str], language: str = "en") -> list[dict]:
-
+    """
+    Public helper used across the app. Wraps the strict JSON call + local fallback.
+    Output shape: [{"word", "definition", "example"}...].
+    """
     # Clean + dedupe in a stable order
     clean = []
     seen = set()
@@ -881,7 +938,10 @@ def log_input(action: str, payload: dict):
     )
     db.commit()
 def generate_content_questions_via_gpt(story_text, language="en", level="phonics", n=5):
-
+    """
+    Use GPT to generate creative, mixed-type comprehension questions from a story.
+    About half of them will be story-based, and half vocabulary- or meaning-based.
+    """
     prompt = f"""
 You are an expert children's reading educator. Create {n} unique comprehension questions
 for the following story written for {level}-level learners.
@@ -1381,8 +1441,9 @@ def story_new():
         language = (request.form.get("language") or "en").strip().lower()
         level = (request.form.get("level") or "phonics").strip().lower()
 
-        author = (g.current_user["username"] if (g.current_user and g.current_user.get("username")) else None) \
-                 or (request.form.get("author_name") or "guest")
+        # "Author" as entered / current user (used for logging + student-finish mode)
+        base_author = (g.current_user["username"] if (g.current_user and g.current_user.get("username")) else None) \
+                      or (request.form.get("author_name") or "guest")
 
         want_image = bool(request.form.get("gen_image"))
 
@@ -1390,6 +1451,8 @@ def story_new():
         characters = (request.form.get("characters") or "").strip()
         tone = (request.form.get("tone") or "").strip()
         bme = bool(request.form.get("bme"))
+        # NEW: who finishes the ending?
+        student_finish = bool(request.form.get("student_finish"))
 
         if not prompt:
             flash("Please provide phonics letters or vocabulary.", "warning")
@@ -1410,7 +1473,7 @@ def story_new():
         # 1) Generate story
         try:
             profile = get_learner_profile()
-            content = llm_story_from_prompt(gen_prompt, language, level, author, learner_profile=profile)
+            content = llm_story_from_prompt(gen_prompt, language, level, base_author, learner_profile=profile)
         except Exception as e:
             content = naive_story_from_prompt(prompt, language)
             flash("AI generator had an issue; used a fallback story.", "warning")
@@ -1438,18 +1501,27 @@ def story_new():
                 log_input("generate_image_error", {"error": str(e)})
                 flash("Story created, but image generation had an issue.", "warning")
 
-        # 3) Persist story
-        slug = f"{slugify(title)}-{int(datetime.utcnow().timestamp())}"
-        db.execute(
-            """INSERT INTO stories (title, slug, prompt, language, level, content, author_name, visuals)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            (title, slug, prompt, language, level, content, author, visuals_data_url),
-        )
-        db.commit()
-        story_row = db.execute("SELECT id FROM stories WHERE slug = ?", (slug,)).fetchone()
-        story_id = story_row["id"]
+        # Decide the author name stored in DB
+        # - If students will finish: keep the human / learner name
+        # - If AI fully finishes: author is "EduWeaver AI"
+        story_author = base_author
+        if not student_finish:
+            story_author = "EduWeaver AI"
 
-        # ---------- 4) Precompute & cache bilingual vocab (skip names/pronouns) ----------
+        # 3) Persist story
+        slug_base = slugify(title) or "story"
+        ts = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+        slug = f"{slug_base}-{ts}"
+
+        db.execute(
+            """INSERT INTO stories (title, slug, prompt, language, level, content, visuals, author_name)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (title, slug, prompt, language, level, content, visuals_data_url, story_author),
+        )
+        story_id = db.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
+        db.commit()
+
+        # 4) Precompute & cache bilingual vocab (skip names/pronouns)
         # 4a) Exclude explicit character names (if provided)
         exclude_names = set()
         if characters:
@@ -1461,8 +1533,7 @@ def story_new():
                 for tok in re.findall(r"[A-Za-z]+|[가-힣]+", n):
                     exclude_names.add(tok.lower())
 
-        # 4b) Auto-extract (uses your existing extract_vocab_candidates helper)
-        #     This already filters pronouns, particles, and likely proper names.
+        # 4b) Auto-extract
         auto_candidates = extract_vocab_candidates(
             text=content,
             language=language,
@@ -1484,7 +1555,7 @@ def story_new():
         # 4d) Resolve bilingual kid-friendly definitions from multiple sources
         defs_bi = bulk_resolve_kid_definitions_bilingual(merged_words)
 
-        # 4e) Save to DB (so future loads read instantly)
+        # 4e) Save to DB
         for item in defs_bi:
             db.execute(
                 """INSERT INTO vocab_items (story_id, word, definition, example, definition_ko, example_ko, picture_url)
@@ -1500,11 +1571,13 @@ def story_new():
             )
         db.commit()
 
+        # Log story generation (keep both who triggered and stored author)
         log_input("generate_story", {
             "prompt": prompt,
             "language": language,
             "level": level,
-            "author": author,
+            "request_user": base_author,
+            "db_author": story_author,
             "model": DEFAULT_MODEL,
             "vocab_count": len(defs_bi),
             "with_image": want_image,
@@ -1512,26 +1585,65 @@ def story_new():
             "characters": characters,
             "tone": tone,
             "bme": bme,
+            "student_finish": student_finish,
         })
 
-        # 5) Create finish draft for the author to complete later
-        partial = make_partial_from_story(content)
-        db.execute(
-            """INSERT INTO finish_drafts (seed_prompt, partial_text, learner_name, language)
-               VALUES (?, ?, ?, ?)""",
-            (prompt, partial, author, language),
-        )
-        draft_id = db.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
-        db.commit()
+        # 5) Finish-draft behavior depends on student_finish flag
+        if student_finish:
+            # Teacher wants students to finish the ending later:
+            # create an UNFINISHED draft (no completion_text yet)
+            partial = make_partial_from_story(content)
+            db.execute(
+                """INSERT INTO finish_drafts (seed_prompt, partial_text, learner_name, language)
+                   VALUES (?, ?, ?, ?)""",
+                (prompt, partial, story_author, language),
+            )
+            draft_id = db.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
+            db.commit()
 
-        log_input("finish_seed_auto_from_story_new", {
-            "story_id": story_id, "slug": slug, "draft_id": draft_id
-        })
+            log_input("finish_seed_auto_from_story_new", {
+                "story_id": story_id,
+                "slug": slug,
+                "draft_id": draft_id
+            })
 
-        return redirect(url_for("story_new", generated=1,
-                                finish_url=url_for('finish_view', draft_id=draft_id)))
+            # Redirect back with query params to show success modal & deep link to this draft
+            return redirect(url_for(
+                "story_new",
+                generated=1,
+                finish_url=url_for("finish_view", draft_id=draft_id)
+            ))
+        else:
+            # Teacher wants GPT to fully finish the story:
+            # create a COMPLETED finish_draft with author "EduWeaver AI"
+            partial = make_partial_from_story(content)
+            db.execute(
+                """INSERT INTO finish_drafts (seed_prompt, partial_text, learner_name, language, completion_text)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (prompt, partial, story_author, language, content),
+            )
+            draft_id = db.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
+            db.commit()
+
+            log_input("finish_seed_auto_from_story_new_full_ai", {
+                "story_id": story_id,
+                "slug": slug,
+                "draft_id": draft_id,
+                "auto_completed": True,
+                "db_author": story_author,
+            })
+
+            # In Library:
+            # - library() shows ALL finish_drafts with completion_text
+            # - finish_view() will NOT allow edit because learner_name = "EduWeaver AI"
+            flash("Story generated by EduWeaver AI and added to the Library.", "success")
+            return redirect(url_for("library"))
+
     # GET
     return render_template("story_new.html")
+
+
+
 
 # ------- EXTRA IMPORTS (ensure at top of file) -------
 import requests
@@ -2281,6 +2393,9 @@ def api_admin_l1l2():
 @login_required
 @admin_required
 def api_admin_users():
+    """
+    Lightweight per-user rollup for a table; includes last activity.
+    """
     db = get_db()
     rows = db.execute("""
       SELECT
@@ -2388,6 +2503,10 @@ import json
 @app.post("/api/admin/user_reflection/<int:user_id>")
 @login_required
 def api_admin_user_reflection(user_id: int):
+    """
+    Generate short, individualized feedback for a single learner,
+    based on their story and quiz activity.
+    """
     if not (g.current_user and g.current_user.get("is_admin")):
         return jsonify({"ok": False, "error": "forbidden"}), 403
 
@@ -2642,7 +2761,6 @@ def finish_comment(draft_id):
     db.commit()
     flash("Comment posted.", "success")
     return redirect(url_for("finish_view", draft_id=draft_id))
-
 @app.route("/finish/<int:draft_id>", methods=["GET", "POST"])
 @login_required
 def finish_view(draft_id):
@@ -2668,10 +2786,10 @@ def finish_view(draft_id):
         flash("Your ending has been saved.", "success")
         return redirect(url_for("finish_view", draft_id=draft_id, saved=1))
 
-    # Find linked story
+    # Find linked story (NOW ALSO GET visuals)
     story_row = db.execute(
         """
-        SELECT id, title, slug, content, language, level
+        SELECT id, title, slug, content, language, level, visuals
         FROM stories
         WHERE prompt = ?
           AND author_name = ?
@@ -2682,9 +2800,10 @@ def finish_view(draft_id):
         (d["seed_prompt"], d["learner_name"], d["language"])
     ).fetchone()
 
-    d["story_title"] = story_row["title"] if story_row else None
-    d["story_slug"]  = story_row["slug"] if story_row else None
-    d["story_id"]    = story_row["id"] if story_row else None
+    d["story_title"]   = story_row["title"]   if story_row else None
+    d["story_slug"]    = story_row["slug"]    if story_row else None
+    d["story_id"]      = story_row["id"]      if story_row else None
+    d["story_visuals"] = story_row["visuals"] if story_row else None   # <-- NEW
 
     has_quiz = False
     if story_row:
@@ -2703,7 +2822,8 @@ def finish_view(draft_id):
     vocab_words = []
     if story_row:
         vrows = db.execute(
-            "SELECT word, definition, example, definition_ko, example_ko FROM vocab_items WHERE story_id = ? ORDER BY id ASC",
+            "SELECT word, definition, example, definition_ko, example_ko "
+            "FROM vocab_items WHERE story_id = ? ORDER BY id ASC",
             (story_row["id"],)
         ).fetchall()
         for r in vrows:
@@ -2714,7 +2834,8 @@ def finish_view(draft_id):
                 "definition_ko": r.get("definition_ko") or "",
                 "example_ko":    r.get("example_ko") or "",
             })
-    # Load comments for everyone
+
+    # Load comments
     comments = db.execute(
         """
         SELECT author_name, body, created_at
@@ -2734,7 +2855,7 @@ def finish_view(draft_id):
         has_quiz=has_quiz,
         vocab_words=vocab_words,
         comments=comments,
-        is_admin=is_admin
+        is_admin=is_admin,
     )
 
 @app.post("/library/delete/<int:draft_id>")
@@ -3124,6 +3245,629 @@ def api_define():
         "definition_en": de, "example_en": ee,
         "definition_ko": dk, "example_ko": ek
     })
+
+import secrets
+import string
+
+def generate_class_code(length: int = 6) -> str:
+    """Generate a short class code like AB3FQ9."""
+    alphabet = string.ascii_uppercase + string.digits
+    return ''.join(secrets.choice(alphabet) for _ in range(length))
+def current_user_id() -> int | None:
+    u = g.get("current_user")
+    return u["id"] if u and u.get("id") else None
+
+def is_teacher_for_class(db, classroom_id: int) -> bool:
+    uid = current_user_id()
+    if not uid:
+        return False
+    # class owner is teacher
+    row = db.execute("SELECT owner_id FROM classrooms WHERE id = ?", (classroom_id,)).fetchone()
+    if row and row["owner_id"] == uid:
+        return True
+    # or explicitly marked as teacher member
+    row = db.execute(
+        """SELECT 1 FROM classroom_members 
+           WHERE classroom_id = ? AND user_id = ? AND role = 'teacher'""",
+        (classroom_id, uid),
+    ).fetchone()
+    return bool(row)
+@app.route("/classes", methods=["GET", "POST"])
+@login_required
+def classes_home():
+    """
+    Teacher/admin: create a class (POST create_form).
+    Student: join a class via code (POST join_form).
+    Everyone: see classes they belong to.
+    """
+    db = get_db()
+    current_username = g.current_user["username"]
+    is_admin = bool(g.current_user and g.current_user.get("is_admin"))
+
+    # Handle create & join in one place (two separate forms)
+    action = request.form.get("action") if request.method == "POST" else None
+
+    # --- Create class (admin only) ---
+    if request.method == "POST" and action == "create":
+        if not is_admin:
+            flash("Only admins can create classes.", "danger")
+            return redirect(url_for("classes_home"))
+
+        name = (request.form.get("name") or "").strip()
+        if not name:
+            flash("Please enter a class name.", "warning")
+            return redirect(url_for("classes_home"))
+
+        # Generate unique code
+        code = generate_class_code()
+        for _ in range(10):
+            row = db.execute("SELECT id FROM classes WHERE code = ?", (code,)).fetchone()
+            if not row:
+                break
+            code = generate_class_code()
+
+        db.execute(
+            "INSERT INTO classes (name, code, owner_name) VALUES (?, ?, ?)",
+            (name, code, current_username),
+        )
+        class_id = db.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
+
+        # Also insert creator as teacher
+        db.execute(
+            "INSERT INTO class_members (class_id, username, role) VALUES (?, ?, ?)",
+            (class_id, current_username, "teacher"),
+        )
+        db.commit()
+
+        flash("Class created.", "success")
+        return redirect(url_for("class_detail", class_id=class_id))
+
+    # --- Join class (student or teacher) ---
+    if request.method == "POST" and action == "join":
+        code = (request.form.get("code") or "").strip().upper()
+        if not code:
+            flash("Please enter a class code.", "warning")
+            return redirect(url_for("classes_home"))
+
+        c = db.execute("SELECT * FROM classes WHERE code = ?", (code,)).fetchone()
+        if not c:
+            flash("Class not found. Check the code again.", "danger")
+            return redirect(url_for("classes_home"))
+
+        # Insert membership if not exists
+        existing = db.execute(
+            "SELECT id FROM class_members WHERE class_id = ? AND username = ?",
+            (c["id"], current_username),
+        ).fetchone()
+        if existing:
+            flash("You are already in this class.", "info")
+            return redirect(url_for("class_detail", class_id=c["id"]))
+
+        db.execute(
+            "INSERT INTO class_members (class_id, username, role) VALUES (?, ?, ?)",
+            (c["id"], current_username, "student"),
+        )
+        db.commit()
+        flash(f"Joined class {c['name']}.", "success")
+        return redirect(url_for("class_detail", class_id=c["id"]))
+
+    # --- GET: list classes user belongs to ---
+    # As teacher (owner or role=teacher)
+    teaching = db.execute(
+        """
+        SELECT DISTINCT c.*
+        FROM classes c
+        LEFT JOIN class_members m ON m.class_id = c.id
+        WHERE (c.owner_name = ?)
+           OR (m.username = ? AND m.role = 'teacher')
+        ORDER BY datetime(c.created_at) DESC
+        """,
+        (current_username, current_username),
+    ).fetchall()
+
+    # As student
+    learning = db.execute(
+        """
+        SELECT c.*
+        FROM classes c
+        JOIN class_members m ON m.class_id = c.id
+        WHERE m.username = ?
+          AND m.role = 'student'
+        ORDER BY datetime(c.created_at) DESC
+        """,
+        (current_username,),
+    ).fetchall()
+
+    return render_template(
+        "classes.html",
+        teaching=teaching,
+        learning=learning,
+        is_admin=is_admin,
+    )
+@app.route("/classrooms/<int:classroom_id>")
+@login_required
+def classroom_detail(classroom_id):
+    db = get_db()
+
+    classroom = db.execute(
+        "SELECT * FROM classrooms WHERE id = ?", (classroom_id,)
+    ).fetchone()
+    if not classroom:
+        flash("Classroom not found.", "warning")
+        return redirect(url_for("classrooms"))
+
+    uid = current_user_id()
+
+    member = db.execute(
+        "SELECT * FROM classroom_members WHERE classroom_id = ? AND user_id = ?",
+        (classroom_id, uid),
+    ).fetchone()
+    if not member:
+        flash("You are not a member of this classroom.", "warning")
+        return redirect(url_for("classrooms"))
+
+    is_admin = bool(g.current_user and g.current_user.get("is_admin"))
+    is_teacher = is_admin or (member["role"] == "teacher")
+
+    # ---------- Assignments ----------
+    if is_teacher:
+        # Teacher: same as before, no review mark needed
+        assignments = db.execute(
+            """
+            SELECT a.*,
+                   s.title AS story_title
+            FROM classroom_assignments a
+            LEFT JOIN stories s ON s.id = a.story_id
+            WHERE a.classroom_id = ?
+            ORDER BY datetime(a.created_at) DESC
+            """,
+            (classroom_id,),
+        ).fetchall()
+    else:
+        # Student: include my submission status + whether teacher has commented
+        assignments = db.execute(
+            """
+            SELECT a.*,
+                   s.title AS story_title,
+                   sub.status AS my_status,
+                   CASE
+                     WHEN EXISTS (
+                       SELECT 1
+                       FROM finish_comments fc
+                       WHERE fc.draft_id = sub.draft_id
+                     ) THEN 1
+                     ELSE 0
+                   END AS has_review
+            FROM classroom_assignments a
+            LEFT JOIN stories s ON s.id = a.story_id
+            LEFT JOIN assignment_submissions sub
+              ON sub.assignment_id = a.id
+             AND sub.user_id = ?
+            WHERE a.classroom_id = ?
+            ORDER BY datetime(a.created_at) DESC
+            """,
+            (uid, classroom_id),
+        ).fetchall()
+
+    # ---------- Roster ----------
+    members = db.execute(
+        """
+        SELECT u.username, cm.role
+        FROM classroom_members cm
+        JOIN users u ON u.id = cm.user_id
+        WHERE cm.classroom_id = ?
+        ORDER BY cm.role DESC, u.username ASC
+        """,
+        (classroom_id,),
+    ).fetchall()
+
+    return render_template(
+        "classroom_detail.html",
+        classroom=classroom,
+        assignments=assignments,
+        members=members,
+        is_teacher=is_teacher,
+    )
+
+
+@app.route("/classrooms/<int:classroom_id>/assignments/new", methods=["GET", "POST"])
+@login_required
+def assignment_new(classroom_id):
+    db = get_db()
+    if not is_teacher_for_class(db, classroom_id):
+        flash("Only teachers can create assignments.", "warning")
+        return redirect(url_for("classroom_detail", classroom_id=classroom_id))
+
+    room = db.execute("SELECT * FROM classrooms WHERE id = ?", (classroom_id,)).fetchone()
+    if not room:
+        flash("Classroom not found.", "warning")
+        return redirect(url_for("classrooms"))
+
+    if request.method == "POST":
+        title = (request.form.get("title") or "").strip()
+        description = (request.form.get("description") or "").strip()
+        story_id = request.form.get("story_id")
+        story_id = int(story_id) if story_id and story_id.isdigit() else None
+        due_at = (request.form.get("due_at") or "").strip() or None
+
+        if not title:
+            flash("Please enter an assignment title.", "warning")
+            return redirect(url_for("assignment_new", classroom_id=classroom_id))
+
+        db.execute(
+            """INSERT INTO classroom_assignments (classroom_id, title, description, story_id, due_at)
+               VALUES (?, ?, ?, ?, ?)""",
+            (classroom_id, title, description, story_id, due_at),
+        )
+        assignment_id = db.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
+        db.commit()
+
+        flash("Assignment created.", "success")
+        return redirect(url_for("assignment_detail", assignment_id=assignment_id))
+
+    # story options for seed (only show recent)
+    stories = db.execute(
+        "SELECT id, title FROM stories ORDER BY datetime(created_at) DESC LIMIT 50"
+    ).fetchall()
+
+    return render_template(
+        "assignment_new.html",
+        classroom=room,
+        stories=stories,
+    )
+@app.route("/assignments/<int:assignment_id>", methods=["GET", "POST"])
+@login_required
+def assignment_detail(assignment_id: int):
+    db = get_db()
+    uid = current_user_id()
+
+    # Load assignment + classroom + optional seed story
+    assignment = db.execute(
+        """
+        SELECT a.*,
+               c.id   AS classroom_id,
+               c.name AS classroom_name,
+               s.content AS story_content
+        FROM classroom_assignments a
+        JOIN classrooms c ON c.id = a.classroom_id
+        LEFT JOIN stories s ON s.id = a.story_id
+        WHERE a.id = ?
+        """,
+        (assignment_id,),
+    ).fetchone()
+    if not assignment:
+        flash("Assignment not found.", "warning")
+        return redirect(url_for("classrooms"))
+
+    # Determine role
+    is_admin = bool(g.current_user and g.current_user.get("is_admin"))
+    is_teacher = is_admin or is_teacher_for_class(db, assignment["classroom_id"])
+
+    # ==================== TEACHER VIEW ====================
+    if is_teacher:
+        # Roster + submissions + story text
+        roster = db.execute(
+            """
+            SELECT cm.role,
+                   u.username,
+                   sub.id  AS submission_id,
+                   sub.status,
+                   sub.draft_id,
+                   fd.partial_text,
+                   fd.completion_text
+            FROM classroom_members cm
+            JOIN users u ON u.id = cm.user_id
+            LEFT JOIN assignment_submissions sub
+              ON sub.assignment_id = ? AND sub.user_id = u.id
+            LEFT JOIN finish_drafts fd
+              ON fd.id = sub.draft_id
+            WHERE cm.classroom_id = ?
+            ORDER BY cm.role DESC, u.username ASC
+            """,
+            (assignment_id, assignment["classroom_id"]),
+        ).fetchall()
+
+        # Load all comments for all drafts in this assignment
+        draft_ids = [r["draft_id"] for r in roster if r["draft_id"]]
+        comments_by_draft: dict[int, list[sqlite3.Row]] = {}
+        if draft_ids:
+            placeholders = ",".join(["?"] * len(draft_ids))
+            rows = db.execute(
+                f"""
+                SELECT draft_id, author_name, body, created_at
+                FROM finish_comments
+                WHERE draft_id IN ({placeholders})
+                ORDER BY datetime(created_at) ASC
+                """,
+                draft_ids,
+            ).fetchall()
+            for row in rows:
+                comments_by_draft.setdefault(row["draft_id"], []).append(row)
+
+        return render_template(
+            "assignment_detail.html",
+            assignment=assignment,
+            is_teacher=True,
+            roster=roster,
+            comments_by_draft=comments_by_draft,
+        )
+
+    # ==================== STUDENT VIEW ====================
+    # Load this student's submission + draft
+    submission = db.execute(
+        """
+        SELECT sub.*,
+               fd.partial_text,
+               fd.completion_text,
+               fd.id AS draft_id
+        FROM assignment_submissions sub
+        JOIN finish_drafts fd ON fd.id = sub.draft_id
+        WHERE sub.assignment_id = ? AND sub.user_id = ?
+        """,
+        (assignment_id, uid),
+    ).fetchone()
+
+    # Load teacher comments (if any) for this student's draft
+    comments = []
+    if submission and submission["draft_id"]:
+        comments = db.execute(
+            """
+            SELECT author_name, body, created_at
+            FROM finish_comments
+            WHERE draft_id = ?
+            ORDER BY datetime(created_at) ASC
+            """,
+            (submission["draft_id"],),
+        ).fetchall()
+
+    if request.method == "POST":
+        # Only allow saving if a draft exists
+        if not submission:
+            flash("Please click 'Start writing' first to create your draft.", "warning")
+            return redirect(url_for("assignment_detail", assignment_id=assignment_id))
+
+        completion_text = (request.form.get("completion_text") or "").strip()
+
+        # Update finish_drafts
+        db.execute(
+            "UPDATE finish_drafts SET completion_text = ? WHERE id = ?",
+            (completion_text, submission["draft_id"]),
+        )
+
+        # Update submission status
+        new_status = "submitted" if completion_text else "in_progress"
+        db.execute(
+            "UPDATE assignment_submissions SET status = ?, updated_at = DATETIME('now') WHERE id = ?",
+            (new_status, submission["id"]),
+        )
+
+        db.commit()
+        flash("Your ending has been saved.", "success")
+
+        # Reload updated submission + comments
+        submission = db.execute(
+            """
+            SELECT sub.*,
+                   fd.partial_text,
+                   fd.completion_text,
+                   fd.id AS draft_id
+            FROM assignment_submissions sub
+            JOIN finish_drafts fd ON fd.id = sub.draft_id
+            WHERE sub.assignment_id = ? AND sub.user_id = ?
+            """,
+            (assignment_id, uid),
+        ).fetchone()
+        comments = db.execute(
+            """
+            SELECT author_name, body, created_at
+            FROM finish_comments
+            WHERE draft_id = ?
+            ORDER BY datetime(created_at) ASC
+            """,
+            (submission["draft_id"],),
+        ).fetchall()
+
+    return render_template(
+        "assignment_detail.html",
+        assignment=assignment,
+        is_teacher=False,
+        submission=submission,
+        comments=comments,
+    )
+@app.post("/assignments/<int:assignment_id>/comment/<int:draft_id>")
+@login_required
+def assignment_comment(assignment_id: int, draft_id: int):
+    db = get_db()
+
+    # Check assignment exists
+    assignment = db.execute(
+        "SELECT id, classroom_id FROM classroom_assignments WHERE id = ?",
+        (assignment_id,),
+    ).fetchone()
+    if not assignment:
+        flash("Assignment not found.", "danger")
+        return redirect(url_for("classrooms"))
+
+    # Permission: teacher in this class or admin
+    is_admin = bool(g.current_user and g.current_user.get("is_admin"))
+    if not (is_admin or is_teacher_for_class(db, assignment["classroom_id"])):
+        flash("Only teachers can leave comments.", "danger")
+        return redirect(url_for("assignment_detail", assignment_id=assignment_id))
+
+    # Verify draft really belongs to this assignment
+    belongs = db.execute(
+        """
+        SELECT 1
+        FROM assignment_submissions sub
+        WHERE sub.assignment_id = ? AND sub.draft_id = ?
+        """,
+        (assignment_id, draft_id),
+    ).fetchone()
+    if not belongs:
+        flash("This story is not part of this assignment.", "warning")
+        return redirect(url_for("assignment_detail", assignment_id=assignment_id))
+
+    body = (request.form.get("body") or "").strip()
+    if not body:
+        flash("Comment cannot be empty.", "warning")
+        return redirect(url_for("assignment_detail", assignment_id=assignment_id) + f"#story-{draft_id}")
+
+    author = g.current_user.get("username") or "teacher"
+    db.execute(
+        "INSERT INTO finish_comments (draft_id, author_name, body) VALUES (?, ?, ?)",
+        (draft_id, author, body),
+    )
+    db.commit()
+    flash("Comment added.", "success")
+    return redirect(url_for("assignment_detail", assignment_id=assignment_id) + f"#story-{draft_id}")
+
+@app.route("/assignments/<int:assignment_id>/write")
+@login_required
+def assignment_write(assignment_id: int):
+    db = get_db()
+    uid = current_user_id()
+
+    a = db.execute(
+        """
+        SELECT a.*,
+               s.content      AS story_content,
+               s.prompt       AS story_prompt,
+               s.language     AS language
+        FROM classroom_assignments a
+        LEFT JOIN stories s ON s.id = a.story_id
+        WHERE a.id = ?
+        """,
+        (assignment_id,),
+    ).fetchone()
+    if not a:
+        return ("Assignment not found", 404)
+
+    # If the student already has a submission, just go back to assignment page
+    sub = db.execute(
+        """
+        SELECT sub.*, fd.partial_text, fd.completion_text
+        FROM assignment_submissions sub
+        JOIN finish_drafts fd ON fd.id = sub.draft_id
+        WHERE sub.assignment_id = ? AND sub.user_id = ?
+        """,
+        (assignment_id, uid),
+    ).fetchone()
+    if sub:
+        return redirect(url_for("assignment_detail", assignment_id=assignment_id))
+
+    # otherwise create a new finish_drafts row as seed
+    seed_prompt = a.get("description") or a.get("story_prompt") or "Classroom assignment"
+    base_text = a.get("story_content") or ""
+    partial = make_partial_from_story(base_text) if base_text else ""
+
+    learner_name = g.current_user["username"] if g.current_user and g.current_user.get("username") else "guest"
+    language = (a.get("language") or "en")
+
+    db.execute(
+        """
+        INSERT INTO finish_drafts (seed_prompt, partial_text, learner_name, language)
+        VALUES (?, ?, ?, ?)
+        """,
+        (seed_prompt, partial, learner_name, language),
+    )
+    draft_id = db.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
+
+    db.execute(
+        """
+        INSERT INTO assignment_submissions (assignment_id, user_id, draft_id, status)
+        VALUES (?, ?, ?, 'in_progress')
+        """,
+        (assignment_id, uid, draft_id),
+    )
+    db.commit()
+
+    # Now return to assignment detail where the inline editor lives
+    return redirect(url_for("assignment_detail", assignment_id=assignment_id))
+
+@app.route("/classrooms", methods=["GET", "POST"])
+@login_required
+def classrooms():
+    db = get_db()
+    user = g.current_user
+
+    # Only admins can create classrooms (teachers)
+    if request.method == "POST":
+        if not current_user_is_admin():
+            flash("Only teacher/admin accounts can create classrooms.", "warning")
+            return redirect(url_for("classrooms"))
+
+        name = (request.form.get("name") or "").strip()
+        if not name:
+            flash("Please enter a class name.", "warning")
+            return redirect(url_for("classrooms"))
+
+        # generate unique code
+        while True:
+            code = generate_class_code()
+            exists = db.execute("SELECT 1 FROM classrooms WHERE code = ?", (code,)).fetchone()
+            if not exists:
+                break
+
+        db.execute(
+            "INSERT INTO classrooms (name, code, owner_id) VALUES (?, ?, ?)",
+            (name, code, user["id"]),
+        )
+        classroom_id = db.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
+        # add teacher as member
+        db.execute(
+            "INSERT INTO classroom_members (classroom_id, user_id, role) VALUES (?, ?, 'teacher')",
+            (classroom_id, user["id"]),
+        )
+        db.commit()
+        flash("Classroom created.", "success")
+        return redirect(url_for("classroom_detail", classroom_id=classroom_id))
+
+    uid = current_user_id()
+    # classrooms user belongs to
+    classes = db.execute(
+        """
+        SELECT c.*, 
+               CASE WHEN c.owner_id = ? THEN 1 ELSE 0 END AS is_owner,
+               cm.role AS member_role
+        FROM classrooms c
+        JOIN classroom_members cm ON cm.classroom_id = c.id
+        WHERE cm.user_id = ?
+        ORDER BY datetime(c.created_at) DESC
+        """,
+        (uid, uid),
+    ).fetchall()
+
+    return render_template("classrooms.html", classes=classes)
+
+@app.route("/classrooms/join", methods=["GET", "POST"])
+@login_required
+def classroom_join():
+    db = get_db()
+    if request.method == "POST":
+        code = (request.form.get("code") or "").strip().upper()
+        if not code:
+            flash("Please enter a class code.", "warning")
+            return redirect(url_for("classroom_join"))
+
+        room = db.execute("SELECT * FROM classrooms WHERE upper(code) = ?", (code,)).fetchone()
+        if not room:
+            flash("No classroom found with that code.", "danger")
+            return redirect(url_for("classroom_join"))
+
+        uid = current_user_id()
+        try:
+            db.execute(
+                "INSERT OR IGNORE INTO classroom_members (classroom_id, user_id, role) VALUES (?, ?, 'student')",
+                (room["id"], uid),
+            )
+            db.commit()
+        except Exception:
+            pass
+
+        flash(f"Joined classroom: {room['name']}", "success")
+        return redirect(url_for("classroom_detail", classroom_id=room["id"]))
+
+    return render_template("classroom_join.html")
 
 # ------------------------------------------------------------------------------------
 # Main

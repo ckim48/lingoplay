@@ -1,0 +1,262 @@
+{% extends "base.html" %}
+{% block title %}New Assignment · {{ classroom.name }}{% endblock %}
+
+{% block content %}
+
+<div class="card border-0 shadow-sm rounded-4 lp-card-modern overflow-hidden mt-4">
+  <div class="card-body p-4 p-lg-5">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+      <div>
+        <h3 class="mb-0 lp-section-title">New Classroom Assignment</h3>
+        <div class="text-secondary small mt-1">
+          Classroom:
+          <span class="badge rounded-pill lp-badge-soft">{{ classroom.name }}</span>
+        </div>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <a href="{{ url_for('story_new') }}" class="btn btn-sky-soft">
+          <i class="bi bi-stars me-1"></i> Open Story Generator
+        </a>
+        <a href="{{ url_for('classroom_detail', classroom_id=classroom.id) }}" class="btn btn-sky-outline">
+          Back to Class
+        </a>
+      </div>
+    </div>
+
+    <form method="post" id="assignmentForm">
+      <!-- Step 1: Basics -->
+      <div class="d-flex flex-wrap align-items-center gap-2 mb-4">
+        <span class="badge rounded-pill lp-badge-step">1</span>
+        <span class="fw-medium">Assignment Basics</span>
+        <span class="vr mx-2"></span>
+        <span class="text-secondary small">
+          Set the title and due date for this classroom activity.
+        </span>
+      </div>
+
+      <div class="row g-4 mb-2">
+        <!-- Title -->
+        <div class="col-md-8">
+          <label class="form-label small text-uppercase fw-bold text-muted">Assignment Title</label>
+          <div class="input-group input-group-lg lp-input">
+            <span class="input-group-text"><i class="bi bi-journal-text"></i></span>
+            <input type="text"
+                   name="title"
+                   class="form-control"
+                   placeholder="Finish the Story: Friendship at the Park"
+                   required>
+          </div>
+          <div class="form-text">
+            This will appear on the students’ dashboard and assignment page.
+          </div>
+        </div>
+
+        <!-- Due date -->
+        <div class="col-md-4">
+          <label class="form-label small text-uppercase fw-bold text-muted">
+            Due Date <span class="text-muted small">(optional)</span>
+          </label>
+          <div class="input-group input-group-lg lp-input">
+            <span class="input-group-text"><i class="bi bi-calendar-event"></i></span>
+            <input type="datetime-local" name="due_at" class="form-control">
+          </div>
+          <div class="form-text">
+            Leave blank if this is a flexible / open activity.
+          </div>
+        </div>
+      </div>
+
+      <!-- Divider -->
+      <div class="lp-divider my-4"></div>
+
+      <!-- Step 2: Story & targets -->
+      <div class="d-flex flex-wrap align-items-center gap-2 mb-4">
+        <span class="badge rounded-pill lp-badge-step">2</span>
+        <span class="fw-medium">Story Seed & Learning Target</span>
+        <span class="vr mx-2"></span>
+        <span class="text-secondary small">
+          Choose a story from the library and describe what students should do.
+        </span>
+      </div>
+
+      <div class="row g-4">
+        <!-- Seed story -->
+        <div class="col-md-6">
+          <label class="form-label small text-uppercase fw-bold text-muted">Seed Story</label>
+          <select name="story_id" class="form-select form-select-lg lp-input">
+            <option value="">— None (free writing assignment) —</option>
+            {% for s in stories %}
+              <option value="{{ s.id }}">{{ s.title }}</option>
+            {% endfor %}
+          </select>
+          <div class="form-text">
+            Pick a story you generated earlier. Each student will get their own
+            “finish the story” draft based on this text.
+          </div>
+        </div>
+
+        <!-- Learning instructions / description -->
+        <div class="col-md-6">
+          <label class="form-label small text-uppercase fw-bold text-muted">
+            Teacher Instructions to Students
+          </label>
+          <textarea
+            name="description"
+            class="form-control"
+            rows="6"
+            placeholder="Example:
+1) Read the story carefully.
+2) Write your own ending (at least 5–7 sentences).
+3) Try to use these phonics or words: sh, ship, shop.
+4) Focus on kindness / friendship in your ending."></textarea>
+          <div class="form-text">
+            This description will appear on the student assignment page. You can
+            include phonics targets, vocabulary, and rubric notes.
+          </div>
+        </div>
+      </div>
+
+      <!-- Optional hint row -->
+      <div class="row g-4 mt-2">
+        <div class="col-md-6">
+          <div class="small text-muted">
+            Tip: Use the <strong>Story Generator</strong> to create a seed story
+            that matches your phonics or vocabulary focus, then select it here.
+          </div>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="d-flex flex-wrap gap-2 justify-content-end mt-5">
+        <a href="{{ url_for('classroom_detail', classroom_id=classroom.id) }}"
+           class="btn btn-sky-outline btn-lg">
+          Cancel
+        </a>
+        <button type="submit" class="btn btn-sky-solid btn-lg px-4" id="createBtn">
+          <i class="bi bi-check2-circle me-1"></i> Create Assignment
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<style>
+  :root{
+    --sky-25:#f2f8ff; --sky-50:#e8f3ff; --sky-100:#d8ebff;
+    --sky-200:#c2e0ff; --sky-300:#a5d1ff; --sky-400:#7fbaff;
+    --sky-500:#4ea2ff; --sky-600:#2f8cea; --sky-700:#236fbb;
+    --border:#e5eaf3;
+  }
+
+  body{ background:#f6f9ff; }
+
+  .lp-card-modern{
+    border-radius:18px;
+    box-shadow:0 10px 30px rgba(2,6,23,.06), 0 2px 6px rgba(2,6,23,.04);
+  }
+
+  .lp-section-title{
+    color:var(--sky-700);
+    font-weight:700;
+  }
+
+  .lp-badge-soft{
+    background:var(--sky-50);
+    color:var(--sky-700);
+    border:1px solid var(--sky-200);
+    font-weight:600;
+  }
+
+  .lp-badge-step{
+    background:var(--sky-50);
+    color:var(--sky-700);
+    border:1px solid var(--sky-200);
+    font-weight:600;
+  }
+
+  .lp-divider{
+    border-top:1px dashed var(--border);
+  }
+
+  .lp-input .input-group-text{
+    border-radius:.8rem 0 0 .8rem;
+    border-right:0;
+    background:#f8fafc;
+    color:var(--sky-700);
+    border:1px solid var(--border);
+  }
+
+  .lp-input .form-control{
+    border-left:0;
+    border-radius:0 .8rem .8rem 0;
+    border:1px solid var(--border);
+  }
+
+  .lp-input .form-control:focus,
+  .form-select.lp-input:focus{
+    border-color:var(--sky-300);
+    box-shadow:0 0 0 .25rem rgba(127,186,255,.22);
+  }
+
+  .form-select.lp-input{
+    border-radius:.8rem;
+    border:1px solid var(--border);
+  }
+
+  /* Buttons shared with other pages */
+  .btn-sky-outline{
+    --bs-btn-color:var(--sky-700);
+    --bs-btn-bg:transparent;
+    --bs-btn-border-color:var(--sky-300);
+    --bs-btn-hover-bg:var(--sky-50);
+    --bs-btn-hover-border-color:var(--sky-400);
+    --bs-btn-active-bg:var(--sky-100);
+  }
+
+  .btn-sky-soft{
+    --bs-btn-color:#0b1224;
+    --bs-btn-bg:var(--sky-100);
+    --bs-btn-border-color:var(--sky-200);
+    --bs-btn-hover-bg:var(--sky-200);
+    --bs-btn-hover-border-color:var(--sky-300);
+    --bs-btn-active-bg:var(--sky-300);
+  }
+
+  .btn-sky-solid{
+    --bs-btn-color:#fff;
+    --bs-btn-bg:var(--sky-600);
+    --bs-btn-border-color:var(--sky-600);
+    --bs-btn-hover-bg:var(--sky-700);
+    --bs-btn-hover-border-color:var(--sky-700);
+    --bs-btn-focus-shadow-rgb:35,111,187;
+    --bs-btn-active-bg:var(--sky-700);
+    --bs-btn-active-border-color:var(--sky-700);
+    box-shadow:0 10px 22px rgba(46,140,234,.22);
+  }
+</style>
+
+<script>
+  (function(){
+    const form = document.getElementById('assignmentForm');
+    const btn  = document.getElementById('createBtn');
+
+    if(form && btn){
+      form.addEventListener('submit', () => {
+        btn.disabled = true;
+        btn.dataset.originalHtml = btn.innerHTML;
+        btn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i> Creating…';
+      });
+
+      window.addEventListener('pageshow', (e) => {
+        if (e.persisted) {
+          btn.disabled = false;
+          if (btn.dataset.originalHtml) {
+            btn.innerHTML = btn.dataset.originalHtml;
+          }
+        }
+      });
+    }
+  })();
+</script>
+
+{% endblock %}
