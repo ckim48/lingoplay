@@ -1,0 +1,61 @@
+{% extends "base2.html" %}
+{% block title %}Finish the Story · {{ story.title }}{% endblock %}
+
+{% block content %}
+
+<div class="container mt-4">
+  <div class="row justify-content-center">
+    <div class="col-lg-8">
+      <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-body p-4">
+          <h3 class="h4 mb-2">Finish the Story</h3>
+          <p class="text-muted mb-3">
+            Story: <strong>{{ story.title }}</strong>
+          </p>
+
+          {% if assignment.instructions %}
+            <div class="alert alert-info small">
+              <strong>Instructions:</strong><br>
+              {{ assignment.instructions | nl2br }}
+            </div>
+          {% endif %}
+
+          <h6 class="fw-semibold mb-2">Story so far</h6>
+          <div class="border rounded-3 p-3 bg-light-subtle small mb-4" style="max-height: 260px; overflow:auto;">
+            {{ draft.partial_text | nl2br }}
+          </div>
+
+          <form method="post">
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Write your ending</label>
+              <textarea
+                name="completion_text"
+                rows="6"
+                class="form-control"
+                placeholder="Continue the story in your own words."
+              >{{ submission.completion_text if submission else "" }}</textarea>
+            </div>
+
+            {% if assignment.user_status == 'submitted' %}
+              <p class="small text-muted">
+                You have already submitted this assignment. Submitting again will overwrite your previous answer.
+              </p>
+            {% endif %}
+
+            <div class="d-flex justify-content-between mt-3">
+              <a href="{{ url_for('assignments_list') }}" class="btn btn-outline-secondary">
+                Back to assignments
+              </a>
+              <button type="submit" class="btn btn-primary">
+                Submit ending
+              </button>
+            </div>
+          </form>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

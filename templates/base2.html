@@ -1,0 +1,659 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}EduWeaverPlay{% endblock %}</title>
+
+  <!-- Bootstrap 5 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <!-- Icons -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    body{
+      font-family:"Nunito", system-ui, sans-serif;
+      background:#fffaf3;
+      min-height:100vh;
+      padding-top:72px;
+    }
+
+    nav.navbar{
+      background:#ffffff;
+      border-bottom:1px solid rgba(0,0,0,.06);
+    }
+
+    .brand-text{
+      font-family:"Baloo 2";
+      font-size:1.45rem;
+      font-weight:600;
+      color:#ff6b6b;
+    }
+
+    .btn-sky{
+      background:#ff6b6b;
+      color:#fff;
+      border-radius:999px;
+      padding:.45rem 1.25rem;
+      font-family:"Baloo 2";
+    }
+
+    .btn-sky:hover{
+      background:#e86060;
+      color:#fff;
+    }
+
+    footer{
+      margin-top:4rem;
+      padding:2rem 0;
+      text-align:center;
+      font-size:.9rem;
+      color:#999;
+    }
+
+    /* ---------- DICTIONARY FLOATING UI ---------- */
+    .dict-fab{
+      position:fixed;
+      right:24px;
+      bottom:24px;
+      z-index:1080;
+      border-radius:999px;
+      box-shadow:0 10px 25px rgba(0,0,0,.25);
+      display:flex;
+      align-items:center;
+      gap:.35rem;
+      background:#ff6b6b;
+      color:#fff;
+      border:none;
+      padding:.55rem 1rem;
+      font-weight:600;
+      font-size:.95rem;
+    }
+    .dict-fab i{ font-size:1.1rem; }
+    .dict-fab:hover{
+      background:#e86060;
+      color:#fff;
+    }
+
+    .dict-drawer{
+      position:fixed;
+      top:72px; /* below navbar */
+      right:0;
+      width:min(360px, 100%);
+      height:calc(100vh - 72px);
+      background:#ffffff;
+      border-left:1px solid rgba(0,0,0,.06);
+      box-shadow:-18px 0 35px rgba(15,23,42,.18);
+      z-index:1075;
+      transform:translateX(100%);
+      transition:transform .28s ease-out;
+      display:flex;
+      flex-direction:column;
+    }
+    .dict-drawer.open{
+      transform:translateX(0);
+    }
+
+    .dict-header{
+      padding:.75rem 1rem;
+      border-bottom:1px solid rgba(0,0,0,.06);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:.5rem;
+    }
+    .dict-title{
+      font-weight:700;
+      font-size:.95rem;
+    }
+    .dict-tabs{
+      padding:.5rem 1rem 0;
+      display:flex;
+      gap:.5rem;
+    }
+    .dict-tab-btn{
+      flex:1;
+      border-radius:999px;
+      border:1px solid rgba(0,0,0,.08);
+      background:#f8fafc;
+      font-size:.8rem;
+      padding:.25rem .75rem;
+    }
+    .dict-tab-btn.active{
+      background:#ff6b6b;
+      color:#fff;
+      border-color:#ff6b6b;
+    }
+
+    .dict-body{
+      padding:.75rem 1rem 1rem;
+      overflow-y:auto;
+      font-size:.9rem;
+      flex:1;
+    }
+
+    .dict-search-row{
+      display:flex;
+      gap:.5rem;
+      margin-bottom:.5rem;
+    }
+    .dict-dir-toggle{
+      display:flex;
+      border-radius:999px;
+      background:#f3f4f6;
+      padding:2px;
+      font-size:.75rem;
+    }
+    .dict-dir-toggle button{
+      flex:1;
+      border:none;
+      background:transparent;
+      border-radius:999px;
+      padding:.2rem .4rem;
+    }
+    .dict-dir-toggle button.active{
+      background:#fff;
+      box-shadow:0 0 0 1px rgba(0,0,0,.08);
+    }
+
+    .dict-result-card{
+      border-radius:.75rem;
+      background:#fff7ec;
+      padding:.6rem .75rem;
+      margin-bottom:.75rem;
+      border:1px solid #ffe0b9;
+    }
+    .dict-main-word{
+      font-weight:700;
+      font-size:1rem;
+    }
+    .dict-translation{
+      font-size:.95rem;
+      margin-top:.25rem;
+    }
+    .dict-examples{
+      margin-top:.5rem;
+      font-size:.8rem;
+      color:#555;
+    }
+
+    .dict-section-title{
+      font-weight:700;
+      font-size:.8rem;
+      text-transform:uppercase;
+      letter-spacing:.05em;
+      color:#999;
+      margin-top:.75rem;
+      margin-bottom:.2rem;
+    }
+
+    .dict-list{
+      list-style:none;
+      padding-left:0;
+      margin:0;
+    }
+    .dict-list li{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:.4rem;
+      padding:.35rem 0;
+      border-bottom:1px dashed rgba(0,0,0,.05);
+      font-size:.85rem;
+    }
+    .dict-list-word{
+      font-weight:600;
+    }
+    .dict-list-meta{
+      color:#888;
+      font-size:.78rem;
+    }
+
+    .dict-empty{
+      font-size:.8rem;
+      color:#999;
+      font-style:italic;
+      margin-top:.3rem;
+    }
+  </style>
+
+  {% block head %}{% endblock %}
+</head>
+
+<body>
+
+<!-- NAVBAR -->
+<nav class="navbar navbar-expand-lg fixed-top">
+  <div class="container">
+
+    <a class="navbar-brand d-flex align-items-center gap-2" href="{{ url_for('index') }}">
+      <i class="bi bi-stars text-warning"></i>
+      <span class="brand-text">EduWeaverPlay</span>
+    </a>
+
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+            data-bs-target="#navbarMain">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+
+    <div class="collapse navbar-collapse" id="navbarMain">
+      <ul class="navbar-nav ms-auto align-items-lg-center gap-lg-2">
+        {% if current_user and current_user.username == "testtest" %}
+        <li class="nav-item">
+          <a class="nav-link" href="{{ url_for('story_new') }}">Create Story</a>
+        </li>
+        {% endif %}
+
+        <li class="nav-item">
+          <a class="nav-link" href="{{ url_for('library') }}">Library</a>
+        </li>
+
+        {% if current_user %}
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('assignments_list') }}">Assignments</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('word_scramble') }}">Word Scramble</a>
+          </li>
+        {% endif %}
+
+        {% if current_user and current_user.username == "testtest" %}
+        <li class="nav-item">
+          <a class="nav-link" href="{{ url_for('admin_stories') }}">Admin</a>
+        </li>
+        <li class="nav-item">
+  <a class="nav-link" href="{{ url_for('admin_analytics') }}">Analytics</a>
+</li>
+        {% endif %}
+
+        {% if current_user %}
+          <li class="nav-item ms-lg-3 mt-2 mt-lg-0">
+            <a class="btn btn-sky" href="{{ url_for('logout') }}">Logout</a>
+          </li>
+        {% else %}
+          <li class="nav-item ms-lg-3 mt-2 mt-lg-0">
+            <a class="btn btn-sky" href="{{ url_for('login') }}">Login</a>
+          </li>
+        {% endif %}
+      </ul>
+    </div>
+
+  </div>
+</nav>
+
+<!-- MAIN -->
+<div class="container py-4">
+  {% block content %}{% endblock %}
+</div>
+
+<footer>
+  EduWeaverPlay · AI-powered Story Classroom
+</footer>
+
+<!-- FLOATING DICTIONARY BUTTON -->
+{% if current_user %}
+<button type="button" class="dict-fab" id="dictFab">
+  <i class="bi bi-translate"></i>
+  <span>Dictionary</span>
+</button>
+{% endif %}
+
+<!-- SLIDING DICTIONARY DRAWER -->
+{% if current_user %}
+<div class="dict-drawer" id="dictDrawer" aria-hidden="true">
+  <div class="dict-header">
+    <div>
+      <div class="dict-title">
+        <i class="bi bi-translate me-1 text-warning"></i> EN ↔ KO Dictionary
+      </div>
+      <div class="text-muted small">Quick lookup, history, and bookmarks</div>
+    </div>
+    <button class="btn btn-sm btn-outline-secondary rounded-pill" id="dictCloseBtn">
+      <i class="bi bi-x-lg"></i>
+    </button>
+  </div>
+
+  <div class="dict-tabs">
+    <button class="dict-tab-btn active" data-tab="search">Search</button>
+    <button class="dict-tab-btn" data-tab="bookmarks">Bookmarks</button>
+  </div>
+
+  <div class="dict-body">
+    <!-- SEARCH TAB -->
+    <div id="dictTabSearch">
+      <div class="dict-search-row">
+        <input type="text" class="form-control form-control-sm" id="dictQueryInput"
+               placeholder="Type a word or short phrase…">
+        <button class="btn btn-sm btn-primary" id="dictSearchBtn">
+          <i class="bi bi-search"></i>
+        </button>
+      </div>
+      <div class="dict-dir-toggle mb-2">
+        <button type="button" class="active" data-dict-direction="en_ko">EN → KO</button>
+        <button type="button" data-dict-direction="ko_en">KO → EN</button>
+      </div>
+
+      <div id="dictResultArea" class="mb-2" style="display:none;"></div>
+
+      <div class="d-flex justify-content-between align-items-center mb-1">
+        <div class="dict-section-title mb-0">Recent Searches</div>
+        <button class="btn btn-link btn-sm p-0 small" id="dictClearHistoryBtn">
+          Clear
+        </button>
+      </div>
+      <ul class="dict-list" id="dictHistoryList"></ul>
+      <div class="dict-empty" id="dictHistoryEmpty" style="display:none;">
+        No searches yet. Try looking up a word.
+      </div>
+    </div>
+
+    <!-- BOOKMARKS TAB -->
+    <div id="dictTabBookmarks" style="display:none;">
+      <div class="dict-section-title">Bookmarks</div>
+      <ul class="dict-list" id="dictBookmarkList"></ul>
+      <div class="dict-empty" id="dictBookmarkEmpty" style="display:none;">
+        No bookmarks yet. Tap the ★ button after a search to save it.
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+{% if current_user %}
+<script>
+(function(){
+  const drawer = document.getElementById('dictDrawer');
+  const fab = document.getElementById('dictFab');
+  const closeBtn = document.getElementById('dictCloseBtn');
+  const tabButtons = document.querySelectorAll('.dict-tab-btn');
+  const tabSearch = document.getElementById('dictTabSearch');
+  const tabBookmarks = document.getElementById('dictTabBookmarks');
+
+  const queryInput = document.getElementById('dictQueryInput');
+  const searchBtn = document.getElementById('dictSearchBtn');
+  const dirButtons = document.querySelectorAll('[data-dict-direction]');
+  const resultArea = document.getElementById('dictResultArea');
+
+  const historyList = document.getElementById('dictHistoryList');
+  const historyEmpty = document.getElementById('dictHistoryEmpty');
+  const clearHistoryBtn = document.getElementById('dictClearHistoryBtn');
+
+  const bookmarkList = document.getElementById('dictBookmarkList');
+  const bookmarkEmpty = document.getElementById('dictBookmarkEmpty');
+
+  const APIs = {
+    search: "{{ url_for('api_dict_search') }}",
+    history: "{{ url_for('api_dict_history') }}",
+    clearHistory: "{{ url_for('api_dict_clear_history') }}",
+    bookmarks: "{{ url_for('api_dict_bookmarks') }}",
+    toggleBookmark: "{{ url_for('api_dict_toggle_bookmark') }}"
+  };
+
+  let direction = 'en_ko';
+  let currentLookupId = null;
+
+  function openDrawer(){
+    drawer.classList.add('open');
+    drawer.setAttribute('aria-hidden', 'false');
+    if (!historyList.dataset.loaded){
+      loadHistory();
+    }
+    if (!bookmarkList.dataset.loaded){
+      loadBookmarks();
+    }
+  }
+  function closeDrawer(){
+    drawer.classList.remove('open');
+    drawer.setAttribute('aria-hidden', 'true');
+  }
+
+  if (fab){
+    fab.addEventListener('click', openDrawer);
+  }
+  if (closeBtn){
+    closeBtn.addEventListener('click', closeDrawer);
+  }
+
+  // Tabs
+  tabButtons.forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      tabButtons.forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      const tab = btn.dataset.tab;
+      if (tab === 'search'){
+        tabSearch.style.display = '';
+        tabBookmarks.style.display = 'none';
+      } else {
+        tabSearch.style.display = 'none';
+        tabBookmarks.style.display = '';
+        if (!bookmarkList.dataset.loaded){
+          loadBookmarks();
+        }
+      }
+    });
+  });
+
+  // Direction toggle
+  dirButtons.forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      dirButtons.forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      direction = btn.dataset.dictDirection || 'en_ko';
+    });
+  });
+
+  // Search
+  function renderResult(data){
+    currentLookupId = data.lookup_id || null;
+    const r = data.result || {};
+    resultArea.innerHTML = `
+      <div class="dict-result-card">
+        <div class="d-flex justify-content-between align-items-start mb-1">
+          <div>
+            <div class="dict-main-word">${r.headword || data.query}</div>
+            <div class="dict-translation">${r.translation || ''}</div>
+          </div>
+          <button type="button"
+                  class="btn btn-sm ${data.bookmarked ? 'btn-warning' : 'btn-outline-warning'}"
+                  id="dictBookmarkBtn">
+            <i class="bi ${data.bookmarked ? 'bi-star-fill' : 'bi-star'}"></i>
+          </button>
+        </div>
+        <div class="dict-examples">
+          ${r.example_en ? `<div><b>EN:</b> ${r.example_en}</div>` : ''}
+          ${r.example_ko ? `<div><b>KO:</b> ${r.example_ko}</div>` : ''}
+        </div>
+      </div>
+    `;
+    resultArea.style.display = 'block';
+
+    const bookmarkBtn = document.getElementById('dictBookmarkBtn');
+    if (bookmarkBtn){
+      bookmarkBtn.addEventListener('click', ()=>toggleBookmark(currentLookupId, bookmarkBtn));
+    }
+  }
+
+  async function doSearch(){
+    const q = (queryInput.value || '').trim();
+    if (!q) return;
+    resultArea.style.display = 'block';
+    resultArea.innerHTML = `
+      <div class="dict-result-card">
+        <div class="small text-muted">
+          <span class="spinner-border spinner-border-sm me-2"></span>
+          Looking up…
+        </div>
+      </div>
+    `;
+    try{
+      const res = await fetch(APIs.search, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({query:q, direction})
+      });
+      if (!res.ok) throw new Error('lookup failed');
+      const data = await res.json();
+      if (!data.ok){
+        throw new Error(data.error || 'lookup error');
+      }
+      renderResult(data);
+      historyList.dataset.loaded = '1';
+      await loadHistory();
+    }catch(err){
+      console.error(err);
+      resultArea.innerHTML = `
+        <div class="dict-result-card">
+          <div class="text-danger small">Could not look up that word right now.</div>
+        </div>
+      `;
+    }
+  }
+
+  searchBtn.addEventListener('click', doSearch);
+  queryInput.addEventListener('keydown', e=>{
+    if (e.key === 'Enter'){
+      e.preventDefault();
+      doSearch();
+    }
+  });
+
+  // History
+  async function loadHistory(){
+    try{
+      const res = await fetch(APIs.history);
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      historyList.innerHTML = '';
+      if (!data.items || !data.items.length){
+        historyEmpty.style.display = 'block';
+        return;
+      }
+      historyEmpty.style.display = 'none';
+      data.items.forEach(item=>{
+        const li = document.createElement('li');
+        li.innerHTML = `
+          <div>
+            <div class="dict-list-word">${item.query}</div>
+            <div class="dict-list-meta">${item.direction_label}</div>
+          </div>
+          <button class="btn btn-sm btn-light border" data-lookup-id="${item.id}">
+            <i class="bi bi-arrow-return-right"></i>
+          </button>
+        `;
+        li.querySelector('button').addEventListener('click', ()=>replayLookup(item.id));
+        historyList.appendChild(li);
+      });
+    }catch(err){
+      console.error(err);
+    }
+  }
+
+  async function replayLookup(id){
+    try{
+      const res = await fetch(APIs.search, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({lookup_id:id})
+      });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      if (data.ok){
+        queryInput.value = data.query || '';
+        direction = data.direction || direction;
+        dirButtons.forEach(b=>{
+          b.classList.toggle('active', b.dataset.dictDirection === direction);
+        });
+        renderResult(data);
+      }
+    }catch(err){
+      console.error(err);
+    }
+  }
+
+  if (clearHistoryBtn){
+    clearHistoryBtn.addEventListener('click', async ()=>{
+      try{
+        const res = await fetch(APIs.clearHistory, {method:'POST'});
+        if (res.ok){
+          historyList.innerHTML = '';
+          historyEmpty.style.display = 'block';
+        }
+      }catch(err){
+        console.error(err);
+      }
+    });
+  }
+
+  // Bookmarks
+  async function loadBookmarks(){
+    try{
+      const res = await fetch(APIs.bookmarks);
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      bookmarkList.innerHTML = '';
+      if (!data.items || !data.items.length){
+        bookmarkEmpty.style.display = 'block';
+        return;
+      }
+      bookmarkEmpty.style.display = 'none';
+      data.items.forEach(item=>{
+        const li = document.createElement('li');
+        li.innerHTML = `
+          <div>
+            <div class="dict-list-word">${item.query}</div>
+            <div class="dict-list-meta">${item.translation || ''}</div>
+          </div>
+          <button class="btn btn-sm btn-outline-danger" data-lookup-id="${item.id}">
+            <i class="bi bi-trash"></i>
+          </button>
+        `;
+        li.querySelector('button').addEventListener('click', ()=>toggleBookmark(item.id));
+        bookmarkList.appendChild(li);
+      });
+      bookmarkList.dataset.loaded = '1';
+    }catch(err){
+      console.error(err);
+    }
+  }
+
+  async function toggleBookmark(id, btnEl){
+    if (!id) return;
+    try{
+      const res = await fetch(APIs.toggleBookmark, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({lookup_id:id})
+      });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      if (btnEl && data.bookmarked !== undefined){
+        if (data.bookmarked){
+          btnEl.classList.remove('btn-outline-warning');
+          btnEl.classList.add('btn-warning');
+          btnEl.innerHTML = '<i class="bi bi-star-fill"></i>';
+        }else{
+          btnEl.classList.add('btn-outline-warning');
+          btnEl.classList.remove('btn-warning');
+          btnEl.innerHTML = '<i class="bi bi-star"></i>';
+        }
+      }
+      // Refresh bookmarks silently
+      await loadBookmarks();
+    }catch(err){
+      console.error(err);
+    }
+  }
+
+})();
+</script>
+{% endif %}
+
+{% block scripts %}{% endblock %}
+</body>
+</html>

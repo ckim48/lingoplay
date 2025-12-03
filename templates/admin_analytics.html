@@ -1,601 +1,660 @@
-{% extends "base.html" %}
-{% block title %}Admin Analytics · EduWeaver{% endblock %}
+{% extends "base2.html" %}
+{% block title %}Class Analytics · EduWeaver Admin{% endblock %}
 
 {% block content %}
-<div class="container py-4">
-
-  <!-- ===== Page Header ===== -->
-  <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+<div class="container mt-4 admin-analytics">
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
     <div>
-      <h1 class="h4 mb-1">Admin Analytics</h1>
-      <div class="text-muted small">Monitor learner progress, compare cohorts, and drill into per-user charts.</div>
+      <h3 class="fw-bold mb-1 text-aa-heading">
+        Class Analytics
+      </h3>
+      <p class="text-aa-muted mb-0">
+        Compare L1 vs L2 learners and drill down into a single student.
+      </p>
     </div>
-
-    <div class="d-flex align-items-center gap-2">
-      <div class="dropdown">
-        <button class="btn btn-ghost dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
-          Last 30 days
-        </button>
-        <ul class="dropdown-menu dropdown-menu-end">
-          <li><button class="dropdown-item" data-range="7">Last 7 days</button></li>
-          <li><button class="dropdown-item active" data-range="30">Last 30 days</button></li>
-          <li><button class="dropdown-item" data-range="90">Last 90 days</button></li>
-        </ul>
-      </div>
-      <button id="btn-reflect" class="btn btn-sky"><i class="bi bi-stars me-1"></i> Research Reflection</button>
+    <div class="badge bg-aa-pill text-wrap">
+      <span class="me-1">●</span> Teacher view
     </div>
   </div>
 
-  <!-- ===== Quick KPIs ===== -->
-  <div class="row g-3 mb-3">
-    <div class="col-6 col-lg-3">
-      <div class="kpi card shadow-sm border-0">
-        <div class="card-body">
-          <div class="kpi-label">Users</div>
-          <div id="kpi-users" class="kpi-value">—</div>
-          <div class="kpi-trend" id="kpi-users-sub">Active last 30d: —</div>
-        </div>
-      </div>
-    </div>
-    <div class="col-6 col-lg-3">
-      <div class="kpi card shadow-sm border-0">
-        <div class="card-body">
-          <div class="kpi-label">Stories</div>
-          <div id="kpi-stories" class="kpi-value">—</div>
-          <div class="kpi-trend" id="kpi-stories-sub">/ learner: —</div>
-        </div>
-      </div>
-    </div>
-    <div class="col-6 col-lg-3">
-      <div class="kpi card shadow-sm border-0">
-        <div class="card-body">
-          <div class="kpi-label">Finishes</div>
-          <div id="kpi-finishes" class="kpi-value">—</div>
-          <div class="kpi-trend" id="kpi-finishes-sub">Completion rate: —</div>
-        </div>
-      </div>
-    </div>
-    <div class="col-6 col-lg-3">
-      <div class="kpi card shadow-sm border-0">
-        <div class="card-body">
-          <div class="kpi-label">Avg Quiz %</div>
-          <div id="kpi-avg" class="kpi-value">—</div>
-          <div class="kpi-trend" id="kpi-avg-sub">Attempts: —</div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ===== Tabs ===== -->
-  <ul class="nav nav-pills nav-fill rounded-3 glass mb-3" id="analyticsTabs" role="tablist">
+  <!-- Nav Tabs -->
+  <ul class="nav nav-tabs mb-3 aa-nav-tabs" role="tablist">
     <li class="nav-item" role="presentation">
-      <button class="nav-link active" id="tab-overview" data-bs-toggle="pill" data-bs-target="#pane-overview" type="button" role="tab">Overview</button>
+      <button class="nav-link active" id="tab-overview-tab"
+              data-bs-toggle="tab" data-bs-target="#tab-overview"
+              type="button" role="tab" aria-controls="tab-overview"
+              aria-selected="true">
+        L1 vs L2 Overview
+      </button>
     </li>
     <li class="nav-item" role="presentation">
-      <button class="nav-link" id="tab-cohorts" data-bs-toggle="pill" data-bs-target="#pane-cohorts" type="button" role="tab">L1 vs L2 Cohorts</button>
-    </li>
-    <li class="nav-item" role="presentation">
-      <button class="nav-link" id="tab-learners" data-bs-toggle="pill" data-bs-target="#pane-learners" type="button" role="tab">Learners</button>
+      <button class="nav-link" id="tab-student-tab"
+              data-bs-toggle="tab" data-bs-target="#tab-student"
+              type="button" role="tab" aria-controls="tab-student"
+              aria-selected="false">
+        Single Student
+      </button>
     </li>
   </ul>
 
   <div class="tab-content">
+    <!-- ===================== TAB 1: OVERVIEW ===================== -->
+    <div class="tab-pane fade show active" id="tab-overview" role="tabpanel"
+         aria-labelledby="tab-overview-tab">
 
-    <!-- ===== Overview ===== -->
-    <div class="tab-pane fade show active" id="pane-overview" role="tabpanel" aria-labelledby="tab-overview">
+      <!-- CHART ROW: L1 vs L2 -->
+      <div class="row g-3 mb-4">
+        <div class="col-md-6">
+          <div class="card border-0 shadow-sm aa-card h-100">
+            <div class="card-body">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="fw-bold mb-0">Assignments · L1 vs L2</h6>
+                <span class="small text-aa-muted">Avg score & completion</span>
+              </div>
+              <canvas id="aaAssignmentsChart" height="180"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-6">
+          <div class="card border-0 shadow-sm aa-card h-100">
+            <div class="card-body">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="fw-bold mb-0">Practice · L1 vs L2</h6>
+                <span class="small text-aa-muted">Scramble & dictionary</span>
+              </div>
+              <canvas id="aaPracticeChart" height="180"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- END CHART ROW -->
+
+      <div class="row g-3 mb-3">
+        {% for g in group_list %}
+        <div class="col-md-6">
+          <div class="card border-0 shadow-sm aa-card h-100">
+            <div class="card-body">
+              <div class="d-flex justify-content-between align-items-start mb-2">
+                <div>
+                  <div class="badge aa-pill-label">
+                    {{ g.code }}
+                  </div>
+                  <h5 class="fw-bold mb-1">{{ g.label }}</h5>
+                  <div class="small text-aa-muted">
+                    {{ g.student_count }} student{{ g.student_count != 1 and 's' or '' }}
+                  </div>
+                </div>
+                <div class="aa-big-number text-end">
+                  {% if g.assignments_avg_score %}
+                  {{ "%.1f"|format(g.assignments_avg_score) }}%
+                  {% else %}
+                  –
+                  {% endif %}
+                  <div class="aa-big-caption">Avg. Assignment Score</div>
+                </div>
+              </div>
+
+              <div class="row g-3 small mt-1">
+                <div class="col-6">
+                  <div class="aa-metric-label">Assignments</div>
+                  <div class="d-flex align-items-center justify-content-between">
+                    <span class="fw-semibold">
+                      {{ g.assignments_completed }}/{{ g.assignments_total }}
+                    </span>
+                    <span class="text-aa-muted">
+                      {% if g.assignments_total %}
+                        {{ "%.0f"|format(100 * g.assignments_completed / g.assignments_total) }}% completed
+                      {% else %}
+                        No data
+                      {% endif %}
+                    </span>
+                  </div>
+                  <div class="progress aa-progress mt-1">
+                    <div class="progress-bar aa-progress-bar"
+                         role="progressbar"
+                         style="width: {{ g.assignments_total and (100 * g.assignments_completed / g.assignments_total) or 0 }}%"
+                         aria-valuenow="{{ g.assignments_total and (100 * g.assignments_completed / g.assignments_total) or 0 }}"
+                         aria-valuemin="0" aria-valuemax="100"></div>
+                  </div>
+                  <div class="small text-aa-muted mt-1">
+                    Avg attempts: {{ "%.1f"|format(g.assignments_avg_attempts or 0) }}
+                  </div>
+                </div>
+
+                <div class="col-6">
+                  <div class="aa-metric-label">Word Scramble</div>
+                  <div class="d-flex align-items-center justify-content-between">
+                    <span class="fw-semibold">{{ g.scramble_sessions }}</span>
+                    <span class="text-aa-muted">
+                      {% if g.scramble_total_questions %}
+                        {{ "%.1f"|format(g.scramble_accuracy) }}% correct
+                      {% else %}
+                        No sessions yet
+                      {% endif %}
+                    </span>
+                  </div>
+                  <div class="progress aa-progress mt-1">
+                    <div class="progress-bar aa-progress-bar-soft"
+                         role="progressbar"
+                         style="width: {{ g.scramble_accuracy or 0 }}%"
+                         aria-valuenow="{{ g.scramble_accuracy or 0 }}"
+                         aria-valuemin="0" aria-valuemax="100"></div>
+                  </div>
+                  <div class="small text-aa-muted mt-1">
+                    Correct: {{ g.scramble_total_correct }}/{{ g.scramble_total_questions }}
+                  </div>
+                </div>
+              </div>
+
+              <hr class="my-3">
+
+              <div class="row g-3 small">
+                <div class="col-6">
+                  <div class="aa-metric-label mb-1">Dictionary Lookups</div>
+                  <div class="fw-semibold">{{ g.dict_lookups }}</div>
+                  <div class="text-aa-muted">
+                    Across {{ g.student_count or 0 }} student{{ g.student_count != 1 and 's' or '' }}
+                  </div>
+                </div>
+                <div class="col-6">
+                  <div class="aa-metric-label mb-1">Top Keywords</div>
+                  {% if g.top_queries %}
+                    <ul class="aa-keyword-list">
+                      {% for q in g.top_queries %}
+                      <li>
+                        <span class="aa-keyword">{{ q.query }}</span>
+                        <span class="aa-keyword-count">{{ q.cnt }}</span>
+                      </li>
+                      {% endfor %}
+                    </ul>
+                  {% else %}
+                    <div class="text-aa-muted fst-italic">No lookups yet.</div>
+                  {% endif %}
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+
+      <div class="alert alert-light border-aa-soft mt-2 small" role="alert">
+        Hint: You can encourage more L2 students to use the dictionary during reading activities,
+        or assign extra scramble sessions if accuracy is low.
+      </div>
+    </div>
+
+    <!-- ===================== TAB 2: SINGLE STUDENT ===================== -->
+    <div class="tab-pane fade" id="tab-student" role="tabpanel"
+         aria-labelledby="tab-student-tab">
+
+      <form method="get" action="{{ url_for('admin_analytics') }}"
+            class="row g-2 align-items-end mb-3">
+        <div class="col-md-4">
+          <label class="form-label small text-aa-muted">Select student</label>
+          <select name="user_id" class="form-select">
+            {% for s in students %}
+            <option value="{{ s.id }}"
+                    {% if selected_user and s.id == selected_user.id %}selected{% endif %}>
+              {{ s.username }}{% if s.is_english_native == 1 %} · L1{% elif s.is_english_native == 0 %} · L2{% endif %}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <button type="submit" class="btn btn-aa w-100">View</button>
+        </div>
+      </form>
+
+      {% if not selected_user %}
+      <div class="alert alert-warning small">
+        No students found yet. Ask students to register first.
+      </div>
+      {% else %}
       <div class="row g-3">
-        <div class="col-12 col-xxl-8">
-          <div class="card border-0 shadow-sm">
+        <!-- Student summary card -->
+        <div class="col-lg-4">
+          <div class="card border-0 shadow-sm aa-card h-100">
             <div class="card-body">
-              <div class="d-flex align-items-center justify-content-between mb-2">
-                <div class="h6 mb-0">Activity Timeline</div>
-                <div class="text-muted small">Stories, Finishes, Quiz Attempts</div>
+              <div class="d-flex justify-content-between align-items-start">
+                <div>
+                  <div class="badge aa-pill-label">
+                    {{ selected_user.username }}
+                  </div>
+                  <h5 class="fw-bold mb-1">
+                    {{ selected_user.username }}
+                  </h5>
+                  <div class="small text-aa-muted">
+                    {{ selected_user.email }}
+                  </div>
+                  <div class="small text-aa-muted mt-1">
+                    Group:
+                    {% if selected_user.is_english_native == 1 %}
+                      L1 · Native English
+                    {% elif selected_user.is_english_native == 0 %}
+                      L2 · Non-native
+                    {% else %}
+                      Not set
+                    {% endif %}
+                  </div>
+                </div>
               </div>
-              <div class="chart-box tall">
-                <canvas id="overviewLine"></canvas>
+
+              {% if student_assign_stats %}
+              <hr class="my-3">
+              <div class="small">
+                <div class="aa-metric-label">Assignments</div>
+                <div class="fw-semibold">
+                  {{ student_assign_stats.total }} total,
+                  {{ student_assign_stats.completed }} submitted
+                </div>
+                <div class="text-aa-muted">
+                  Avg score:
+                  {% if student_assign_stats.avg_score %}
+                    {{ "%.1f"|format(student_assign_stats.avg_score) }}%
+                  {% else %}
+                    –
+                  {% endif %}
+                  · Avg attempts:
+                  {{ "%.1f"|format(student_assign_stats.avg_attempts or 0) }}
+                </div>
+
+                {% if student_assign_stats.by_type %}
+                <div class="mt-2">
+                  {% for t, info in student_assign_stats.by_type.items() %}
+                  <div class="d-flex justify-content-between">
+                    <span class="text-aa-muted">
+                      {{ t|capitalize }}
+                    </span>
+                    <span>
+                      {{ info.completed }}/{{ info.count }} submitted
+                    </span>
+                  </div>
+                  {% endfor %}
+                </div>
+                {% endif %}
               </div>
+              {% else %}
+              <hr class="my-3">
+              <div class="small text-aa-muted">
+                No assignments for this student yet.
+              </div>
+              {% endif %}
+
+              {% if student_scramble_summary %}
+              <hr class="my-3">
+              <div class="small">
+                <div class="aa-metric-label">Word Scramble</div>
+                <div class="fw-semibold">
+                  {{ student_scramble_summary.sessions }} session{{ student_scramble_summary.sessions != 1 and 's' or '' }}
+                </div>
+                <div class="text-aa-muted">
+                  Correct: {{ student_scramble_summary.total_correct }}/{{ student_scramble_summary.total_questions }}
+                  {% if student_scramble_summary.total_questions %}
+                    ({{ "%.1f"|format(student_scramble_summary.accuracy) }}%)
+                  {% endif %}
+                </div>
+              </div>
+              {% endif %}
             </div>
           </div>
         </div>
-        <div class="col-12 col-xxl-4">
-          <div class="card border-0 shadow-sm h-100">
+
+        <!-- Assignments list -->
+        <div class="col-lg-4">
+          <div class="card border-0 shadow-sm aa-card h-100">
             <div class="card-body">
-              <div class="h6 mb-2">Attempt Score Distribution</div>
-              <div class="chart-box">
-                <canvas id="scoreDist"></canvas>
+              <h6 class="fw-bold mb-2">Recent Assignments</h6>
+              {% if student_assign_list %}
+              <div class="aa-list small">
+                {% for a in student_assign_list[:8] %}
+                <div class="aa-list-row">
+                  <div>
+                    <div class="fw-semibold">
+                      {{ a.assignment_title or "Untitled" }}
+                    </div>
+                    <div class="text-aa-muted">
+                      Type: {{ a.assignment_type or "?" }} ·
+                      {% if a.status == "submitted" %}
+                        Submitted
+                      {% else %}
+                        Pending
+                      {% endif %}
+                    </div>
+                  </div>
+                  <div class="text-end">
+                    {% if a.score is not none %}
+                      <div class="fw-semibold">
+                        {{ "%.0f"|format(a.score) }}%
+                      </div>
+                    {% else %}
+                      <div class="text-aa-muted">–</div>
+                    {% endif %}
+                    <div class="text-aa-muted">
+                      tries: {{ a.attempt_count or 0 }}
+                    </div>
+                  </div>
+                </div>
+                {% endfor %}
               </div>
-              <div class="small text-muted mt-2">Histogram of latest quiz attempt scores.</div>
+              {% else %}
+              <div class="small text-aa-muted">
+                No assignments recorded.
+              </div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        <!-- Dict & scramble sessions -->
+        <div class="col-lg-4">
+          <div class="card border-0 shadow-sm aa-card h-100">
+            <div class="card-body">
+              <h6 class="fw-bold mb-2">Dictionary & Scramble Details</h6>
+
+              <div class="small mb-3">
+                <div class="aa-metric-label mb-1">Recent Dictionary Lookups</div>
+                {% if student_lookups %}
+                <ul class="aa-keyword-list">
+                  {% for l in student_lookups %}
+                  <li class="justify-content-between">
+                    <span class="aa-keyword">{{ l.query }}</span>
+                    <span class="aa-keyword-count">
+                      {{ l.created_at|dt("%m-%d") }}
+                    </span>
+                  </li>
+                  {% endfor %}
+                </ul>
+                {% else %}
+                <div class="text-aa-muted fst-italic">
+                  No lookups yet.
+                </div>
+                {% endif %}
+              </div>
+
+              {% if student_scramble_sessions %}
+              <div class="small">
+                <div class="aa-metric-label mb-1">Last Scramble Sessions</div>
+                <div class="aa-list small">
+                  {% for s in student_scramble_sessions %}
+                  <div class="aa-list-row">
+                    <div>
+                      <div class="text-aa-muted">
+                        Session #{{ s.id }}
+                      </div>
+                    </div>
+                    <div class="text-end">
+                      <div>
+                        {{ s.correct_count }}/{{ s.total }} correct
+                      </div>
+                    </div>
+                  </div>
+                  {% endfor %}
+                </div>
+              </div>
+              {% endif %}
             </div>
           </div>
         </div>
       </div>
-
-      <!-- ===== Modern Reflection Card ===== -->
-      <div class="card border-0 lp-card-modern mt-3">
-        <div class="card-body p-0">
-          <div class="lp-strip d-flex align-items-center justify-content-between px-4 py-3">
-            <div class="d-flex align-items-center gap-2">
-              <span class="lp-dot" aria-hidden="true"></span>
-              <span class="small text-uppercase fw-semibold">AI Research Reflection</span>
-            </div>
-            <div class="d-flex align-items-center gap-2">
-              <button id="copy-reflection" class="btn btn-outline-sky btn-sm" title="Copy text">
-                <i class="bi bi-clipboard-check me-1"></i> Copy
-              </button>
-              <button id="btn-reflect-2" class="btn btn-sky btn-sm" title="Generate reflection">
-                <i class="bi bi-stars me-1"></i> Generate
-              </button>
-            </div>
-          </div>
-
-          <div id="reflection-skeleton" class="p-4 p-lg-5 d-none">
-            <div class="skeleton-line w-75 mb-2"></div>
-            <div class="skeleton-line w-100 mb-2"></div>
-            <div class="skeleton-line w-95 mb-2"></div>
-            <div class="skeleton-line w-80 mb-2"></div>
-            <div class="skeleton-line w-60"></div>
-          </div>
-
-          <div id="reflection" class="p-4 p-lg-5" style="white-space:pre-line; min-height:80px;">
-            Click “Research Reflection” to generate a summary with GPT.
-          </div>
-        </div>
-      </div>
+      {% endif %}
     </div>
-
-    <!-- ===== Cohorts ===== -->
-    <div class="tab-pane fade" id="pane-cohorts" role="tabpanel" aria-labelledby="tab-cohorts">
-      <div class="row g-3">
-        <div class="col-12 col-xl-7">
-          <div class="card border-0 shadow-sm">
-            <div class="card-body">
-              <div class="h6 mb-2">L1 vs L2 — Volume & Outcomes</div>
-              <div class="chart-box tall">
-                <canvas id="l1l2Bar"></canvas>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="col-12 col-xl-5">
-          <div class="card border-0 shadow-sm h-100">
-            <div class="card-body">
-              <div class="h6 mb-2">Average Quiz Score Trend</div>
-              <div class="chart-box">
-                <canvas id="l1l2Line"></canvas>
-              </div>
-              <div class="small text-muted mt-2">Rolling average quiz % by cohort.</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ===== Learners (table + per-user feedback) ===== -->
-    <div class="tab-pane fade" id="pane-learners" role="tabpanel" aria-labelledby="tab-learners">
-      <div class="card border-0 shadow-sm">
-        <div class="card-body">
-
-          <div class="row g-2 align-items-center mb-2">
-            <div class="col-12 col-md-6">
-              <div class="input-group">
-                <span class="input-group-text bg-transparent border-end-0"><i class="bi bi-search"></i></span>
-                <input id="search" class="form-control border-start-0" placeholder="Search username…" />
-              </div>
-            </div>
-            <div class="col-6 col-md-3">
-              <select id="filter-l1" class="form-select">
-                <option value="">All (L1 & L2)</option>
-                <option value="1">L1</option>
-                <option value="0">L2</option>
-              </select>
-            </div>
-            <div class="col-6 col-md-3 text-md-end">
-              <span class="small text-muted" id="learner-count-label"></span>
-            </div>
-          </div>
-
-          <div class="table-responsive">
-            <table class="table align-middle">
-              <thead>
-              <tr>
-                <th>User</th><th>L1</th><th>Age</th><th>Gender</th>
-                <th>Stories</th><th>Finishes</th><th>Attempts</th>
-                <th>Last Activity</th>
-                <th>Detail</th>
-                <th>Feedback</th>
-              </tr>
-              </thead>
-              <tbody id="users-tbody"></tbody>
-            </table>
-          </div>
-
-        </div>
-      </div>
-    </div>
-
   </div>
 </div>
 
-<!-- ===== Per-User Drawer ===== -->
-<div class="offcanvas offcanvas-end w-100 w-lg-50" tabindex="-1" id="userDrawer" aria-labelledby="userDrawerLabel">
-  <div class="offcanvas-header">
-    <div>
-      <h5 class="offcanvas-title" id="userDrawerLabel">Learner Detail</h5>
-      <div class="text-muted small" id="userDrawerSub">Loading…</div>
-    </div>
-    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
-  </div>
-  <div class="offcanvas-body">
-
-    <!-- Placeholder for per-user KPIs / charts if you add them -->
-    <div class="mb-3" id="user-metrics"></div>
-
-    <!-- Student Feedback (matches sky theme) -->
-    <section class="card border-0 lp-card-modern">
-      <div class="card-body p-0">
-        <div class="lp-strip d-flex align-items-center justify-content-between px-4 py-3">
-          <div class="d-flex align-items-center gap-2">
-            <span class="lp-dot" aria-hidden="true"></span>
-            <span class="small text-uppercase fw-semibold">Student Feedback</span>
-          </div>
-          <div class="d-flex align-items-center gap-2">
-            <button id="copy-user-feedback" class="btn btn-outline-sky btn-sm" title="Copy">
-              <i class="bi bi-clipboard-check me-1"></i> Copy
-            </button>
-            <button id="btn-user-reflect" class="btn btn-sky btn-sm" title="Generate feedback">
-              <i class="bi bi-magic me-1"></i> Generate
-            </button>
-            <button id="btn-user-close" class="btn btn-link btn-sm text-muted" type="button" title="Close">
-              <i class="bi bi-x-lg"></i>
-            </button>
-          </div>
-        </div>
-
-        <div id="user-reflection-skel" class="p-4 d-none">
-          <div class="skeleton-line w-75 mb-2"></div>
-          <div class="skeleton-line w-100 mb-2"></div>
-          <div class="skeleton-line w-95 mb-2"></div>
-          <div class="skeleton-line w-80 mb-2"></div>
-          <div class="skeleton-line w-60"></div>
-        </div>
-
-        <div id="user-reflection" class="p-4" style="white-space:pre-line; min-height:60px;">
-          Click “Generate” to create tailored feedback for this learner.
-        </div>
-      </div>
-    </section>
-
-  </div>
-</div>
-
-<!-- ===== Sky Theme ===== -->
 <style>
-  :root{
-    --ink:#0f1b33; --muted:#64748b; --bg:#f6f9ff; --paper:#ffffff;
-    --sky-25:#f2f8ff; --sky-50:#e8f3ff; --sky-100:#d8ebff; --sky-200:#c2e0ff;
-    --sky-300:#a5d1ff; --sky-400:#7fbaff; --sky-500:#4ea2ff; --sky-600:#2f8cea; --sky-700:#236fbb;
-    --border:#e5eaf3; --ring:#b9d6ff;
-  }
-  body{ background:var(--bg); }
-  .glass{
-    background:linear-gradient(180deg, rgba(255,255,255,.85), rgba(255,255,255,.72));
-    border:1px solid var(--border);
-    backdrop-filter:saturate(140%) blur(10px);
-  }
-  .btn-sky{
-    --bs-btn-color:#0b1224; --bs-btn-bg:var(--sky-200); --bs-btn-border-color:var(--sky-300);
-    --bs-btn-hover-bg:var(--sky-300); --bs-btn-hover-border-color:var(--sky-400);
-    --bs-btn-active-bg:var(--sky-400); --bs-btn-active-border-color:var(--sky-500);
-    box-shadow: 0 1px 0 rgba(0,0,0,.03), inset 0 -2px 0 rgba(0,0,0,.05);
-  }
-  .btn-outline-sky{
-    --bs-btn-color:var(--sky-700); --bs-btn-border-color:var(--sky-300);
-    --bs-btn-hover-bg:var(--sky-50); --bs-btn-hover-color:var(--sky-700);
-    --bs-btn-hover-border-color:var(--sky-500);
-  }
-  .kpi-label{ color:var(--muted); font-size:.8rem; }
-  .kpi-value{ font-weight:800; font-size:1.6rem; line-height:1; }
-  .kpi-trend{ color:var(--muted); font-size:.8rem; margin-top:.25rem; }
-  .chart-box{ position:relative; height:320px; }
-  .chart-box.tall{ height:420px; }
-  @media (max-width:575.98px){ .chart-box{ height:260px } .chart-box.tall{ height:320px } }
+/* Palette: soft peach/orange, matching EduWeaverPlay */
+.admin-analytics {
+  font-family: "Nunito", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
 
-  .lp-card-modern{ border-radius:18px; box-shadow:0 10px 30px rgba(2,6,23,.06), 0 2px 6px rgba(2,6,23,.04); background:var(--paper); }
-  .lp-strip{
-    border-bottom:1px solid var(--border);
-    background: radial-gradient(40rem 20rem at -10% 0%, var(--sky-25) 0%, transparent 60%),
-               radial-gradient(40rem 20rem at 120% 0%, var(--sky-25) 0%, transparent 55%), #fff;
-    border-top-left-radius:18px; border-top-right-radius:18px;
-  }
-  .lp-dot{ width:10px; height:10px; border-radius:50%; background: var(--sky-600); box-shadow: 0 0 0 .25rem rgba(47,140,234,.20); }
+.text-aa-heading { color: #402b2b; }
+.text-aa-muted   { color: #8b8b9b; }
 
-  .skeleton-line{
-    height:16px; border-radius:8px;
-    background:
-      linear-gradient(90deg, rgba(168,197,255,0) 0%, rgba(168,197,255,.35) 50%, rgba(168,197,255,0) 100%),
-      linear-gradient(#eaf2ff,#eaf2ff);
-    background-size: 200% 100%, 100% 100%;
-    animation: shimmer 1.2s infinite;
-  }
-  .skeleton-line.w-75{ width:75% } .skeleton-line.w-95{ width:95% } .skeleton-line.w-80{ width:80% } .skeleton-line.w-60{ width:60% } .skeleton-line.w-100{ width:100% }
-  @keyframes shimmer{ 0%{ background-position: -200% 0, 0 0 } 100%{ background-position: 200% 0, 0 0 } }
+.badge.bg-aa-pill{
+  background: #ffe2c8;
+  color: #7a4130;
+  border-radius: 999px;
+  font-weight: 600;
+}
 
-  .reflect-overlay{ position:fixed; inset:0; display:none; place-items:center; z-index:1060;
-    background: rgba(15,27,51,.35); backdrop-filter:saturate(140%) blur(4px); }
-  .reflect-overlay.show{ display:grid; }
-  .reflect-box{ background:#fff; border:1px solid var(--border); border-radius:18px; padding:1.25rem 1.5rem; width:min(640px, 92vw);
-    box-shadow:0 10px 30px rgba(0,0,0,.16); }
-  .ref-title{ font-weight:800; color:var(--ink); }
-  .ref-note{ color:var(--muted); }
-  .pulse{
-    width:42px; height:42px; border-radius:50%;
-    border:4px solid var(--sky-300); border-top-color:var(--sky-600);
-    animation: spin 1s linear infinite;
-  }
-  @keyframes spin{ to{ transform: rotate(360deg) } }
-  .progress{ background:#eef5ff; border-radius:999px; overflow:hidden; height:8px; }
-  .progress-bar{ width:0%; background: linear-gradient(90deg, var(--sky-300), var(--sky-600)); animation: indet 1.1s ease-in-out infinite; }
-  @keyframes indet{ 0%{ transform: translateX(-60%) } 100%{ transform: translateX(160%) } }
+/* Tabs */
+.aa-nav-tabs .nav-link{
+  border: none;
+  border-bottom: 2px solid transparent;
+  font-weight: 600;
+  color: #b38064;
+}
+.aa-nav-tabs .nav-link.active{
+  color: #f97316;
+  border-color: #f97316;
+  background-color: #fff7ec;
+}
+
+/* Cards */
+.aa-card{
+  border-radius: 18px;
+  background: #ffffff;
+  border: 1px solid #f3e1d4;
+}
+.border-aa-soft{
+  border-color: #f3e1d4 !important;
+}
+
+/* Main metric */
+.aa-big-number{
+  font-size: 1.8rem;
+  font-weight: 800;
+  color: #f97316;
+}
+.aa-big-caption{
+  font-size: 0.75rem;
+  color: #a78b7c;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+
+/* Labels / text */
+.aa-metric-label{
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: #a78b7c;
+}
+
+/* Progress bars */
+.aa-progress{
+  height: 6px;
+  background-color: #ffe9d7;
+  border-radius: 999px;
+}
+.aa-progress-bar{
+  background: linear-gradient(90deg, #f97316, #fb923c);
+}
+.aa-progress-bar-soft{
+  background: linear-gradient(90deg, #fbbf24, #f97316);
+}
+
+/* Pill for L1/L2 labels */
+.aa-pill-label{
+  background: #fff1df;
+  color: #b45309;
+  border-radius: 999px;
+  padding: 0.1rem .6rem;
+  font-size: 0.7rem;
+}
+
+/* Keyword chips */
+.aa-keyword-list{
+  list-style: none;
+  padding-left: 0;
+  margin: 0;
+}
+.aa-keyword-list li{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .4rem;
+  padding: .2rem 0;
+  font-size: .85rem;
+}
+.aa-keyword{
+  background: #fff7ed;
+  border-radius: 999px;
+  padding: 0.15rem .6rem;
+  border: 1px solid #fed7aa;
+}
+.aa-keyword-count{
+  font-size: 0.75rem;
+  color: #a78b7c;
+}
+
+/* Simple list rows */
+.aa-list{
+  border-top: 1px dashed #f4d2b8;
+}
+.aa-list-row{
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: .5rem;
+  padding: .4rem 0;
+  border-bottom: 1px dashed #f4d2b8;
+}
+.btn-aa{
+  background-color: #f97316;
+  color: #fff;
+  border-radius: 999px;
+  border: none;
+}
+.btn-aa:hover{
+  background-color: #ea580c;
+  color: #fff;
+}
 </style>
+{% endblock %}
 
-<!-- ===== Reflection Loading Overlay (global) ===== -->
-<div id="reflectOverlay" class="reflect-overlay" aria-hidden="true" aria-live="polite">
-  <div class="reflect-box">
-    <div class="d-flex align-items-center gap-3 mb-3">
-      <div class="pulse" aria-hidden="true"></div>
-      <div>
-        <div class="ref-title">Generating research reflection…</div>
-        <div class="ref-note small">We’re synthesizing trends from recent activity and scores.</div>
-      </div>
-    </div>
-    <div class="progress"><div class="progress-bar"></div></div>
-    <div class="small text-muted mt-2">This may take a few seconds.</div>
-  </div>
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js"></script>
+{% block scripts %}
+{{ super() }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-(async function(){
-  async function getJSON(u){ const r=await fetch(u,{credentials:'same-origin'}); if(!r.ok) throw new Error(await r.text()); return r.json(); }
-  function qs(id){ return document.getElementById(id) }
-  const sum = xs => (xs||[]).reduce((a,b)=>a+(+b||0),0);
-
-  let CURRENT_USER_ID = null;
-
-  let overviewChart, scoreDistChart, l1l2BarChart, l1l2LineChart;
-  function setChart(ref, ctx, cfg){ if(ref && ref.destroy) ref.destroy(); return new Chart(ctx, cfg); }
-  const dsLine = (label, data, tension=0.35)=>({ label, data, tension, fill:false });
-  const dsBar  = (label, data)=>({ label, data });
-
-  const [ov, l1, us] = await Promise.all([
-    getJSON("{{ url_for('api_admin_overview') }}"),
-    getJSON("{{ url_for('api_admin_l1l2') }}"),
-    getJSON("{{ url_for('api_admin_users') }}"),
-  ]);
-
-  // KPIs
-  qs('kpi-users').textContent   = ov.totals.users;
-  qs('kpi-stories').textContent = ov.totals.stories;
-  qs('kpi-finishes').textContent= ov.totals.finishes;
-  qs('kpi-avg').textContent     = (ov.totals.avg_score_pct ?? 0) + '%';
-  qs('kpi-users-sub').textContent    = `Active last 30d: ${ov.totals.active_30d ?? '—'}`;
-  const perLearner = ov.totals.users ? (ov.totals.stories/ov.totals.users).toFixed(1) : '—';
-  qs('kpi-stories-sub').textContent  = `/ learner: ${perLearner}`;
-  const completion = ov.totals.stories ? Math.round(100*(ov.totals.finishes/ov.totals.stories)) : 0;
-  qs('kpi-finishes-sub').textContent = `Completion rate: ${completion}%`;
-  qs('kpi-avg-sub').textContent      = `Attempts: ${ov.totals.attempts ?? '—'}`;
-
-  // Overview timeline
-  overviewChart = setChart(
-    overviewChart,
-    qs('overviewLine'),
-    { type:'line',
-      data:{ labels: ov.series.labels, datasets:[ dsLine('Stories',ov.series.stories), dsLine('Finishes',ov.series.finishes), dsLine('Attempts',ov.series.attempts) ] },
-      options:{ responsive:true, maintainAspectRatio:false, animation:false, scales:{ y:{ beginAtZero:true } }, plugins:{ legend:{ position:'bottom' } } }
-    }
-  );
-
-  // Score histogram
-  const latestPercents = (us.items||[]).map(u=>Number(u.last_percent ?? NaN)).filter(v=>!Number.isNaN(v)&&v>=0&&v<=100);
-  const bins=[0,0,0,0,0]; latestPercents.forEach(p=>{ if(p<=20)bins[0]++; else if(p<=40)bins[1]++; else if(p<=60)bins[2]++; else if(p<=80)bins[3]++; else bins[4]++; });
-  scoreDistChart = setChart(
-    scoreDistChart, qs('scoreDist'),
-    { type:'bar', data:{ labels:['0–20','21–40','41–60','61–80','81–100'], datasets:[ dsBar('Learners', bins) ] },
-      options:{ responsive:true, maintainAspectRatio:false, animation:false, scales:{ y:{ beginAtZero:true, ticks:{ stepSize:1 } } }, plugins:{ legend:{ display:false } } }
-    }
-  );
-
-  // L1/L2
-  l1l2BarChart = setChart(
-    l1l2BarChart, qs('l1l2Bar'),
-    { type:'bar', data:{ labels:l1.groups, datasets:[ dsBar('Stories',l1.stories), dsBar('Finishes',l1.finishes), dsBar('Attempts',l1.attempts), dsBar('Avg Quiz %',l1.avg_scores) ] },
-      options:{ responsive:true, maintainAspectRatio:false, animation:false, scales:{ y:{ beginAtZero:true } }, plugins:{ legend:{ position:'bottom' } } }
-    }
-  );
-  l1l2LineChart = setChart(
-    l1l2LineChart, qs('l1l2Line'),
-    { type:'line', data:{ labels:ov.series.labels, datasets:[ dsLine('L1 Avg %', l1.avg_series_l1||[]), dsLine('L2 Avg %', l1.avg_series_l2||[]) ] },
-      options:{ responsive:true, maintainAspectRatio:false, animation:false, scales:{ y:{ beginAtZero:true, max:100 } }, plugins:{ legend:{ position:'bottom' } } }
-    }
-  );
-
-  // ===== Learners table + per-user feedback button =====
-  const tbody = qs('users-tbody'); const searchEl=qs('search'); const l1El=qs('filter-l1'); const countLabel=qs('learner-count-label');
-  let users=(us.items||[]);
-
-  function passFilter(u){
-    const q=(searchEl?.value||'').trim().toLowerCase(); const fl1=l1El?.value;
-    if(q && !String(u.username).toLowerCase().includes(q)) return false;
-    if(fl1!==''){ const want=fl1==='1'; if(!(u.l1===want)) return false; }
-    return true;
-  }
-  function td(txt){ const d=document.createElement('td'); d.textContent=(txt ?? ''); return d; }
-  function btn(classes, text){ const b=document.createElement('button'); b.className=classes; b.textContent=text; return b; }
-
-  function renderUsers(){
-    if(!tbody) return;
-    tbody.innerHTML=''; const rows=users.filter(passFilter);
-    if(countLabel) countLabel.textContent=`${rows.length} learners shown`;
-    for(const u of rows){
-      const tr=document.createElement('tr');
-      tr.appendChild(td(u.username));
-      tr.appendChild(td(u.l1===true?'L1':(u.l1===false?'L2':'?')));
-      tr.appendChild(td(u.age ?? ''));
-      tr.appendChild(td(u.gender ?? ''));
-      tr.appendChild(td(u.story_count ?? 0));
-      tr.appendChild(td(u.finish_count ?? 0));
-      tr.appendChild(td(u.attempt_count ?? 0));
-      tr.appendChild(td(u.last_activity ? u.last_activity.replace('T',' ').slice(0,16) : ''));
-
-      const tdOpen=document.createElement('td'); const bOpen=btn('btn btn-sm btn-outline-sky','Open');
-      bOpen.onclick=()=>openUser(u.id, u.username);
-      tdOpen.appendChild(bOpen); tr.appendChild(tdOpen);
-
-      const tdReflect=document.createElement('td'); const bRef=btn('btn btn-sm btn-sky','Reflect');
-      bRef.onclick=()=>{ openUser(u.id, u.username, true); };
-      tdReflect.appendChild(bRef); tr.appendChild(tdReflect);
-
-      tbody.appendChild(tr);
-    }
-  }
-  searchEl?.addEventListener('input',renderUsers); l1El?.addEventListener('change',renderUsers); renderUsers();
-
-  // ---------- Global reflection UX ----------
-  const reflectBtnPrimary = qs('btn-reflect');
-  const reflectBtnCard    = qs('btn-reflect-2');
-  const copyBtn           = qs('copy-reflection');
-  const skeleton          = qs('reflection-skeleton');
-  const reflectionEl      = qs('reflection');
-  const overlay           = qs('reflectOverlay');
-
-  function showOverlay(){ overlay?.classList.add('show'); }
-  function hideOverlay(){ overlay?.classList.remove('show'); }
-  function showSkeleton(){ skeleton?.classList.remove('d-none'); reflectionEl.textContent=''; }
-  function hideSkeleton(){ skeleton?.classList.add('d-none'); }
-
-  async function generateReflection(){
-    [reflectBtnPrimary, reflectBtnCard].forEach(b=>{ if(b){ b.disabled=true; b.classList.add('disabled'); } });
-    showOverlay(); showSkeleton();
-    try{
-      const r = await fetch("{{ url_for('api_admin_research_reflection') }}",{ method:'POST', credentials:'same-origin' });
-      const j = await r.json();
-      const text = (j && (j.text||'')).trim() || 'No text';
-      reflectionEl.textContent='';
-      hideSkeleton(); hideOverlay();
-      const chars=[...text]; let i=0;
-      const tick=()=>{ if(i<chars.length){ reflectionEl.textContent += chars[i++]; window.requestAnimationFrame(tick); } };
-      window.requestAnimationFrame(tick);
-    }catch(e){
-      hideSkeleton(); hideOverlay();
-      reflectionEl.textContent = 'Failed to generate reflection.';
-    }finally{
-      [reflectBtnPrimary, reflectBtnCard].forEach(b=>{ if(b){ b.disabled=false; b.classList.remove('disabled'); } });
-    }
-  }
-  reflectBtnPrimary?.addEventListener('click', generateReflection);
-  reflectBtnCard?.addEventListener('click', generateReflection);
-  copyBtn?.addEventListener('click', ()=>{
-    const t = reflectionEl?.textContent || '';
-    if(!t.trim()) return;
-    navigator.clipboard.writeText(t).then(()=>{
-      copyBtn.innerHTML = '<i class="bi bi-clipboard-check-fill me-1"></i> Copied';
-      setTimeout(()=> copyBtn.innerHTML = '<i class="bi bi-clipboard-check me-1"></i> Copy', 1200);
-    });
-  });
-
-  // ---------- Per-user drawer + feedback ----------
-  const drawerTitle = document.getElementById('userDrawerLabel');
-  const drawerSub = document.getElementById('userDrawerSub');
-  const userFeedbackEl = document.getElementById('user-reflection');
-  const userSkel = document.getElementById('user-reflection-skel');
-  const userCopyBtn = document.getElementById('copy-user-feedback');
-  const userGenBtn  = document.getElementById('btn-user-reflect');
-  const userCloseBtn = document.getElementById('btn-user-close');
-
-  function showUserSkeleton(){ userSkel?.classList.remove('d-none'); userFeedbackEl.textContent=''; }
-  function hideUserSkeleton(){ userSkel?.classList.add('d-none'); }
-
-  async function fetchUserFeedback(userId){
-    const url = `{{ url_for('api_admin_user_reflection', user_id=0) }}`.replace('0', userId);
-    const r = await fetch(url, { method:'POST', credentials:'same-origin' });
-    return r.json();
-  }
-
-  function renderFeedback(payload){
-    if(payload && payload.feedback){
-      const f = payload.feedback;
-      const list = (arr, label)=> (Array.isArray(arr) && arr.length)
-        ? `\n${label}\n- ${arr.join('\n- ')}\n` : '';
-      const txt =
-        `${f.summary ? f.summary+'\n' : ''}` +
-        list(f.strengths, 'Strengths') +
-        list(f.focus, 'Focus Areas') +
-        list(f.next_steps, 'Next Steps');
-      userFeedbackEl.textContent = (txt || 'No feedback.');
-    }else{
-      const txt = (payload && payload.text) ? String(payload.text).trim() : '';
-      userFeedbackEl.textContent = (txt || 'No feedback.');
-    }
-  }
-
-  async function generateUserFeedback(){
-    if(!CURRENT_USER_ID) return;
-    userGenBtn.disabled = true;
-    showUserSkeleton();
-    try{
-      const data = await fetchUserFeedback(CURRENT_USER_ID);
-      hideUserSkeleton();
-      renderFeedback(data);
-    }catch(e){
-      hideUserSkeleton();
-      userFeedbackEl.textContent = 'Failed to generate feedback.';
-    }finally{
-      userGenBtn.disabled = false;
-    }
-  }
-
-  userGenBtn?.addEventListener('click', generateUserFeedback);
-  userCopyBtn?.addEventListener('click', ()=>{
-    const t = userFeedbackEl?.textContent || '';
-    if(!t.trim()) return;
-    navigator.clipboard.writeText(t).then(()=>{
-      userCopyBtn.innerHTML = '<i class="bi bi-clipboard-check-fill me-1"></i> Copied';
-      setTimeout(()=> userCopyBtn.innerHTML = '<i class="bi bi-clipboard-check me-1"></i> Copy', 1200);
-    });
-  });
-
-  userCloseBtn?.addEventListener('click', ()=>{
-    const drawerEl = document.getElementById('userDrawer');
-    if(!drawerEl) return;
-    let offcanvas = bootstrap.Offcanvas.getInstance(drawerEl);
-    if(!offcanvas){
-      offcanvas = new bootstrap.Offcanvas(drawerEl);
-    }
-    offcanvas.hide();
-  });
-
-  window.openUser = function(userId, username, autoFeedback=false){
-    CURRENT_USER_ID = userId;
-    drawerTitle.textContent = username ? `Learner: ${username}` : 'Learner Detail';
-    drawerSub.textContent = `User ID: ${userId}`;
-    userFeedbackEl.textContent = 'Click “Generate” to create tailored feedback for this learner.';
-    hideUserSkeleton();
-    const drawerEl = document.getElementById('userDrawer');
-    let offcanvas = bootstrap.Offcanvas.getInstance(drawerEl);
-    if(!offcanvas){
-      offcanvas = new bootstrap.Offcanvas(drawerEl);
-    }
-    offcanvas.show();
-    if(autoFeedback){ generateUserFeedback(); }
+(function() {
+  // We know group_list[0] = L1, group_list[1] = L2 from the view
+  const l1 = {
+    avgScore: {{ group_list[0].assignments_avg_score or 0 }},
+    completed: {{ group_list[0].assignments_completed or 0 }},
+    totalAssign: {{ group_list[0].assignments_total or 0 }},
+    scrambleAccuracy: {{ group_list[0].scramble_accuracy or 0 }},
+    dictLookups: {{ group_list[0].dict_lookups or 0 }},
+    studentCount: {{ group_list[0].student_count or 0 }}
+  };
+  const l2 = {
+    avgScore: {{ group_list[1].assignments_avg_score or 0 }},
+    completed: {{ group_list[1].assignments_completed or 0 }},
+    totalAssign: {{ group_list[1].assignments_total or 0 }},
+    scrambleAccuracy: {{ group_list[1].scramble_accuracy or 0 }},
+    dictLookups: {{ group_list[1].dict_lookups or 0 }},
+    studentCount: {{ group_list[1].student_count or 0 }}
   };
 
-  document.querySelectorAll('[data-range]').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      document.querySelectorAll('[data-range]').forEach(x=>x.classList.remove('active'));
-      btn.classList.add('active');
-      // hook server-side filtering here if you already have it
+  const labels = ['L1', 'L2'];
+
+  // Helpers
+  function completionPct(group) {
+    return group.totalAssign ? (100 * group.completed / group.totalAssign) : 0;
+  }
+  function avgLookupsPerStudent(group) {
+    return group.studentCount ? (group.dictLookups / group.studentCount) : 0;
+  }
+
+  // --- Assignments chart ---
+  const assignCtx = document.getElementById('aaAssignmentsChart');
+  if (assignCtx) {
+    new Chart(assignCtx.getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: 'Avg score (%)',
+            data: [l1.avgScore, l2.avgScore],
+            backgroundColor: '#f97316'
+          },
+          {
+            label: 'Completion (%)',
+            data: [completionPct(l1), completionPct(l2)],
+            backgroundColor: '#fed7aa'
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            labels: { color: '#7a5540', font: { size: 11 } }
+          }
+        },
+        scales: {
+          x: {
+            ticks: { color: '#b38064' },
+            grid: { display: false }
+          },
+          y: {
+            beginAtZero: true,
+            max: 100,
+            ticks: { color: '#b38064' },
+            grid: { color: '#ffe9d7' }
+          }
+        }
+      }
     });
-  });
+  }
+
+  // --- Practice chart (scramble + dict) ---
+  const practiceCtx = document.getElementById('aaPracticeChart');
+  if (practiceCtx) {
+    new Chart(practiceCtx.getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: 'Scramble accuracy (%)',
+            data: [l1.scrambleAccuracy, l2.scrambleAccuracy],
+            backgroundColor: '#fb923c'
+          },
+          {
+            label: 'Avg dict lookups / student',
+            data: [avgLookupsPerStudent(l1), avgLookupsPerStudent(l2)],
+            backgroundColor: '#facc15'
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            labels: { color: '#7a5540', font: { size: 11 } }
+          }
+        },
+        scales: {
+          x: {
+            ticks: { color: '#b38064' },
+            grid: { display: false }
+          },
+          y: {
+            beginAtZero: true,
+            ticks: { color: '#b38064' },
+            grid: { color: '#ffe9d7' }
+          }
+        }
+      }
+    });
+  }
 })();
 </script>
 {% endblock %}

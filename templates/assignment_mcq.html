@@ -1,0 +1,130 @@
+{% extends "base2.html" %}
+{% block title %}Reading Comprehension · {{ story.title }}{% endblock %}
+
+{% block content %}
+
+<div class="container mt-4">
+  <div class="row justify-content-center">
+    <div class="col-lg-8">
+      <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-body p-4">
+          <h3 class="h4 mb-2">Reading Comprehension</h3>
+          <p class="text-muted mb-3">
+            Story: <strong>{{ story.title }}</strong>
+          </p>
+
+          {% if assignment.instructions %}
+            <div class="alert alert-info small">
+              <strong>Instructions:</strong><br>
+              {{ assignment.instructions | nl2br }}
+            </div>
+          {% endif %}
+
+          {# Use submission.score if available, otherwise assignment.score #}
+          {% set score = submission.score if submission and submission.score is not none else assignment.score %}
+
+          {% if score is not none %}
+            <div class="alert alert-success small">
+              Your current score: <strong>{{ '%.1f'|format(score) }}%</strong>
+              You can submit again to update your score.
+            </div>
+          {% endif %}
+
+          <form method="post">
+            {% if questions %}
+              {% for q in questions %}
+                {% set q_index = loop.index0 %}
+                <div class="mb-4">
+                  <div class="fw-semibold mb-1">
+                    Q{{ loop.index }}. {{ q.question }}
+                  </div>
+                  <div class="ms-1">
+                    {% for opt in q.options %}
+                      <div class="form-check">
+                        <input
+                          class="form-check-input"
+                          type="radio"
+                          name="q{{ q_index }}"
+                          id="q{{ q_index }}_opt{{ loop.index0 }}"
+                          value="{{ loop.index0 }}"
+                        >
+                        <label class="form-check-label" for="q{{ q_index }}_opt{{ loop.index0 }}">
+                          {{ opt }}
+                        </label>
+                      </div>
+                    {% endfor %}
+                  </div>
+                </div>
+              {% endfor %}
+            {% else %}
+              <p class="text-muted">No questions are available for this assignment.</p>
+            {% endif %}
+
+            <div class="d-flex justify-content-between mt-3">
+              <a href="{{ url_for('assignments_list') }}" class="btn btn-outline-secondary">
+                Back to assignments
+              </a>
+              <button type="submit" class="btn btn-primary">
+                Submit answers
+              </button>
+            </div>
+          </form>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ---------------------------- #
+   Score modal (Well done!)     #
+   ---------------------------- #}
+<div class="modal fade" id="scoreModal" tabindex="-1" aria-labelledby="scoreModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content rounded-4 border-0 shadow">
+      <div class="modal-header border-0">
+        <h5 class="modal-title fw-semibold" id="scoreModalLabel">Well done!</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body pb-3">
+        {% if score is not none %}
+          <p class="mb-1">
+            You scored:
+          </p>
+          <p class="display-6 fw-bold mb-2">
+            {{ '%.1f'|format(score) }}%
+          </p>
+          <p class="text-muted small mb-0">
+            You can try the quiz again to improve your score, or go back to see your other assignments.
+          </p>
+        {% else %}
+          <p class="mb-0">
+            Your answers were submitted.
+          </p>
+        {% endif %}
+      </div>
+      <div class="modal-footer border-0 d-flex justify-content-between">
+        <a href="{{ url_for('assignments_list') }}" class="btn btn-outline-secondary">
+          Back to assignments
+        </a>
+        <button type="button" class="btn btn-primary" data-bs-dismiss="modal">
+          Try again
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if just_submitted and score is not none %}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    var modalEl = document.getElementById('scoreModal');
+    if (modalEl && window.bootstrap) {
+      var modal = new bootstrap.Modal(modalEl);
+      modal.show();
+    }
+  });
+</script>
+{% endif %}
+
+{% endblock %}

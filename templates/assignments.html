@@ -1,0 +1,199 @@
+{% extends "base2.html" %}
+{% block title %}My Assignments · EduWeaverPlay{% endblock %}
+
+{% block content %}
+
+<div class="assignments-page py-3 py-md-4">
+  <div class="d-flex align-items-center justify-content-between mb-3 mb-md-4">
+    <div>
+      <h3 class="fw-semibold mb-1">My Assignments</h3>
+      <p class="text-muted small mb-0">
+        Tap a card to start or review your work.
+      </p>
+    </div>
+  </div>
+
+  {% if not assignments %}
+    <div class="text-center py-5">
+      <div class="empty-bubble mx-auto mb-3">
+        <i class="bi bi-journal-x"></i>
+      </div>
+      <h5 class="fw-semibold mb-1">No Assignments Yet</h5>
+      <p class="text-muted small mb-0">
+        Your teacher will send you a reading task or game soon.
+      </p>
+    </div>
+  {% else %}
+
+    <div class="row g-3 g-md-4">
+      {% for a in assignments %}
+        {% set attempts = a.attempt_count or 0 %}
+        {% set is_mcq = (a.assignment_type == 'mcq') %}
+        {% set is_finish = (a.assignment_type == 'finish') %}
+        {% set status = (a.status or '') %}
+        {% set score = a.score %}
+        {% set title = a.assignment_title or a.story_title %}
+
+        <div class="col-12 col-sm-6 col-lg-4">
+          <a href="{{ url_for('assignment_detail', assignment_id=a.id) }}"
+             class="text-decoration-none">
+            <div class="assignment-card h-100 d-flex flex-column">
+
+              <div class="d-flex align-items-center justify-content-between mb-2">
+                <span class="badge rounded-pill assignment-pill">
+                  {% if is_mcq %}Reading MCQ{% elif is_finish %}Finish Writing{% else %}Assignment{% endif %}
+                </span>
+
+                {% if status == 'submitted' %}
+                  <span class="status-dot status-done">
+                    <span class="dot"></span><span class="label">Done</span>
+                  </span>
+                {% else %}
+                  <span class="status-dot status-todo">
+                    <span class="dot"></span><span class="label">To do</span>
+                  </span>
+                {% endif %}
+              </div>
+
+              <div class="mb-1">
+                <h5 class="assignment-title mb-1">
+                  {{ title }}
+                </h5>
+                <div class="small text-muted">
+                  Story: {{ a.story_title }}
+                </div>
+              </div>
+
+              <div class="mt-auto pt-2 d-flex justify-content-between align-items-center small">
+                <div class="text-muted">
+                  {{ a.created_at|dt("%Y-%m-%d") }}
+                </div>
+                <div class="d-flex flex-column align-items-end">
+                  <div>
+                    Attempts:
+                    <span class="fw-semibold">{{ attempts }}</span>
+                  </div>
+                  {% if is_mcq and score is not none %}
+                    <div>
+                      Score:
+                      <span class="fw-semibold">{{ '%.1f'|format(score) }}%</span>
+                    </div>
+                  {% endif %}
+                </div>
+              </div>
+
+            </div>
+          </a>
+        </div>
+      {% endfor %}
+    </div>
+
+  {% endif %}
+</div>
+
+<style>
+.assignments-page {
+  min-height: calc(100vh - 80px);
+}
+
+/* Empty state */
+.empty-bubble {
+  width: 72px;
+  height: 72px;
+  border-radius: 24px;
+  background: radial-gradient(circle at 20% 0%, #ffe1f0 0, #fffaf5 60%, #fff 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  color: #f97373;
+  box-shadow: 0 0.75rem 1.5rem rgba(15, 23, 42, 0.08);
+}
+
+/* Cards */
+.assignment-card {
+  border-radius: 1.25rem;
+  padding: 0.9rem 1rem;
+  background: #ffffff;
+  box-shadow: 0 0.5rem 1.4rem rgba(15,23,42,0.08);
+  transition: transform .16s ease, box-shadow .16s ease, background .16s ease;
+  border: 1px solid rgba(248, 185, 160, 0.35);
+  position: relative;
+  overflow: hidden;
+}
+.assignment-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at -10% -20%, rgba(255, 237, 213, 0.7), transparent 60%),
+    radial-gradient(circle at 110% 120%, rgba(219, 234, 254, 0.9), transparent 55%);
+  opacity: 0.5;
+  z-index: -1;
+}
+.assignment-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 0.75rem 2rem rgba(15,23,42,0.16);
+  background: #fffbf8;
+}
+
+/* Pill */
+.assignment-pill {
+  background: #fee2e2;
+  color: #b91c1c;
+  font-size: 0.7rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding-inline: 0.7rem;
+}
+
+/* Status chips */
+.status-dot {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+}
+.status-dot .dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+}
+.status-dot .label {
+  font-weight: 600;
+}
+.status-done {
+  background: #dcfce7;
+  color: #166534;
+}
+.status-done .dot {
+  background: #16a34a;
+}
+.status-todo {
+  background: #fef9c3;
+  color: #854d0e;
+}
+.status-todo .dot {
+  background: #facc15;
+}
+
+/* Title */
+.assignment-title {
+  font-size: 1rem;
+  line-height: 1.2;
+}
+
+/* Mobile tweaks */
+@media (max-width: 576px) {
+  .assignment-card {
+    padding: 0.8rem 0.9rem;
+  }
+  .assignment-title {
+    font-size: 0.98rem;
+  }
+}
+</style>
+
+{% endblock %}

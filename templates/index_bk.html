@@ -1,0 +1,430 @@
+<!doctype html>
+<html lang="en" data-bs-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EduWeaver · Read · Create · Smile</title>
+
+  <!-- Bootstrap + icons -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+
+  <!-- Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Baloo+2:wght@500;600;700&display=swap" rel="stylesheet">
+
+  <!-- AOS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/aos@2.3.4/dist/aos.css">
+
+  <!-- Favicons -->
+  <link rel="icon" href="{{ url_for('static', filename='favicon.png') }}" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
+  <meta name="theme-color" content="#2f8cea">
+
+  <style>
+  :root{
+    /* Sky palette shared with final_view */
+    --ink:#0f1b33; --muted:#64748b; --bg:#f6f9ff; --paper:#ffffff;
+    --sky-25:#f2f8ff; --sky-50:#e8f3ff; --sky-100:#d8ebff; --sky-200:#c2e0ff;
+    --sky-300:#a5d1ff; --sky-400:#7fbaff; --sky-500:#4ea2ff; --sky-600:#2f8cea; --sky-700:#236fbb;
+    --border:#e5eaf3; --ring:#b9d6ff;
+  }
+
+  html,body{height:100%}
+  body{
+    font-family:"Plus Jakarta Sans", system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    color:var(--ink); background:var(--bg);
+  }
+
+  /* NAV */
+  .navbar{
+    position:sticky; top:0; z-index:9999;
+    backdrop-filter:saturate(140%) blur(10px);
+    -webkit-backdrop-filter:saturate(140%) blur(10px);
+    background:linear-gradient(180deg, rgba(255,255,255,.82), rgba(255,255,255,.68));
+    border-bottom:1px solid var(--border);
+  }
+  .navbar-brand{
+    font-family:"Baloo 2", system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    font-weight:700; letter-spacing:.2px; display:flex; align-items:center; gap:.4rem; font-size:24px;
+  }
+  .navbar-brand .brand-dot{
+    inline-size:.6rem; block-size:.6rem; border-radius:999px;
+    background: radial-gradient(65% 65% at 30% 30%, var(--sky-600), var(--sky-400));
+    box-shadow:0 0 0 3px rgba(47,140,234,.18);
+  }
+
+  /* Buttons (sky) */
+  .btn-sky{
+    --bs-btn-color:#0b1224; --bs-btn-bg:var(--sky-200); --bs-btn-border-color:var(--sky-300);
+    --bs-btn-hover-bg:var(--sky-300); --bs-btn-hover-border-color:var(--sky-400);
+    --bs-btn-active-bg:var(--sky-400); --bs-btn-active-border-color:var(--sky-500);
+    border-radius:999px; padding:.55rem 1rem; font-weight:600;
+    box-shadow: 0 1px 0 rgba(0,0,0,.03), inset 0 -2px 0 rgba(0,0,0,.05);
+  }
+  .btn-sky-light{
+    --bs-btn-color:#0b1224; --bs-btn-bg:var(--sky-50); --bs-btn-border-color:var(--sky-100);
+    --bs-btn-hover-bg:var(--sky-100); --bs-btn-hover-border-color:var(--sky-200);
+    border-radius:999px; padding:.55rem 1rem; font-weight:600;
+  }
+  .btn-outline-sky{
+    --bs-btn-color:var(--sky-700); --bs-btn-border-color:var(--sky-300);
+    --bs-btn-hover-bg:var(--sky-50); --bs-btn-hover-color:var(--sky-700);
+    --bs-btn-hover-border-color:var(--sky-500);
+    border-radius:999px; padding:.55rem 1rem; font-weight:600;
+  }
+
+  .subtle{ color:var(--muted) }
+
+  /* Modern cards */
+  .lp-card{ border:1px solid var(--border); border-radius:16px; background:linear-gradient(180deg, rgba(255,255,255,.9), rgba(255,255,255,.86)); box-shadow:0 10px 30px rgba(2,6,23,.06) }
+  .lp-card-modern{ border-radius:18px; box-shadow:0 10px 30px rgba(2,6,23,.06), 0 2px 6px rgba(2,6,23,.04); background:var(--paper); }
+  .py-6{padding-top:3.5rem;padding-bottom:3.5rem} .py-lg-8{padding-top:6rem;padding-bottom:6rem}
+
+  /* ===== HERO SECTION (sky) ===== */
+  .lp-hero-full{
+    min-height:100vh; margin:0; padding-top:1px;
+    position:relative; overflow:hidden; isolation:isolate;
+    background:#f7fbff;
+  }
+  .lp-hero-full .container{ position:relative; z-index:3 }
+
+  /* Subtle gradient wash */
+  .bg-wash{
+    position:absolute;inset:0;z-index:0;pointer-events:none;
+    background:linear-gradient(120deg,
+      rgba(47,140,234,.12) 0%,
+      rgba(127,186,255,.10) 40%,
+      rgba(162,209,255,.10) 70%,
+      rgba(255,255,255,0) 100%);
+    background-size:200% 200%;
+    animation:washShift 28s ease-in-out infinite;
+  }
+  @keyframes washShift{
+    0%{background-position:0% 0%}
+    50%{background-position:100% 100%}
+    100%{background-position:0% 0%}
+  }
+
+  /* Cubes (sky) */
+  .cube-bg{position:absolute;inset:0;z-index:1;pointer-events:none;}
+  .cube{
+    position:absolute;width:28vmin;height:28vmin;border-radius:12px;
+    opacity:.28;
+    background:linear-gradient(135deg, rgba(127,186,255,.30), rgba(47,140,234,.22));
+    border:1.5px solid rgba(162,209,255,.35);
+    box-shadow:0 16px 50px rgba(127,186,255,.18);
+    animation:cubeRoam 36s ease-in-out infinite;
+    will-change:transform;
+  }
+  @keyframes cubeRoam{
+    0%{transform:translate3d(var(--x0,0),var(--y0,0),0)rotate(var(--base,0deg))}
+    25%{transform:translate3d(var(--x1,0),var(--y1,0),0)rotate(calc(var(--base,0deg)+3deg))}
+    50%{transform:translate3d(var(--x2,0),var(--y2,0),0)rotate(calc(var(--base,0deg)+6deg))}
+    75%{transform:translate3d(var(--x3,0),var(--y3,0),0)rotate(calc(var(--base,0deg)+3deg))}
+    100%{transform:translate3d(var(--x0,0),var(--y0,0),0)rotate(var(--base,0deg))}
+  }
+  .cube.c1{left:-12vmin;top:12vh;--base:5deg;--x0:0;--y0:0;--x1:18px;--y1:-14px;--x2:-8px;--y2:-28px;--x3:-12px;--y3:-10px;}
+  .cube.c2{right:-14vmin;top:24vh;--base:-6deg;--x0:0;--y0:0;--x1:-16px;--y1:-12px;--x2:2px;--y2:-26px;--x3:8px;--y3:-6px;}
+  .cube.c3{left:18vw;bottom:-10vmin;--base:7deg;width:32vmin;height:32vmin;--x0:0;--y0:0;--x1:10px;--y1:-8px;--x2:-6px;--y2:-22px;--x3:-12px;--y3:-8px;}
+  .cube.c4{right:20vw;bottom:6vh;--base:-8deg;width:26vmin;height:26vmin;--x0:0;--y0:0;--x1:-12px;--y1:-6px;--x2:0;--y2:-18px;--x3:10px;--y3:-4px;}
+  .cube.c5{right:19vw;top:5vh;--base:3deg;width:22vmin;height:22vmin;opacity:.24;--x0:0;--y0:0;--x1:12px;--y1:-10px;--x2:-8px;--y2:-20px;--x3:-14px;--y3:-8px;}
+
+  @media(max-width:768px){
+    .cube.c3,.cube.c4,.cube.c5{display:none;}
+    .cube.c1{width:40vmin;height:40vmin;left:-16vmin;top:12vh;}
+    .cube.c2{width:36vmin;height:36vmin;right:-18vmin;top:44vh;}
+  }
+
+  /* Text entrance */
+  .hero-title,.hero-copy,.hero-ctas{opacity:0;transform:translateY(10px);transition:all .6s ease;}
+  .hero-ready .hero-title,.hero-ready .hero-copy,.hero-ready .hero-ctas{opacity:1;transform:none;}
+
+  .nav-link{ color: var(--ink); }
+  .nav-link:hover{ color: var(--sky-700); }
+
+  /* Sections (sky washes) */
+  .about-section{
+    background:radial-gradient(900px 400px at 5% 0%, rgba(255,255,255,.75), transparent 60%),
+               linear-gradient(180deg, #f7fbff 0%, #f4f9ff 60%, #f2f8ff 100%);
+    border-top:1px solid var(--border)
+  }
+  .eyebrow{ display:inline-block; padding:.25rem .6rem; border-radius:999px; font-size:.85rem; font-weight:700; color:var(--sky-700); background:var(--sky-50); border:1px solid var(--sky-100) }
+  .about-list .tick{ display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:999px; background:var(--sky-50); color:var(--sky-700); flex:0 0 auto }
+  .img-frame{ position:relative; padding:10px; border-radius:20px; background:linear-gradient(180deg, rgba(255,255,255,.9), rgba(255,255,255,.86)) padding-box, linear-gradient(135deg, rgba(127,186,255,.35), rgba(47,140,234,.30), rgba(162,209,255,.28)) border-box; border:1px solid transparent; box-shadow:0 18px 50px rgba(127,186,255,.12); max-width:560px }
+  .img-frame img{ display:block; width:100%; height:auto; border-radius:14px }
+  .img-frame .ring{ position:absolute; width:120px; height:120px; border-radius:999px; pointer-events:none; background:radial-gradient(closest-side, rgba(127,186,255,.35), transparent 65%); filter:blur(8px); opacity:.7 }
+  .img-frame .r1{ right:-28px; top:-28px } .img-frame .r2{ left:-22px; bottom:-22px; background:radial-gradient(closest-side, rgba(47,140,234,.30), transparent 65%) }
+  @keyframes float-a{ 0%,100%{ transform:translateY(0)} 50%{ transform:translateY(-8px)} } @keyframes float-b{ 0%,100%{ transform:translateY(0)} 50%{ transform:translateY(10px)} }
+  @media (prefers-reduced-motion:no-preference){ .img-frame .r1{ animation:float-a 10s ease-in-out infinite } .img-frame .r2{ animation:float-b 12s ease-in-out infinite } }
+
+  .features-section{
+    background:radial-gradient(900px 400px at 100% 0%, rgba(255,255,255,.75), transparent 60%),
+               linear-gradient(180deg, #f7fbff 0%, #f4f9ff 60%, #f2f8ff 100%);
+    border-top:1px solid var(--border)
+  }
+  .section-head{ display:flex; align-items:flex-end; justify-content:space-between; gap:1.25rem; flex-wrap:wrap }
+  .section-meta{ min-width:280px; max-width:760px }
+  .section-kicker{ display:inline-flex; align-items:center; gap:.45rem; padding:.28rem .7rem; border-radius:999px; font-weight:700; font-size:.85rem; color:var(--sky-700); background:var(--sky-50); border:1px solid var(--sky-100) }
+  .section-title{ margin:10px 0 4px 0; font-weight:700; line-height:1.5; letter-spacing:-.3px; font-size:clamp(1.6rem, 3.2vw + .8rem, 2.25rem); background:linear-gradient(90deg, var(--sky-700), var(--sky-500)); -webkit-background-clip:text; background-clip:text; color:transparent }
+  .section-sub{ color:var(--muted); font-size:1.05rem; max-width:52ch }
+  .features-section .row.cards-row{ display:flex; flex-wrap:wrap } .features-section .cards-row > [class*="col-"]{ display:flex }
+  .feat-card{ display:flex; flex-direction:column; justify-content:space-between; flex:1; position:relative; padding:1.5rem; border-radius:20px; background:linear-gradient(180deg, rgba(255,255,255,.92), rgba(255,255,255,.86)) padding-box, linear-gradient(135deg, rgba(127,186,255,.35), rgba(47,140,234,.30), rgba(162,209,255,.28)) border-box; border:1px solid transparent; box-shadow:0 16px 40px rgba(127,186,255,.12); transition: transform .35s cubic-bezier(.2,.8,.2,1), box-shadow .35s ease }
+  .feat-card:hover{ transform: translateY(-6px); box-shadow:0 24px 60px rgba(127,186,255,.16) }
+  .feat-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:.5rem }
+  .feat-icon{ display:inline-grid; place-items:center; width:48px; height:48px; border-radius:14px; background: radial-gradient(85% 85% at 30% 30%, var(--sky-700), var(--sky-500)); color:#fff; font-size:22px; box-shadow:0 6px 14px rgba(35,111,187,.25) }
+  .feat-badge{ padding:.35rem .7rem; border-radius:999px; font-size:.8rem; font-weight:700; color:var(--sky-700); background:var(--sky-50); border:1px solid var(--sky-100) }
+  .feat-list{ list-style:none; padding:0; margin:0 0 1rem 0 } .feat-list li{ display:flex; align-items:flex-start; gap:.6rem; padding:.15rem 0 } .feat-list i{ color:var(--sky-700); margin-top:.15rem }
+  .feat-link{ display:inline-flex; align-items:center; justify-content:center; gap:.4rem; font-weight:600; text-decoration:none; color:#fff; border:none; border-radius:999px; background:linear-gradient(90deg, var(--sky-700), var(--sky-500)); padding:.55rem 1.1rem; transition:all .3s ease; box-shadow:0 4px 14px rgba(47,140,234,.28) }
+  .feat-link i{ transition:transform .3s ease } .feat-link:hover{ transform:translateY(-3px); box-shadow:0 6px 18px rgba(47,140,234,.35) } .feat-link:hover i{ transform:translateX(3px) }
+
+  .contact-section{
+    background:radial-gradient(900px 400px at 0% 100%, rgba(255,255,255,.75), transparent 60%),
+               linear-gradient(180deg, #f7fbff 0%, #f4f9ff 60%, #f2f8ff 100%);
+    border-top:1px solid var(--border)
+  }
+  .contact-card{ max-width:720px; margin-inline:auto; padding:2rem; border-radius:20px; background:transparent; text-align:center }
+  .mail-pill{ display:inline-flex; align-items:center; gap:.5rem; font-weight:700; letter-spacing:.2px; padding:.65rem 1rem; border-radius:999px; background:var(--sky-50); border:1px solid var(--sky-100); color:var(--sky-700); text-decoration:none }
+  .mail-pill:hover{ background:var(--sky-100); border-color:var(--sky-200) }
+
+  .site-footer{ border-top:1px solid var(--border); background:linear-gradient(180deg, rgba(255,255,255,.86), rgba(255,255,255,.78)) }
+  .site-footer .brand{ font-family:"Baloo 2", system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; font-weight:700 }
+  .site-footer a{ color:var(--muted); text-decoration:none } .site-footer a:hover{ color:var(--sky-700) }
+  </style>
+</head>
+
+<body>
+<nav class="navbar navbar-expand-lg">
+  <div class="container">
+    <a class="navbar-brand" href="{{ url_for('index') }}">
+      <span class="brand-dot"></span> EduWeaver
+    </a>
+
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+
+    <div id="nav" class="collapse navbar-collapse">
+      <ul class="navbar-nav ms-auto align-items-lg-center gap-2">
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('story_new') }}">AI Story</a></li>
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('library') }}">Library</a></li>
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('dashboard') }}">Dashboard</a></li>
+
+        {% if current_user %}
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle fw-semibold" href="#" role="button" data-bs-toggle="dropdown">
+              {{ current_user.username }}
+            </a>
+            <ul class="dropdown-menu dropdown-menu-end">
+              <li><span class="dropdown-item-text text-secondary small">Signed in</span></li>
+              <li><hr class="dropdown-divider"></li>
+                            {% if current_user and current_user.is_admin %}
+  <li class="nav-item"><a class="dropdown-item" href="{{ url_for('admin_analytics') }}">Admin</a></li>
+{% endif %}
+                                          <li><a class="dropdown-item" href="{{ url_for('classrooms') }}">Classroom</a></li>
+              <li><a class="dropdown-item" href="{{ url_for('finish_new') }}">Your drafts</a></li>
+              <li><a class="dropdown-item" href="{{ url_for('library') }}">Community library</a></li>
+              <li><hr class="dropdown-divider"></li>
+              <li>
+                <form action="{{ url_for('logout') }}" method="post" class="px-3 py-1">
+                  <button class="btn btn-sm w-100 btn-sky-light">Sign out</button>
+                </form>
+              </li>
+            </ul>
+          </li>
+        {% else %}
+          <li class="nav-item"><a class="btn btn-sky-light" href="{{ url_for('login') }}">Sign in</a></li>
+        {% endif %}
+      </ul>
+    </div>
+  </div>
+</nav>
+
+<section class="lp-hero-full d-flex align-items-center position-relative overflow-hidden" id="hero">
+  <div class="bg-wash"></div>
+  <div class="cube-bg">
+    <span class="cube c1"></span>
+    <span class="cube c2"></span>
+    <span class="cube c3"></span>
+    <span class="cube c4"></span>
+    <span class="cube c5"></span>
+  </div>
+
+  <div class="container position-relative">
+    <div class="col-lg-8">
+      <h1 class="hero-title display-4 fw-semibold mb-3" data-aos="fade-up">Stories that teach—made from your phonics & words.</h1>
+      <p class="hero-copy lead subtle mb-4" data-aos="fade-up" data-aos-delay="150">
+        Turn phonics or vocabulary into bite-size stories, instant worksheets, and quick quizzes—perfect for classroom and home.
+      </p>
+      <div class="hero-ctas d-flex gap-2" data-aos="zoom-in" data-aos-delay="300">
+        <a class="btn btn-sky" href="/story/new"><i class="bi bi-play-fill me-1"></i> Get started</a>
+        <a class="btn btn-outline-sky" href="#about"><i class="bi bi-info-circle me-1"></i> Learn more</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =============== ABOUT =============== -->
+<section id="about" class="about-section py-6 py-lg-8">
+  <div class="container">
+    <div class="row align-items-center g-5">
+      <div class="col-lg-6" data-aos="fade-right">
+        <span class="eyebrow">About EduWeaver</span>
+        <h2 class="display-6 fw-semibold mt-2 mb-3">Turn words into stories, instantly.</h2>
+        <p class="lead subtle mb-4">
+          EduWeaver transforms phonics and vocabulary into short, level-friendly stories — then auto-builds worksheets and quizzes to make learning easy.
+        </p>
+        <ul class="about-list list-unstyled mb-4">
+          <li class="d-flex align-items-start gap-3 mb-2">
+            <span class="tick"><i class="bi bi-check-lg"></i></span>
+            <div><strong>EN · KO bilingual</strong> outputs with age-appropriate tone and length.</div>
+          </li>
+          <li class="d-flex align-items-start gap-3 mb-2">
+            <span class="tick"><i class="bi bi-check-lg"></i></span>
+            <div><strong>One click worksheets</strong> and <strong>5-question quizzes</strong> per story.</div>
+          </li>
+          <li class="d-flex align-items-start gap-3">
+            <span class="tick"><i class="bi bi-check-lg"></i></span>
+            <div><strong>Classroom-ready</strong> layout, exports, and student-friendly fonts.</div>
+          </li>
+        </ul>
+        <div class="d-flex flex-wrap gap-2">
+          <a href="{{ url_for('story_new') }}" class="btn btn-sky">
+            <i class="bi bi-magic me-1"></i> Generate a story
+          </a>
+          <a href="{{ url_for('library') }}" class="btn btn-outline-sky">
+            <i class="bi bi-journal-text me-1"></i> Browse library
+          </a>
+        </div>
+      </div>
+
+      <div class="col-lg-6" data-aos="fade-left">
+        <div class="img-frame mx-auto">
+          <img src="{{ url_for('static', filename='about1.png') }}" alt="EduWeaver preview" class="img-fluid rounded-4 shadow-sm" loading="lazy"/>
+          <span class="ring r1"></span>
+          <span class="ring r2"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =============== FEATURES =============== -->
+<section id="features" class="features-section py-6 py-lg-8">
+  <div class="container">
+    <div class="section-head mb-4">
+      <div class="section-meta" data-aos="fade-right">
+        <span class="section-kicker"><i class="bi bi-stars"></i> Features</span>
+        <h2 class="section-title">Everything you need to teach—fast.</h2>
+        <p class="section-sub">Generate stories, worksheets, and quizzes in minutes with classroom-ready design.</p>
+      </div>
+    </div>
+
+    <div class="row g-4 cards-row">
+      <div class="col-md-6 col-lg-4" data-aos="fade-up" data-aos-delay="0">
+        <article class="feat-card h-100">
+          <div>
+            <div class="feat-head">
+              <span class="feat-icon"><i class="bi bi-magic"></i></span>
+              <span class="feat-badge">Auto-create</span>
+            </div>
+            <h3 class="h5 fw-semibold mt-2 mb-2">Story Generator</h3>
+            <p class="mb-3 subtle">Turn phonics & vocabulary into short, level-friendly stories tailored for young readers.</p>
+            <ul class="feat-list">
+              <li><i class="bi bi-check2"></i> Grade-aware tone & length</li>
+              <li><i class="bi bi-check2"></i> EN · KO bilingual output</li>
+              <li><i class="bi bi-check2"></i> One-click export</li>
+            </ul>
+          </div>
+          <a href="{{ url_for('story_new') }}" class="feat-link">Try it now <i class="bi bi-arrow-right-short"></i></a>
+        </article>
+      </div>
+
+      <div class="col-md-6 col-lg-4" data-aos="fade-up" data-aos-delay="100">
+        <article class="feat-card h-100">
+          <div>
+            <div class="feat-head">
+              <span class="feat-icon"><i class="bi bi-file-text"></i></span>
+              <span class="feat-badge">Printable</span>
+            </div>
+            <h3 class="h5 fw-semibold mt-2 mb-2">Worksheets</h3>
+            <p class="mb-3 subtle">Ready-to-use activities from each story: comprehension, phonics, and vocabulary practice.</p>
+            <ul class="feat-list">
+              <li><i class="bi bi-check2"></i> Clean classroom layout</li>
+              <li><i class="bi bi-check2"></i> PDF & image export</li>
+              <li><i class="bi bi-check2"></i> Adjustable difficulty</li>
+            </ul>
+          </div>
+          <a href="{{ url_for('library') }}" class="feat-link">See examples <i class="bi bi-arrow-right-short"></i></a>
+        </article>
+      </div>
+
+      <div class="col-md-6 col-lg-4" data-aos="fade-up" data-aos-delay="200">
+        <article class="feat-card h-100">
+          <div>
+            <div class="feat-head">
+              <span class="feat-icon"><i class="bi bi-clipboard-check"></i></span>
+              <span class="feat-badge">Assess</span>
+            </div>
+            <h3 class="h5 fw-semibold mt-2 mb-2">Quick Quizzes</h3>
+            <p class="mb-3 subtle">Five smart questions per story to check understanding—perfect for warm-ups or exit tickets.</p>
+            <ul class="feat-list">
+              <li><i class="bi bi-check2"></i> Auto-generated from text</li>
+              <li><i class="bi bi-check2"></i> Multiple choice format</li>
+              <li><i class="bi bi-check2"></i> Share or print instantly</li>
+            </ul>
+          </div>
+          <a href="{{ url_for('dashboard') }}" class="feat-link">Manage results <i class="bi bi-arrow-right-short"></i></a>
+        </article>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =============== CONTACT =============== -->
+<section id="contact" class="contact-section py-6 py-lg-8">
+  <div class="container">
+    <div class="text-center mb-4" data-aos="fade-down">
+      <span class="eyebrow">Contact</span>
+      <h2 class="section-title" style="line-height:1.25;">We’d love to hear from you</h2>
+      <p class="section-sub mx-auto">Questions, ideas, or feedback about EduWeaver? Email us anytime.</p>
+    </div>
+
+    <div class="contact-card" data-aos="zoom-in">
+      <a class="mail-pill" href="mailto:hello@EduWeaver.app?subject=Hello%20EduWeaver">
+        <i class="bi bi-envelope-fill"></i> hello@EduWeaver.app
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer class="site-footer py-4">
+  <div class="container">
+    <div class="d-flex flex-column flex-lg-row align-items-center justify-content-between gap-3">
+      <div class="d-flex align-items-center gap-2">
+        <span class="brand-dot" style="inline-size:.6rem;block-size:.6rem;border-radius:999px;background: radial-gradient(65% 65% at 30% 30%, var(--sky-600), var(--sky-400));box-shadow:0 0 0 3px rgba(47,140,234,.18);"></span>
+        <span class="brand">EduWeaver</span>
+        <span class="text-secondary">·</span>
+        <small class="text-secondary">© {{ current_year or 2025 }}</small>
+      </div>
+      <ul class="nav gap-3">
+        <li class="nav-item"><a class="nav-link p-0" href="#about">About</a></li>
+        <li class="nav-item"><a class="nav-link p-0" href="#features">Features</a></li>
+        <li class="nav-item"><a class="nav-link p-0" href="#contact">Contact</a></li>
+      </ul>
+    </div>
+  </div>
+</footer>
+
+<!-- Scripts -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/aos@2.3.4/dist/aos.js"></script>
+<script>
+  AOS.init({ duration: 700, once: true, offset: 90, easing: 'ease-out-cubic' });
+  // mark hero ready for simple stagger
+  window.addEventListener('load', () => {
+    document.getElementById('hero').classList.add('hero-ready');
+  });
+</script>
+</body>
+</html>

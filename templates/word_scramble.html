@@ -1,0 +1,356 @@
+{% extends "base2.html" %}
+{% block title %}Word Scramble · EduWeaverPlay{% endblock %}
+
+{% block content %}
+
+<div class="row justify-content-center mt-4">
+  <div class="col-lg-7">
+    <div class="card border-0 shadow-lg rounded-4 game-bg-v7">
+      <div class="card-body p-4 p-md-5">
+
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4 pb-3 border-bottom-soft">
+          <div>
+            <h3 class="fw-bolder mb-1 game-title-v7">Word Unscrambler Challenge!</h3>
+            <p class="text-muted small mb-0">
+              Unjumble the letters to reveal the secret word. Good luck!
+            </p>
+          </div>
+          <div class="text-end score-box-v7">
+            <div class="small text-muted">Progress</div>
+            <div class="fs-4 fw-bold">
+              <span id="scoreCorrect">0</span>/<span id="scoreTotal">{{ puzzles|length }}</span>
+            </div>
+          </div>
+        </div>
+
+        {% if puzzles %}
+        <div class="game-area-v7">
+
+          <div id="puzzleDisplay" class="puzzle-display-v7 mb-4">
+            </div>
+
+          <div class="input-feedback-area text-center">
+            <form id="scrambleForm" class="d-flex justify-content-center gap-3">
+              <input type="text"
+                     class="form-control form-control-lg rounded-pill scramble-input-v7"
+                     placeholder="Type your guess here"
+                     autocomplete="off"
+                     autocapitalize="off"
+                     id="scrambleInput">
+              <button class="btn btn-lg btn-coral-v7 rounded-pill px-4" type="submit" id="checkButton">Check</button>
+            </form>
+
+            <div id="feedbackContainer" class="feedback-container-v7">
+                </div>
+
+            <button id="nextButton" class="btn btn-lg btn-success rounded-pill mt-4 px-5" style="display: none;">
+                Next Puzzle <i class="bi bi-arrow-right"></i>
+            </button>
+            <button id="restartButton" class="btn btn-outline-secondary btn-sm rounded-pill mt-4" style="display: none;">
+                Restart Game
+            </button>
+          </div>
+        </div>
+
+        {% else %}
+        <div class="py-4 text-center text-muted small">
+          No words yet. Read a story or wait for your teacher to assign.
+        </div>
+        {% endif %}
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+/* Define Coral Theme Variables based on Login Page */
+:root {
+    --coral-main: #ff6b6b;
+    --coral-light: #ffd7cc;
+    --ink: #111827;
+    --muted: #6b7280;
+    --success-color: #10b981;
+}
+
+/* ----- Layout & Container Styles ----- */
+.game-bg-v7 {
+    background: linear-gradient(140deg, #fff7e5 0%, #ffeef7 50%, #f6f8ff 100%) !important;
+    border: 1px solid rgba(255, 107, 107, 0.1);
+}
+.game-title-v7 {
+    color: var(--coral-main);
+}
+.score-box-v7 {
+    color: var(--ink);
+}
+.border-bottom-soft {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05) !important;
+}
+
+/* ----- Puzzle Display ----- */
+.puzzle-display-v7 {
+    min-height: 120px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    border-radius: 12px;
+    background: #fff;
+    border: 1px solid var(--coral-light);
+    box-shadow: 0 4px 15px rgba(255, 107, 107, 0.08);
+}
+.scramble-letters-v7 {
+    display:flex;
+    gap: 0.8rem;
+    flex-wrap:wrap;
+    justify-content:center;
+}
+.scramble-letter-v7 {
+    min-width: 45px;
+    min-height: 45px;
+    border-radius: 8px; /* Squared off for modern look */
+    background: #fff;
+    border: 2px solid var(--coral-main);
+    color: var(--coral-main);
+    font-size: 1.5rem;
+    font-weight: 800;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    box-shadow: 0 4px 0 var(--coral-light);
+    transform: translateY(0);
+    transition: transform 0.2s;
+}
+.scramble-letter-v7:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 0 var(--coral-light);
+}
+.scramble-letter-space-v7 { min-width: 20px; }
+
+/* ----- Input & Button ----- */
+.scramble-input-v7 {
+  max-width: 300px;
+  height: 55px;
+  text-align: center;
+  font-size: 1.25rem;
+  border: 1px solid var(--coral-light);
+  border-radius: 999px !important;
+}
+.scramble-input-v7:focus {
+  border-color: var(--coral-main) !important;
+  box-shadow: 0 0 0 .2rem rgba(255,107,107,.25) !important;
+}
+.btn-coral-v7 {
+  background: var(--coral-main);
+  color: #fff;
+  border: none;
+  font-weight: 700;
+  box-shadow: 0 4px 10px rgba(255,107,107,.35);
+}
+.btn-coral-v7:hover {
+  background: #e86060;
+  color: #fff;
+}
+
+/* ----- Animated Feedback ----- */
+.feedback-container-v7 {
+    margin-top: 1.5rem;
+    min-height: 40px;
+}
+.feedback-message {
+    font-size: 1.5rem;
+    font-weight: 700;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 0.3s, transform 0.3s;
+}
+.feedback-message.active {
+    opacity: 1;
+    transform: translateY(0);
+}
+.feedback-icon {
+    font-size: 2.5rem;
+    margin-right: 10px;
+    vertical-align: middle;
+}
+
+/* Successful Check Styling */
+.scramble-card.correct .scramble-letter-v7 {
+    background: var(--success-color);
+    color: white;
+    border-color: #15803d;
+    box-shadow: 0 4px 0 #86efac;
+}
+
+/* Animation Keyframes */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-10px); }
+  40%, 80% { transform: translateX(10px); }
+}
+.shake {
+    animation: shake 0.5s ease-in-out;
+}
+</style>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const puzzles = {{ puzzles | tojson }}; // Puzzles array from Flask
+  const puzzleDisplay = document.getElementById('puzzleDisplay');
+  const scrambleForm = document.getElementById('scrambleForm');
+  const scrambleInput = document.getElementById('scrambleInput');
+  const checkButton = document.getElementById('checkButton');
+  const nextButton = document.getElementById('nextButton');
+  const restartButton = document.getElementById('restartButton');
+  const scoreCorrectEl = document.getElementById('scoreCorrect');
+  const scoreTotalEl = document.getElementById('scoreTotal');
+  const feedbackContainer = document.getElementById('feedbackContainer');
+
+  let currentPuzzleIndex = 0;
+  let correctCount = 0;
+  let currentPuzzle = null;
+
+  // --- HTML Rendering Functions ---
+
+  function renderLetters(scrambledText) {
+    let html = '<div class="scramble-letters-v7">';
+    for (const ch of scrambledText) {
+      if (ch === ' ') {
+        html += '<span class="scramble-letter-space-v7">&nbsp;</span>';
+      } else {
+        html += `<span class="scramble-letter-v7">${ch}</span>`;
+      }
+    }
+    html += '</div>';
+    return html;
+  }
+
+  function renderPuzzle(puzzle) {
+    if (!puzzle) return;
+
+    // Reset feedback
+    feedbackContainer.innerHTML = '';
+
+    // Render the puzzle content
+    puzzleDisplay.innerHTML = `
+      <div class="scramble-number-circle mb-3">${currentPuzzleIndex + 1}</div>
+      ${renderLetters(puzzle.scrambled)}
+      ${puzzle.definition ? `<div class="small text-muted mt-3">Hint: ${puzzle.definition}</div>` : ''}
+    `;
+
+    scrambleInput.value = '';
+    scrambleInput.disabled = false;
+    checkButton.disabled = false;
+    nextButton.style.display = 'none';
+    scrambleInput.focus();
+  }
+
+  // --- Game Flow Control ---
+
+  function loadNextPuzzle() {
+    if (currentPuzzleIndex < puzzles.length) {
+      currentPuzzle = puzzles[currentPuzzleIndex];
+      renderPuzzle(currentPuzzle);
+    } else {
+      showFinalScore();
+    }
+  }
+
+  function showFinalScore() {
+    puzzleDisplay.innerHTML = `
+        <h4 class="fw-bold text-success">Game Complete! 🎉</h4>
+        <p class="fs-3">${correctCount} out of ${puzzles.length} correct.</p>
+        <p class="text-muted">You did great!</p>
+    `;
+    checkButton.style.display = 'none';
+    scrambleInput.style.display = 'none';
+    restartButton.style.display = 'inline-block';
+  }
+
+  // --- Animated Feedback ---
+
+  function showFeedback(isCorrect, message) {
+    feedbackContainer.innerHTML = '';
+    const msgElement = document.createElement('div');
+    msgElement.className = 'feedback-message';
+
+    if (isCorrect) {
+        msgElement.innerHTML = `<span class="feedback-icon text-success">🤩</span> ${message}`;
+        msgElement.style.color = 'var(--success-color)';
+        // Animate the letters green on success
+        puzzleDisplay.querySelectorAll('.scramble-letter-v7').forEach(el => {
+            el.classList.add('correct');
+            el.style.backgroundColor = 'var(--success-color)';
+            el.style.color = 'white';
+            el.style.borderColor = '#15803d';
+            el.style.boxShadow = '0 4px 0 #86efac';
+            el.style.transform = 'translateY(0)';
+        });
+    } else {
+        msgElement.innerHTML = `<span class="feedback-icon text-danger"><i class="bi bi-emoji-dizzy-fill"></i></span> ${message}`;
+        msgElement.style.color = 'var(--coral-main)';
+        // Animate the input field red and shake
+        scrambleForm.classList.add('shake');
+        setTimeout(() => scrambleForm.classList.remove('shake'), 500);
+    }
+
+    feedbackContainer.appendChild(msgElement);
+    // Trigger CSS transition
+    setTimeout(() => msgElement.classList.add('active'), 10);
+  }
+
+  // --- Event Handler ---
+
+  scrambleForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const guess = scrambleInput.value.trim().toLowerCase();
+    const answer = currentPuzzle.word.toLowerCase();
+
+    if (!guess) return;
+
+    // Clear any previous feedback/shake
+    feedbackContainer.innerHTML = '';
+
+    if (guess === answer) {
+      // Correct Answer
+      correctCount++;
+      scoreCorrectEl.textContent = correctCount;
+
+      showFeedback(true, "Awesome! You got it right!");
+
+      scrambleInput.disabled = true;
+      checkButton.disabled = true;
+      nextButton.style.display = 'inline-block';
+
+      // Log success (Placeholder for API call)
+      // logPuzzleResult(currentPuzzle.word, true);
+
+    } else {
+      // Incorrect Answer
+      showFeedback(false, "Oops! Try that one more time.");
+
+      // Clear input quickly to encourage another guess
+      scrambleInput.value = '';
+      scrambleInput.focus();
+    }
+  });
+
+  nextButton.addEventListener('click', () => {
+    currentPuzzleIndex++;
+    loadNextPuzzle();
+  });
+
+  restartButton.addEventListener('click', () => {
+    window.location.reload();
+  });
+
+  // --- Initialization ---
+  loadNextPuzzle();
+})();
+</script>
+{% endblock %}

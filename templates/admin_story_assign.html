@@ -1,0 +1,131 @@
+{% extends "base2.html" %}
+{% block title %}Assign Story · {{ story.title }}{% endblock %}
+
+{% block content %}
+
+<div class="container mt-4">
+  <div class="row justify-content-center">
+    <div class="col-lg-8">
+      <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-body p-4">
+          <h3 class="h4 mb-2">Create Assignment</h3>
+          <p class="text-muted mb-3">
+            Story: <strong>{{ story.title }}</strong>
+          </p>
+
+          <form method="post">
+            <!-- Assignment type -->
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Assignment type</label>
+              <div class="d-flex flex-wrap gap-3">
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="assignment_type" id="typeFinish" value="finish" checked>
+                  <label class="form-check-label" for="typeFinish">
+                    Finish writing (students complete the ending)
+                  </label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="assignment_type" id="typeMcq" value="mcq">
+                  <label class="form-check-label" for="typeMcq">
+                    Reading comprehension (MCQ)
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <!-- Title -->
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Assignment title</label>
+              <input
+                type="text"
+                name="title"
+                class="form-control"
+                placeholder="e.g., Finish the story: {{ story.title }}"
+              >
+              <div class="form-text">
+                If left empty, a default title will be used.
+              </div>
+            </div>
+
+            <!-- Instructions -->
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Instructions (optional)</label>
+              <textarea
+                name="instructions"
+                rows="3"
+                class="form-control"
+                placeholder="Write a short instruction for learners (optional)."
+              ></textarea>
+            </div>
+
+            <!-- Due date -->
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Due date (optional)</label>
+              <input
+                type="datetime-local"
+                name="due_at"
+                class="form-control"
+              >
+              <div class="form-text">
+                Leave empty if there is no strict deadline.
+              </div>
+            </div>
+
+            <!-- Story preview (short) -->
+            <div class="mb-4">
+              <label class="form-label fw-semibold d-flex align-items-center justify-content-between">
+                Story preview
+                <span class="badge bg-light text-muted border">read-only</span>
+              </label>
+              <div class="border rounded-3 p-3 bg-light-subtle small" style="max-height: 200px; overflow:auto;">
+                {{ story.content[:800] }}{% if story.content|length > 800 %}…{% endif %}
+              </div>
+            </div>
+
+            <!-- Learner selection -->
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Assign to learners</label>
+              {% if students %}
+                <div class="border rounded-3 p-3" style="max-height: 260px; overflow:auto;">
+                  {% for s in students %}
+                    <div class="form-check mb-1">
+                      <input
+                        class="form-check-input"
+                        type="checkbox"
+                        name="user_ids"
+                        id="user{{ s.id }}"
+                        value="{{ s.id }}"
+                      >
+                      <label class="form-check-label" for="user{{ s.id }}">
+                        {{ s.username }}{% if s.email %} <span class="text-muted small">&lt;{{ s.email }}&gt;</span>{% endif %}
+                      </label>
+                    </div>
+                  {% endfor %}
+                </div>
+                <div class="form-text">
+                  Check the students you want to assign this story to.
+                </div>
+              {% else %}
+                <p class="text-muted small mb-0">
+                  No learners found. Please register some non-admin users first.
+                </p>
+              {% endif %}
+            </div>
+
+            <div class="d-flex justify-content-between mt-4">
+              <a href="{{ url_for('admin_stories') }}" class="btn btn-outline-secondary">
+                Cancel
+              </a>
+              <button type="submit" class="btn btn-primary">
+                Create assignment
+              </button>
+            </div>
+          </form>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

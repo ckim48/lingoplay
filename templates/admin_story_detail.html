@@ -1,0 +1,116 @@
+{% extends "base2.html" %}
+{% block title %}Story Detail · EduWeaverPlay{% endblock %}
+
+{% block content %}
+<div class="card border-0 lp-card-modern overflow-hidden mt-4">
+  <div class="card-body p-4 p-lg-5">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3">
+      <div>
+        <h3 class="fw-semibold story-title mb-1">{{ story.title }}</h3>
+        <p class="text-muted mb-1 small">
+          By {{ story.author_name }} · {{ story.created_at|dt }}
+        </p>
+        <p class="text-muted mb-0 small">
+          Level: {{ story.level }} · Language: {{ story.language|upper }}
+        </p>
+      </div>
+
+      {% if story.visuals %}
+      <div class="text-end">
+        <div class="ratio ratio-1x1" style="width:120px;">
+          <img src="{{ story.visuals }}" alt="Cover image"
+               class="rounded-3 border" style="object-fit:cover;">
+        </div>
+        <div class="small text-muted mt-1">Cover image</div>
+      </div>
+      {% endif %}
+    </div>
+
+    <hr class="my-3">
+
+    <!-- Prompt / target words -->
+    <div class="mb-4">
+      <h6 class="text-uppercase text-muted small fw-bold mb-1">Target phonics / vocabulary</h6>
+      <p class="mb-0">{{ story.prompt }}</p>
+    </div>
+
+    <!-- Seed / partial story -->
+    <div class="mb-4">
+      <h6 class="text-uppercase text-muted small fw-bold mb-2">
+        Seed story (shared with students)
+      </h6>
+      {% if draft %}
+        <pre class="small bg-light p-3 rounded-3 mb-0" style="white-space:pre-wrap;">{{ draft.partial_text }}</pre>
+      {% else %}
+        <p class="text-muted small fst-italic mb-0">
+          No seed / finish draft is linked to this story yet.
+        </p>
+      {% endif %}
+    </div>
+
+    <!-- Completed part -->
+    <div class="mb-4">
+      <div class="d-flex align-items-center justify-content-between mb-2">
+        <h6 class="text-uppercase text-muted small fw-bold mb-0">
+          Completed story / ending
+        </h6>
+
+        {% if draft and draft.completion_text %}
+          <span class="badge text-bg-info-subtle text-info-emphasis">
+            {% if story.author_name == "EduWeaver AI" %}
+              Completed by AI
+            {% else %}
+              Completed by learner
+            {% endif %}
+          </span>
+        {% endif %}
+      </div>
+
+      {% if draft and draft.completion_text %}
+        <pre class="small bg-white border p-3 rounded-3 mb-0" style="white-space:pre-wrap;">
+{{ draft.completion_text }}
+        </pre>
+      {% elif draft %}
+        <div class="border rounded-3 p-3 bg-light-subtle">
+          <p class="text-muted small mb-1">
+            No one has completed this story yet.
+          </p>
+          <p class="text-muted small mb-0">
+            When a student finishes the story, their ending will appear here.
+          </p>
+        </div>
+      {% else %}
+        <p class="text-muted small fst-italic mb-0">
+          There is no completion draft linked to this story.
+        </p>
+      {% endif %}
+    </div>
+
+    <!-- Full AI reference (optional) -->
+    <div class="mt-4">
+      <button class="btn btn-outline-secondary btn-sm" type="button"
+              data-bs-toggle="collapse" data-bs-target="#fullStoryCollapse">
+        Show full AI story (teacher reference)
+      </button>
+      <div class="collapse mt-2" id="fullStoryCollapse">
+        <pre class="small bg-light p-3 rounded-3" style="white-space:pre-wrap;">
+{{ story.content }}
+        </pre>
+      </div>
+    </div>
+
+    <!-- Vocab list -->
+    {% if vocab and vocab|length %}
+      <hr class="my-4">
+      <h6 class="text-uppercase text-muted small fw-bold mb-2">Vocabulary items</h6>
+      <ul class="list-unstyled small mb-0">
+        {% for item in vocab %}
+          <li class="mb-1">
+            <strong>{{ item.word }}</strong> – {{ item.definition }}
+          </li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

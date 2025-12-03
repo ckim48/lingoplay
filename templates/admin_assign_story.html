@@ -1,0 +1,171 @@
+{% extends "base2.html" %}
+{% block title %}Assign Story · EduWeaverPlay{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <div class="card border-0 shadow-sm mt-3">
+      <div class="card-body p-4">
+        <h3 class="mb-2">{{ story.title }}</h3>
+        <p class="text-muted mb-3">
+          Assign this story to selected students.
+        </p>
+
+        {% if draft %}
+          <div class="alert alert-info small">
+            <div><strong>Draft status:</strong>
+              {% if draft.completion_text %}
+                This story has a <strong>completed</strong> text (good for <em>MCQ reading</em>).
+              {% else %}
+                This story has an <strong>unfinished</strong> draft (good for <em>Finish the Story</em>).
+              {% endif %}
+            </div>
+          </div>
+        {% else %}
+          <div class="alert alert-warning small">
+            No <code>finish_drafts</code> found for this story yet.
+          </div>
+        {% endif %}
+
+        <form method="post" id="assignFormPage">
+          <!-- Assignment type -->
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Assignment type</label>
+
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="assignment_type"
+                     id="type_finish" value="finish" checked>
+              <label class="form-check-label" for="type_finish">
+                Finish-writing: students complete the ending of the story.
+              </label>
+            </div>
+
+            <div class="form-check mt-1">
+              <input class="form-check-input" type="radio" name="assignment_type"
+                     id="type_mcq" value="mcq">
+              <label class="form-check-label" for="type_mcq">
+                Reading comprehension (MCQ) for the completed story.
+              </label>
+            </div>
+            <div class="form-text" id="assignTypeHelp">
+              Finish-writing is intended for stories with an <strong>unfinished</strong> draft.
+              MCQ reading is for stories where the full text is already completed by AI.
+            </div>
+          </div>
+
+          <!-- Users list -->
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Select students</label>
+            {% if users %}
+              <div class="border rounded p-2" style="max-height:260px; overflow:auto;">
+                {% for u in users %}
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox"
+                           name="user_ids" value="{{ u.id }}"
+                           id="user_{{ u.id }}">
+                    <label class="form-check-label" for="user_{{ u.id }}">
+                      {{ u.username }} ({{ u.email }})
+                    </label>
+                  </div>
+                {% endfor %}
+              </div>
+              <div class="form-text">
+                Only non-admin users are listed here.
+              </div>
+            {% else %}
+              <p class="text-muted small mb-0">No students found yet.</p>
+            {% endif %}
+          </div>
+
+          <div class="d-flex justify-content-between align-items-center">
+            <a href="{{ url_for('admin_story_detail', slug=story.slug) }}"
+               class="btn btn-outline-secondary">
+              Back to Story
+            </a>
+            <button type="submit" class="btn btn-primary" id="assignSubmitBtn">
+              Assign to selected students
+            </button>
+          </div>
+        </form>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Full-screen loading overlay for MCQ generation -->
+<div id="mcqLoadingOverlay" class="mcq-loading-overlay d-none">
+  <div class="mcq-loading-inner">
+    <div class="spinner-border" role="status" aria-hidden="true"></div>
+    <div class="mt-3 fw-semibold">Generating MCQ questions…</div>
+    <div class="text-muted small">This may take a few seconds. Please do not close the page.</div>
+  </div>
+</div>
+{% endblock %}
+
+{% block styles %}
+{{ super() }}
+<style>
+.mcq-loading-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.7);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mcq-loading-overlay .mcq-loading-inner {
+  background: #ffffff;
+  border-radius: 1.5rem;
+  padding: 1.75rem 2.25rem;
+  text-align: center;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.35);
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+(function(){
+  const form = document.getElementById('assignFormPage');
+  const btn = document.getElementById('assignSubmitBtn');
+  const help = document.getElementById('assignTypeHelp');
+  const mcqOverlay = document.getElementById('mcqLoadingOverlay');
+  const typeFinish = document.getElementById('type_finish');
+  const typeMcq = document.getElementById('type_mcq');
+
+  // Change helper text + button label depending on assignment type
+  function updateUiForType() {
+    if (typeMcq.checked) {
+      help.innerHTML = "MCQ mode: GPT will generate multiple-choice questions from the completed story text, then assign them to the selected students.";
+      btn.textContent = "Generate MCQs & Assign";
+    } else {
+      help.innerHTML = "Finish-writing is intended for stories with an <strong>unfinished</strong> draft. Students will complete the ending themselves.";
+      btn.textContent = "Assign to selected students";
+    }
+  }
+
+  if (typeFinish && typeMcq) {
+    typeFinish.addEventListener('change', updateUiForType);
+    typeMcq.addEventListener('change', updateUiForType);
+    updateUiForType();
+  }
+
+  // On submit: if MCQ is selected, show loading overlay
+  if (form && btn && mcqOverlay) {
+    form.addEventListener('submit', function(e) {
+      const chosen = form.querySelector('input[name="assignment_type"]:checked');
+      if (chosen && chosen.value === 'mcq') {
+        // Show overlay + freeze button text
+        mcqOverlay.classList.remove('d-none');
+        btn.disabled = true;
+        btn.textContent = "Generating MCQs…";
+      }
+    });
+  }
+})();
+</script>
+{% endblock %}

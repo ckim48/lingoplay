@@ -1,263 +1,264 @@
-{% extends "base.html" %}
-{% block title %}Library · EduWeaver{% endblock %}
+{% extends "base2.html" %}
+{% block title %}Library · EduWeaverPlay{% endblock %}
+
 {% block content %}
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
 
-<div class="card border-0 lp-card-modern overflow-hidden mt-4">
-  <div class="card-body p-4 p-lg-5">
-    <!-- Top bar -->
-    <div class="d-flex flex-wrap gap-3 justify-content-between align-items-center mb-4">
-      <h3 class="mb-0 fw-semibold">Library</h3>
-      <div class="d-flex align-items-center gap-3">
-        <div class="small text-muted">Matches: <span id="matchCount">0</span></div>
-        <a href="{{ url_for('story_new') }}" class="btn btn-sky-light">
-          <i class="bi bi-magic me-1"></i> New Story
-        </a>
+<div class="container mt-4">
+  {# Modernized Header Layout #}
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-5 pb-3 border-bottom border-v6-soft">
+    <div class="d-flex align-items-center gap-4">
+      <i class="bi bi-book-half display-5" style="color:#F87171 !important;"></i>
+      <div>
+        <h3 class="fw-bolder mb-1 v6-section-title">The Magic Bookshelf</h3>
+        <p class="text-muted v6-section-p mb-0">
+          Explore stories shared by your teacher. Tap any cover to begin reading!
+        </p>
       </div>
     </div>
+    {# Add a playful graphic/placeholder here for a modern touch #}
+  </div>
 
-    <!-- Controls -->
-    <div class="row g-3 align-items-end mb-3">
-      <div class="col-md-8">
-        <label class="form-label small text-uppercase fw-bold text-muted">Search</label>
-        <div class="input-group input-group-lg lp-input">
-          <span class="input-group-text"><i class="bi bi-search"></i></span>
-          <input id="libSearch" class="form-control" placeholder="Search by title, author, or keywords">
-          <button class="btn btn-outline-secondary only-md" id="libClear" type="button" title="Clear">
-            <i class="bi bi-x-circle"></i>
-          </button>
-        </div>
-      </div>
-      <div class="col-md-4">
-        <label class="form-label small text-uppercase fw-bold text-muted">Sort</label>
-        <select id="libSort" class="form-select form-select-lg lp-input">
-          <option value="newest">Newest first</option>
-          <option value="oldest">Oldest first</option>
-          <option value="title">Title (A–Z)</option>
-          <option value="author">Author (A–Z)</option>
-        </select>
-      </div>
-    </div>
+  {% if stories %}
+  <div class="row g-4 g-lg-5">
+    {% for s in stories %}
+    <div class="col-sm-6 col-lg-4 col-xl-3">
+      <div class="book-wrap-v6">
+        <div class="card border-0 library-card-v6 h-100 p-0 position-relative">
 
-    <!-- Grid of cards -->
-    <div id="libGrid" class="row g-4">
-      {% for d in completes %}
-        {% set title = d.story_title or 'Untitled Story' %}
-        <div class="col-12 col-md-6 col-lg-4 lib-wrap"
-             data-title="{{ title|lower }}"
-             data-author="{{ (d.learner_name or 'guest')|lower }}"
-             data-keywords="{{ (d.seed_prompt or '')|lower }}"
-             data-created="{{ (d.created_at|string).strip() }}">
-          <div class="card h-100 lp-story-card position-relative">
-            <div class="card-body d-flex flex-column">
-              <div class="d-flex align-items-start justify-content-between mb-2">
-                <a href="{{ url_for('finish_view', draft_id=d.id) }}" class="stretched-link text-decoration-none">
-                  <h5 class="card-title mb-0">{{ title }}</h5>
-                </a>
-                <span class="badge lp-badge-lang ms-2">{{ d.language|upper }}</span>
+          {# Admin Remove Button #}
+          {% if is_admin %}
+          <form method="post" action="{{ url_for('admin_unshare_story', slug=s.slug) }}"
+                onsubmit="return confirm('Are you sure you want to remove \'{{ s.title }}\' from the Library?');"
+                class="admin-remove-form">
+            <button type="submit" class="btn btn-sm library-remove-btn-v6">
+              <i class="bi bi-x-lg"></i>
+            </button>
+          </form>
+          {% endif %}
+
+          <a href="{{ url_for('book_view', draft_id=s.draft_id) }}"
+             class="text-decoration-none text-reset d-flex flex-column h-100">
+
+            <div class="library-card-img-wrap-v6"
+                 style="background-image: url('{{ s.visuals or url_for('static', filename='img/fallback_cover.png') }}');">
               </div>
 
-              <div class="text-secondary small mb-2">
-                <i class="bi bi-person"></i> {{ d.learner_name or 'guest' }}
+            <div class="card-body p-3 p-md-4 d-flex flex-column flex-grow-1 bg-v6-paper">
+
+              {# Tags Refined and Grouped #}
+              <div class="d-flex align-items-center mb-2 gap-2">
+                <span class="v6-tag-level">{{ s.language|upper }}</span>
+                <span class="v6-tag-level v6-tag-level-accent">{{ s.level|title }}</span>
               </div>
 
-              <p class="card-text small flex-grow-1">
-                <span class="fw-semibold">Keywords/Phonics:</span>
-                {{ d.seed_prompt[:120] }}{% if d.seed_prompt|length > 120 %}…{% endif %}
+              <h5 class="fw-bold mb-2 text-v6-title truncate-2-lines">
+                {{ s.title }}
+              </h5>
+
+              <p class="small text-v6-muted mb-3 flex-grow-1">
+                By <span class="fw-semibold">{{ s.author_name or "EduWeaver AI" }}</span>
               </p>
-            </div>
 
-            <div class="card-footer bg-transparent d-flex justify-content-between align-items-center">
-              <span class="small text-secondary">
-                <i class="bi bi-clock me-1"></i>{{ d.created_at|dt("%Y-%m-%d %H:%M") }}
-              </span>
-
-              <div class="d-flex gap-2">
-                <a href="{{ url_for('finish_view', draft_id=d.id) }}" class="btn btn-sm btn-outline-secondary position-relative">
-                  Read
-                </a>
-
-                {% if current_user and current_user.is_admin %}
-                  <button type="button"
-                          class="btn btn-sm btn-outline-danger position-relative"
-                          data-delete
-                          data-draft-id="{{ d.id }}"
-                          data-title="{{ title|e }}"
-                          title="Delete">
-                    <i class="bi bi-trash"></i>
-                  </button>
-                {% endif %}
+              <div class="mt-auto pt-3 d-flex justify-content-between align-items-center border-top border-v6-soft">
+                <span class="badge tag-shared-v6">
+                  Shared
+                </span>
+                <span class="small text-v6-link fw-bold">
+                  Read Now <i class="bi bi-arrow-right-circle-fill ms-1"></i>
+                </span>
               </div>
             </div>
-          </div>
+          </a>
         </div>
-      {% else %}
-        <div class="col-12">
-          <div class="text-secondary">No completed stories yet.</div>
-        </div>
-      {% endfor %}
-    </div>
-  </div>
-</div>
-
-<!-- Delete confirmation modal -->
-<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content rounded-4">
-      <div class="modal-header border-0">
-        <h5 class="modal-title" id="deleteModalLabel">Delete story?</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" data-cancel></button>
-      </div>
-      <div class="modal-body pt-0">
-        <p class="mb-2">You're about to delete:</p>
-        <div class="p-2 rounded border bg-light small" id="deleteStoryTitle"></div>
-        <p class="text-danger small mb-0 mt-2">This cannot be undone.</p>
-      </div>
-      <div class="modal-footer border-0">
-        <button type="button" class="btn btn-sky-light" data-bs-dismiss="modal" data-cancel>Cancel</button>
-        <form id="deleteForm" method="post" class="m-0">
-          <button type="submit" class="btn btn-outline-danger">
-            <i class="bi bi-trash me-1"></i> Delete
-          </button>
-        </form>
       </div>
     </div>
+    {% endfor %}
   </div>
+  {% else %}
+  <div class="py-5 text-center text-v6-muted">
+    <p class="mb-1 fw-semibold">No stories in the Library yet.</p>
+    <p class="small mb-0">
+      Your teacher can share stories from the <span class="fw-bold">Story Review</span> page.
+    </p>
+    <i class="bi bi-box-seam display-4 mt-4 d-block" style="color: var(--color-v6-soft-border);"></i>
+  </div>
+  {% endif %}
 </div>
 
 <style>
-  :root{
-    --ink:#0f1b33; --muted:#64748b; --bg:#f6f9ff; --paper:#ffffff;
-    --sky-25:#f2f8ff; --sky-50:#e8f3ff; --sky-100:#d8ebff; --sky-200:#c2e0ff;
-    --sky-300:#a5d1ff; --sky-400:#7fbaff; --sky-500:#4ea2ff; --sky-600:#2f8cea; --sky-700:#236fbb;
-    --border:#e5eaf3;
-  }
+/* --- V6 Modern & Attractive Styles --- */
+/* Integrated modern font: Outfit */
+body {
+    font-family: 'Outfit', sans-serif;
+    background-color: #fffaf3 !important;
+}
 
-  body{ background:var(--bg); }
-  .lp-card-modern{ border-radius:18px; box-shadow:0 10px 30px rgba(2,6,23,.06), 0 2px 6px rgba(2,6,23,.04); background:var(--paper); }
+/* V6 Color Palette (Clean & Playful) */
+:root {
+    --color-v6-primary: #3772FF; /* Royal Blue */
+    --color-v6-primary-dark: #2B5AD9; /* Darker Royal Blue */
+    --color-v6-accent: #3ECF8E;  /* Emerald Green for Links/Action */
+    --color-v6-background: #F4F7FB; /* Soft Light Gray Background */
+    --color-v6-paper: #FFFFFF;
+    --color-v6-paper-bg: #FFFFFF; /* Pure white for card body */
+    --color-v6-soft-border: #E5E9F2; /* Light Border/Divider */
+    --color-v6-heading: #1A1D2B; /* Near Black */
+    --color-v6-muted: #6C7383; /* Soft Gray Text */
+    --color-v6-level-tag-bg: #E0EFFF; /* Very Light Blue Tag BG */
+    --color-v6-level-tag-text: #1E40AF; /* Dark Blue Tag Text */
+    --color-v6-shadow-light: rgba(60, 66, 87, 0.1);
+    --color-v6-shadow-deep: rgba(26, 29, 43, 0.1);
+}
 
-  /* Inputs (sky theme) */
-  .lp-input .input-group-text{
-    border-radius:.8rem 0 0 .8rem; border-right:0; background:#f8fafc; color:var(--sky-700);
-  }
-  .lp-input .form-control{ border-left:0; border-radius:0 .8rem .8rem 0; }
-  .lp-input .form-control:focus, .form-select.lp-input:focus{
-    border-color:var(--sky-400);
-    box-shadow:0 0 0 .25rem rgba(47,140,234,.15);
-  }
-  .form-select.lp-input{ border-radius:.8rem; }
+/* Utility Classes */
+.text-v6-primary { color: var(--color-v6-primary) !important; }
+.text-v6-primary-dark { color: var(--color-v6-primary-dark) !important; }
+.text-v6-heading { color: var(--color-v6-heading) !important; }
+.text-v6-muted { color: var(--color-v6-muted) !important; }
+.bg-v6-paper { background-color: var(--color-v6-paper-bg) !important; }
+.border-v6-soft { border-color: var(--color-v6-soft-border) !important; }
+.text-v6-link { color: var(--color-v6-accent) !important; }
+.truncate-2-lines {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-height: 2.8em; /* Ensure consistent height for two lines */
+}
 
-  /* Badges + buttons (sky) */
-  .lp-badge-lang{
-    background:var(--sky-50);
-    color:var(--sky-700);
-    border:1px solid var(--sky-200);
-    font-weight:600;
-  }
-  .btn-sky{
-    --bs-btn-color:#0b1224; --bs-btn-bg:var(--sky-200); --bs-btn-border-color:var(--sky-300);
-    --bs-btn-hover-bg:var(--sky-300); --bs-btn-hover-border-color:var(--sky-400);
-    --bs-btn-active-bg:var(--sky-400); --bs-btn-active-border-color:var(--sky-500);
-  }
-  .btn-sky-light{
-    --bs-btn-color:#0b1224; --bs-btn-bg:var(--sky-50); --bs-btn-border-color:var(--sky-100);
-    --bs-btn-hover-bg:var(--sky-100); --bs-btn-hover-border-color:var(--sky-200);
-  }
+/* --- HEADER STYLES V6 --- */
+.v6-section-title {
+    font-size: 2rem;
+    color: var(--color-v6-heading);
+    line-height: 1.1;
+    font-weight: 800; /* Extra bold */
+}
+.v6-section-p {
+    font-size: 1rem;
+    color: var(--color-v6-muted) !important;
+}
 
-  /* Story cards */
-  .lp-story-card{
-    border:1px solid var(--border);
-    border-radius:14px;
-    transition:transform .1s ease, box-shadow .2s ease, border-color .2s ease;
-  }
-  .lp-story-card:hover{
-    transform:translateY(-2px);
-    box-shadow:0 10px 24px rgba(2,6,23,.08);
-    border-color:var(--sky-200);
-  }
-  .lp-story-card .card-title{ font-weight:600; line-height:1.25; color: var(--sky-700); }
-  .lp-story-card:hover .card-title,
-  .lp-story-card a:focus-visible .card-title{ color: var(--sky-600); }
-  .lp-story-card a.stretched-link:focus-visible{
-    outline: 3px solid rgba(47,140,234,.30);
-    outline-offset: 2px; border-radius: 8px;
-  }
-  .lp-story-card a.text-decoration-none{ color: inherit; }
-  .lp-story-card .btn-outline-secondary{ border-color:var(--border); }
-  .lp-story-card .btn-outline-secondary:hover{
-    border-color:var(--sky-300); color:var(--sky-700); background:var(--sky-50);
-  }
+/* --- BOOK CARD STYLES V6 --- */
 
-  /* Footer controls above stretched-link */
-  .lp-story-card .card-footer .btn,
-  .lp-story-card .card-footer form { position: relative; z-index: 5; }
+/* Card Wrapper (3D effect refinement) */
+.book-wrap-v6 {
+    perspective: 1200px;
+    transform-style: preserve-3d;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.book-wrap-v6:hover {
+    transform: translateY(-8px) rotateX(1deg) rotateY(-1deg);
+    /* Subtle glow on hover */
+    box-shadow: 0 15px 30px -10px rgba(55, 114, 255, 0.2);
+}
 
-  /* Danger outline */
-  .btn-outline-danger { border-color:#ef4444; }
-  .btn-outline-danger:hover { background:#fee2e2; color:#b91c1c; border-color:#f87171; }
+/* Library Card Styles V6 (The Book Cover) */
+.library-card-v6 {
+    background: var(--color-v6-paper);
+    border-radius: 18px !important;
+    /* Refined modern shadow (Soft, elevated look) */
+    box-shadow:
+        0 8px 16px var(--color-v6-shadow-light),
+        0 1px 2px var(--color-v6-shadow-deep);
+    transition: all 0.3s ease;
+    transform: translateZ(10px);
+}
+/* No 'Spine' effect for a flatter, more modern card look */
+/* Removed ::before pseudo-element */
+
+
+/* Cover Image Wrapper V6 (Aspect Ratio change for a sleeker look) */
+.library-card-img-wrap-v6 {
+    width: 100%;
+    padding-top: 100%; /* Square aspect ratio (1:1) is very modern */
+    background-size: cover;
+    background-position: center;
+    background-color: var(--color-v6-soft-border);
+    border-radius: 18px 18px 0 0 !important;
+    border-bottom: 3px solid var(--color-v6-soft-border);
+    position: relative;
+}
+/* Subtle overlay on image to make it pop */
+.library-card-img-wrap-v6::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.05); /* Very light dark overlay */
+    transition: background 0.3s;
+    border-radius: 18px 18px 0 0 !important;
+}
+.book-wrap-v6:hover .library-card-img-wrap-v6::after {
+    background: rgba(0, 0, 0, 0.02);
+}
+
+
+/* Card Body Title */
+.text-v6-title {
+    font-size: 1.35rem; /* Slightly larger, bold title */
+    line-height: 1.3;
+    color: var(--color-v6-heading);
+}
+
+/* Level/Language Tags V6 (Pill Shape, Clean Colors) */
+.v6-tag-level {
+    display: inline-block;
+    padding: 0.3rem 0.8rem;
+    border-radius: 50px; /* Full pill shape */
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    background-color: var(--color-v6-level-tag-bg);
+    color: var(--color-v6-level-tag-text);
+    transition: background-color 0.2s;
+}
+.v6-tag-level-accent {
+    background-color: #FCE7F6; /* Soft Pink */
+    color: #9D174D; /* Dark Pink */
+}
+
+/* Shared Status Badge V6 (More integrated look) */
+.tag-shared-v6 {
+    background-color: var(--color-v6-primary);
+    color: var(--color-v6-paper);
+    font-weight: 600;
+    padding: 0.3rem 0.75rem;
+    border-radius: 6px; /* Squarer, modern pill */
+    font-size: 0.75rem;
+    box-shadow: 0 4px 8px rgba(55, 114, 255, 0.2);
+}
+
+/* Admin Remove Button V6 (Subtle, professional) */
+.library-remove-btn-v6 {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    z-index: 20;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    font-size: 0.9rem;
+    background-color: #F87171 !important; /* Soft Red */
+    color: white;
+    border: none;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    border-radius: 50% !important;
+    opacity: 0.95;
+    transition: opacity 0.2s, transform 0.2s, background-color 0.2s;
+}
+.library-remove-btn-v6:hover {
+    opacity: 1;
+    transform: scale(1.08);
+    background-color: #DC2626 !important; /* Darker Red */
+}
 </style>
-
-<script>
-  (function(){
-    const grid   = document.getElementById('libGrid');
-    const wraps  = [...grid.querySelectorAll('.lib-wrap')];
-    const search = document.getElementById('libSearch');
-    const clear  = document.getElementById('libClear');
-    const sort   = document.getElementById('libSort');
-    const count  = document.getElementById('matchCount');
-
-    const norm = s => (s||'').toLowerCase();
-
-    function apply(){
-      const q = norm(search.value);
-      let visible = [];
-
-      wraps.forEach(w => {
-        const show = !q || w.dataset.title.includes(q) || w.dataset.author.includes(q) || w.dataset.keywords.includes(q);
-        w.style.display = show ? '' : 'none';
-        if (show) visible.push(w);
-      });
-
-      const sv = sort.value;
-      visible.sort((A,B) => {
-        if (sv === 'newest')  return new Date(B.dataset.created) - new Date(A.dataset.created);
-        if (sv === 'oldest')  return new Date(A.dataset.created) - new Date(B.dataset.created);
-        if (sv === 'title')   return A.dataset.title.localeCompare(B.dataset.title);
-        if (sv === 'author')  return A.dataset.author.localeCompare(B.dataset.author);
-        return 0;
-      });
-
-      visible.forEach(el => grid.appendChild(el));
-      if (count) count.textContent = visible.length;
-    }
-
-    apply();
-    search.addEventListener('input', apply);
-    sort.addEventListener('change', apply);
-    clear?.addEventListener('click', () => { search.value=''; search.focus(); apply(); });
-
-    // Delete modal
-    const deleteBtns = document.querySelectorAll('[data-delete]');
-    const modalEl = document.getElementById('deleteModal');
-    const titleEl = document.getElementById('deleteStoryTitle');
-    const formEl  = document.getElementById('deleteForm');
-
-    function stopAll(e){ e.preventDefault(); e.stopPropagation(); if (e.stopImmediatePropagation) e.stopImmediatePropagation(); }
-
-    deleteBtns.forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        stopAll(e);
-        const id = btn.getAttribute('data-draft-id');
-        const t  = btn.getAttribute('data-title') || 'This story';
-        titleEl.textContent = t;
-        formEl.setAttribute('action', "{{ url_for('library_delete_draft', draft_id=0) }}".replace('/0', '/' + id));
-        if (window.bootstrap && window.bootstrap.Modal) {
-          window.bootstrap.Modal.getOrCreateInstance(modalEl).show();
-        }
-      }, true);
-    });
-
-    modalEl?.querySelectorAll('[data-cancel]').forEach(el=> el.addEventListener('click', stopAll));
-  })();
-</script>
 
 {% endblock %}
