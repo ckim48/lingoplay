@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}EduWeaverPlay{% endblock %}</title>
+  <title>{% block title %}LexiTale{% endblock %}</title>
 
   <!-- Bootstrap 5 -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -29,7 +29,7 @@
 
     .brand-text{
       font-family:"Baloo 2";
-      font-size:1.45rem;
+      font-size:1.75rem;
       font-weight:600;
       color:#ff6b6b;
     }
@@ -231,8 +231,7 @@
   <div class="container">
 
     <a class="navbar-brand d-flex align-items-center gap-2" href="{{ url_for('index') }}">
-      <i class="bi bi-stars text-warning"></i>
-      <span class="brand-text">EduWeaverPlay</span>
+      <span class="brand-text">LexiTale</span>
     </a>
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
@@ -252,22 +251,25 @@
           <a class="nav-link" href="{{ url_for('library') }}">Library</a>
         </li>
 
+        {% if current_user and current_user.username != "testtest"%}
+        <li class="nav-item">
+          <a class="nav-link" href="{{ url_for('assignments_list') }}">Assignments</a>
+        </li>
+        {% endif %}
+
         {% if current_user %}
-          <li class="nav-item">
-            <a class="nav-link" href="{{ url_for('assignments_list') }}">Assignments</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="{{ url_for('word_scramble') }}">Word Scramble</a>
-          </li>
+        <li class="nav-item">
+          <a class="nav-link" href="{{ url_for('word_scramble') }}">Word Scramble</a>
+        </li>
         {% endif %}
 
         {% if current_user and current_user.username == "testtest" %}
         <li class="nav-item">
-          <a class="nav-link" href="{{ url_for('admin_stories') }}">Admin</a>
+          <a class="nav-link" href="{{ url_for('admin_stories') }}">Dashboard</a>
         </li>
         <li class="nav-item">
-  <a class="nav-link" href="{{ url_for('admin_analytics') }}">Analytics</a>
-</li>
+          <a class="nav-link" href="{{ url_for('admin_analytics') }}">Analytics</a>
+        </li>
         {% endif %}
 
         {% if current_user %}
@@ -291,7 +293,7 @@
 </div>
 
 <footer>
-  EduWeaverPlay · AI-powered Story Classroom
+  LexiTale · AI-powered Story Classroom
 </footer>
 
 <!-- FLOATING DICTIONARY BUTTON -->
@@ -353,10 +355,33 @@
 
     <!-- BOOKMARKS TAB -->
     <div id="dictTabBookmarks" style="display:none;">
-      <div class="dict-section-title">Bookmarks</div>
+
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <div class="dict-section-title mb-0">Bookmarks</div>
+        <select id="dictBookmarkSort"
+                class="form-select form-select-sm"
+                style="width:auto; min-width: 120px;">
+          <option value="asc" selected>A → Z</option>
+          <option value="desc">Z → A</option>
+        </select>
+      </div>
+
       <ul class="dict-list" id="dictBookmarkList"></ul>
+
       <div class="dict-empty" id="dictBookmarkEmpty" style="display:none;">
         No bookmarks yet. Tap the ★ button after a search to save it.
+      </div>
+
+      <div class="d-flex justify-content-between align-items-center mt-2">
+        <button class="btn btn-sm btn-outline-secondary"
+                id="dictBookmarkPrev">
+          &laquo; Prev
+        </button>
+        <div class="small text-muted" id="dictBookmarkPaginationInfo"></div>
+        <button class="btn btn-sm btn-outline-secondary"
+                id="dictBookmarkNext">
+          Next &raquo;
+        </button>
       </div>
     </div>
   </div>
@@ -386,6 +411,10 @@
 
   const bookmarkList = document.getElementById('dictBookmarkList');
   const bookmarkEmpty = document.getElementById('dictBookmarkEmpty');
+  const bookmarkSortSelect = document.getElementById('dictBookmarkSort');
+  const bookmarkPrevBtn = document.getElementById('dictBookmarkPrev');
+  const bookmarkNextBtn = document.getElementById('dictBookmarkNext');
+  const bookmarkPaginationInfo = document.getElementById('dictBookmarkPaginationInfo');
 
   const APIs = {
     search: "{{ url_for('api_dict_search') }}",
@@ -397,6 +426,12 @@
 
   let direction = 'en_ko';
   let currentLookupId = null;
+
+  // Bookmarks state for sorting & paging
+  let bookmarkItems = [];
+  let bookmarkSortDir = 'asc'; // 'asc' or 'desc'
+  let bookmarkPage = 1;
+  const BOOKMARKS_PER_PAGE = 5;
 
   function openDrawer(){
     drawer.classList.add('open');
@@ -448,7 +483,7 @@
     });
   });
 
-  // Search
+  // Search result render
   function renderResult(data){
     currentLookupId = data.lookup_id || null;
     const r = data.result || {};
@@ -479,6 +514,7 @@
     }
   }
 
+  // Search
   async function doSearch(){
     const q = (queryInput.value || '').trim();
     if (!q) return;
@@ -523,19 +559,24 @@
     }
   });
 
-  // History
+  // === HISTORY: show top 5 recent words ===
   async function loadHistory(){
     try{
       const res = await fetch(APIs.history);
       if (!res.ok) throw new Error();
       const data = await res.json();
       historyList.innerHTML = '';
-      if (!data.items || !data.items.length){
+
+      const items = data.items || [];
+      const latest = items.slice(0, 5);  // Top 5 only
+
+      if (!latest.length){
         historyEmpty.style.display = 'block';
         return;
       }
       historyEmpty.style.display = 'none';
-      data.items.forEach(item=>{
+
+      latest.forEach(item=>{
         const li = document.createElement('li');
         li.innerHTML = `
           <div>
@@ -590,38 +631,104 @@
     });
   }
 
-  // Bookmarks
+  // === BOOKMARKS: load, sort (A–Z / Z–A), paginate ===
   async function loadBookmarks(){
     try{
       const res = await fetch(APIs.bookmarks);
       if (!res.ok) throw new Error();
       const data = await res.json();
-      bookmarkList.innerHTML = '';
-      if (!data.items || !data.items.length){
-        bookmarkEmpty.style.display = 'block';
-        return;
-      }
-      bookmarkEmpty.style.display = 'none';
-      data.items.forEach(item=>{
-        const li = document.createElement('li');
-        li.innerHTML = `
-          <div>
-            <div class="dict-list-word">${item.query}</div>
-            <div class="dict-list-meta">${item.translation || ''}</div>
-          </div>
-          <button class="btn btn-sm btn-outline-danger" data-lookup-id="${item.id}">
-            <i class="bi bi-trash"></i>
-          </button>
-        `;
-        li.querySelector('button').addEventListener('click', ()=>toggleBookmark(item.id));
-        bookmarkList.appendChild(li);
-      });
+
+      bookmarkItems = data.items || [];
       bookmarkList.dataset.loaded = '1';
+      bookmarkPage = 1;           // reset to first page
+      renderBookmarks();
     }catch(err){
       console.error(err);
     }
   }
 
+  function renderBookmarks(){
+    bookmarkList.innerHTML = '';
+
+    if (!bookmarkItems.length){
+      bookmarkEmpty.style.display = 'block';
+      if (bookmarkPaginationInfo) bookmarkPaginationInfo.textContent = '';
+      if (bookmarkPrevBtn) bookmarkPrevBtn.disabled = true;
+      if (bookmarkNextBtn) bookmarkNextBtn.disabled = true;
+      return;
+    }
+    bookmarkEmpty.style.display = 'none';
+
+    // Sort by query (A→Z or Z→A)
+    const sorted = [...bookmarkItems].sort((a,b)=>{
+      const qa = (a.query || '').toLowerCase();
+      const qb = (b.query || '').toLowerCase();
+      if (qa < qb) return bookmarkSortDir === 'asc' ? -1 : 1;
+      if (qa > qb) return bookmarkSortDir === 'asc' ?  1 : -1;
+      return 0;
+    });
+
+    const totalPages = Math.max(1, Math.ceil(sorted.length / BOOKMARKS_PER_PAGE));
+    if (bookmarkPage > totalPages) bookmarkPage = totalPages;
+
+    const start = (bookmarkPage - 1) * BOOKMARKS_PER_PAGE;
+    const pageItems = sorted.slice(start, start + BOOKMARKS_PER_PAGE);
+
+    pageItems.forEach(item=>{
+      const li = document.createElement('li');
+      li.innerHTML = `
+        <div>
+          <div class="dict-list-word">${item.query}</div>
+          <div class="dict-list-meta">${item.translation || ''}</div>
+        </div>
+        <button class="btn btn-sm btn-outline-danger" data-lookup-id="${item.id}">
+          <i class="bi bi-trash"></i>
+        </button>
+      `;
+      li.querySelector('button').addEventListener('click', ()=>toggleBookmark(item.id));
+      bookmarkList.appendChild(li);
+    });
+
+    if (bookmarkPaginationInfo){
+      bookmarkPaginationInfo.textContent = `Page ${bookmarkPage} of ${totalPages}`;
+    }
+    if (bookmarkPrevBtn){
+      bookmarkPrevBtn.disabled = bookmarkPage <= 1;
+    }
+    if (bookmarkNextBtn){
+      bookmarkNextBtn.disabled = bookmarkPage >= totalPages;
+    }
+  }
+
+  // Sort control
+  if (bookmarkSortSelect){
+    bookmarkSortSelect.addEventListener('change', ()=>{
+      bookmarkSortDir = bookmarkSortSelect.value === 'desc' ? 'desc' : 'asc';
+      bookmarkPage = 1;
+      renderBookmarks();
+    });
+  }
+
+  // Pagination controls
+  if (bookmarkPrevBtn){
+    bookmarkPrevBtn.addEventListener('click', ()=>{
+      if (bookmarkPage > 1){
+        bookmarkPage--;
+        renderBookmarks();
+      }
+    });
+  }
+  if (bookmarkNextBtn){
+    bookmarkNextBtn.addEventListener('click', ()=>{
+      const totalPages = Math.max(1, Math.ceil((bookmarkItems.length || 0) / BOOKMARKS_PER_PAGE));
+      if (bookmarkPage < totalPages){
+        bookmarkPage++;
+        renderBookmarks();
+      }
+    });
+  }
+
+  // Toggle bookmark (also refresh bookmark list)
   async function toggleBookmark(id, btnEl){
     if (!id) return;
     try{
@@ -643,7 +750,7 @@
           btnEl.innerHTML = '<i class="bi bi-star"></i>';
         }
       }
-      // Refresh bookmarks silently
+      // Refresh bookmarks silently after any toggle
       await loadBookmarks();
     }catch(err){
       console.error(err);
@@ -654,6 +761,5 @@
 </script>
 {% endif %}
 
-{% block scripts %}{% endblock %}
 </body>
 </html>

@@ -2,159 +2,288 @@
 {% block title %}Story Review · EduWeaver Admin{% endblock %}
 
 {% block content %}
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Baloo+2:wght@700;800&display=swap" rel="stylesheet">
+
+{% set active_tab = request.args.get('tab') or 'stories' %}
+{% set fragment = request.args.get('fragment') or '' %}
 
 <div class="admin-stories-wrap-v2 mt-3 mt-md-4">
-  <div class="card admin-stories-card-v2 border-0 shadow-lg rounded-5 custom-card-glow">
-    <div class="card-body p-3 p-md-4">
-      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3 mb-md-4">
-        <div class="d-flex align-items-center gap-2">
-          <div class="admin-pill-icon-v2">
-            <i class="bi bi-stars"></i>
-          </div>
-          <div>
-            <h4 class="mb-1 fw-bolder text-deep-blue">Generated Stories</h4>
-            <p class="mb-0 text-muted small">
-              Review AI stories, assign them to students, and manage Library sharing.
-            </p>
-          </div>
+  <div class="p-3 p-md-4">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3 mb-md-4">
+      <div class="d-flex align-items-center gap-3">
+        <div class="admin-pill-icon-v7">
+          <i class="bi bi-stars"></i>
         </div>
         <div>
-          <a href="{{ url_for('story_new') }}" class="btn btn-sm btn-action-primary rounded-pill shadow-sm">
-            <i class="bi bi-plus-lg me-1"></i> New Story
-          </a>
+          <h1 class="mb-1 fw-bolder admin-title-v7">Admin Dashboard</h1>
+          <p class="mb-0 text-muted small admin-text-body">
+            Review AI stories, manage assignments, and grade student submissions.
+          </p>
         </div>
       </div>
-
-      {% if stories %}
-      <div class="table-responsive admin-table-shell-v2 p-5">
-        <table class="table align-middle mb-0 story-table-v2">
-          <thead class="small text-muted">
-            <tr>
-              <th scope="col" class="table-th-padding">Title</th>
-              <th scope="col" class="d-none d-md-table-cell table-th-padding">Prompt / Target words</th>
-              <th scope="col" class="table-th-padding">Lang / Level</th>
-              <th scope="col" class="d-none d-md-table-cell table-th-padding">Author</th>
-              <th scope="col" class="table-th-padding">Created</th>
-              <th scope="col" class="text-end table-th-padding">Actions / Status</th>
-            </tr>
-          </thead>
-          <tbody>
-          {% for s in stories %}
-            {% set draft = draft_map.get(s.id) %}
-            {% set can_finish = draft and not draft.completion_text %}
-            {% set can_mcq = draft and draft.completion_text %}
-            {% set assigned_cnt = (assign_map.get(s.id) if assign_map is defined else 0) or 0 %}
-            {% set mcq_ready = s.mcq_questions_json is not none and (s.mcq_questions_json|string)|length > 2 %}
-            <tr>
-              <td onclick="window.location='{{ url_for('admin_story_detail', slug=s.slug) }}'" role="button" class="table-td-padding">
-                <div class="fw-bold text-truncate text-deep-blue" title="{{ s.title }}">{{ s.title }}</div>
-              </td>
-              <td class="d-none d-md-table-cell table-td-padding" onclick="window.location='{{ url_for('admin_story_detail', slug=s.slug) }}'" role="button">
-                <span class="text-secondary-light small">
-                  {{ s.prompt[:64] }}{% if s.prompt|length > 64 %}…{% endif %}
-                </span>
-              </td>
-              <td onclick="window.location='{{ url_for('admin_story_detail', slug=s.slug) }}'" role="button" class="table-td-padding">
-                <div class="story-tag tag-lang">{{ s.language|upper }}</div>
-                <div class="story-tag tag-level">{{ s.level }}</div>
-              </td>
-              <td class="d-none d-md-table-cell table-td-padding" onclick="window.location='{{ url_for('admin_story_detail', slug=s.slug) }}'" role="button">
-                <span class="small text-secondary-light">{{ s.author_name }}</span>
-              </td>
-              <td onclick="window.location='{{ url_for('admin_story_detail', slug=s.slug) }}'" role="button" class="table-td-padding">
-                <span class="small text-secondary-light">{{ s.created_at|dt("%Y-%m-%d %H:%M") }}</span>
-              </td>
-
-              <td class="text-end table-td-padding">
-                <div class="d-flex flex-column align-items-end gap-2 mb-2">
-
-                  {# MCQ generate button: only if story is fully completed and MCQs not yet ready #}
-                  {% if can_mcq and not mcq_ready %}
-                  <form method="post"
-                        action="{{ url_for('admin_generate_mcq', slug=s.slug) }}"
-                        class="mcq-gen-form">
-                    <button type="submit"
-                            class="btn btn-sm rounded-pill btn-action-secondary-outline btn-mcq-gen">
-                      <i class="bi bi-question-circle me-1"></i>
-                      Generate MCQ
-                    </button>
-                  </form>
-                  {% endif %}
-
-                  <button
-                    type="button"
-                    class="btn btn-sm rounded-pill btn-action-secondary-outline"
-                    data-bs-toggle="modal"
-                    data-bs-target="#assignModal"
-                    data-story-title="{{ s.title }}"
-                    data-assign-url="{{ url_for('admin_assign_story', slug=s.slug) }}"
-                    data-can-finish="{{ 1 if can_finish else 0 }}"
-                    data-can-mcq="{{ 1 if can_mcq else 0 }}"
-                    data-mcq-ready="{{ 1 if mcq_ready else 0 }}"
-                    {% if not draft %}disabled{% endif %}
-                  >
-                    <i class="bi bi-person-check me-1"></i>
-                    Assign
-                  </button>
-
-                  {% if s.is_shared_library %}
-                  <button
-                    type="button"
-                    class="btn btn-sm rounded-pill btn-action-danger-outline btn-share-library"
-                    data-bs-toggle="modal"
-                    data-bs-target="#shareModal"
-                    data-story-title="{{ s.title }}"
-                    data-share-url="{{ url_for('admin_unshare_story', slug=s.slug) }}"
-                    data-share-mode="unshare"
-                  >
-                    <i class="bi bi-bookmark-dash me-1"></i>
-                    Unshare
-                  </button>
-                  {% else %}
-                  <button
-                    type="button"
-                    class="btn btn-sm rounded-pill btn-action-success-outline btn-share-library"
-                    data-bs-toggle="modal"
-                    data-bs-target="#shareModal"
-                    data-story-title="{{ s.title }}"
-                    data-share-url="{{ url_for('admin_share_story', slug=s.slug) }}"
-                    data-share-mode="share"
-                  >
-                    <i class="bi bi-bookmark-plus me-1"></i>
-                    Share
-                  </button>
-                  {% endif %}
-                </div>
-
-                <div class="small mt-1 d-flex flex-column align-items-end gap-1">
-                  <span class="status-pill status-assigned-{{ 'yes' if assigned_cnt > 0 else 'no' }}">
-                    {% if assigned_cnt > 0 %}
-                      Assigned to {{ assigned_cnt }} student{% if assigned_cnt > 1 %}s{% endif %}
-                    {% else %}
-                      Not assigned
-                    {% endif %}
-                  </span>
-                </div>
-              </td>
-            </tr>
-          {% endfor %}
-          </tbody>
-        </table>
+      <div>
+        <a href="{{ url_for('story_new') }}" class="btn btn-sm btn-action-primary-v7 rounded-pill shadow-sm admin-text-button">
+          <i class="bi bi-plus-lg me-1"></i> New Story
+        </a>
       </div>
-      {% else %}
-      <div class="py-4 text-center text-muted small">
-        No stories yet. Try creating one from the <a href="{{ url_for('story_new') }}">AI Story Generator</a>.
-      </div>
-      {% endif %}
     </div>
+
+    <ul class="nav nav-pills mb-4 gap-2" id="adminTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <a class="nav-link {% if active_tab == 'stories' %}active{% endif %}"
+               id="stories-tab" data-bs-toggle="pill"
+               href="#stories-pane" role="tab" aria-controls="stories-pane"
+               aria-selected="{{ 'true' if active_tab == 'stories' else 'false' }}"
+               href="{{ url_for('admin_stories', tab='stories') }}">
+                <i class="bi bi-book-fill me-1"></i> Generated Stories
+            </a>
+        </li>
+        <li class="nav-item" role="presentation">
+            <a class="nav-link {% if active_tab == 'review' %}active{% endif %}"
+               id="review-tab" data-bs-toggle="pill"
+               href="#review-pane" role="tab" aria-controls="review-pane"
+               aria-selected="{{ 'true' if active_tab == 'review' else 'false' }}"
+               href="{{ url_for('admin_stories', tab='review') }}">
+                <i class="bi bi-pen-fill me-1"></i> Review Submissions
+
+            </a>
+        </li>
+    </ul>
+    <div class="tab-content" id="adminTabsContent">
+
+      <div class="tab-pane fade {% if active_tab == 'stories' %}show active{% endif %}" id="stories-pane" role="tabpanel" aria-labelledby="stories-tab">
+        {% if stories %}
+        <div class="admin-table-shell-v7">
+          {# INCREASED PADDING ON THE SHELL CONTAINER #}
+          <div class="table-responsive p-0 table-padding-outer">
+            <table class="table align-middle mb-0 story-table-v7">
+              <thead class="small admin-text-body">
+                <tr>
+                  <th scope="col" class="table-th-padding">Title</th>
+                  <th scope="col" class="d-none d-md-table-cell table-th-padding">Prompt / Target words</th>
+                  <th scope="col" class="table-th-padding">Lang / Level</th>
+                  <th scope="col" class="d-none d-md-table-cell table-th-padding">Author</th>
+                  <th scope="col" class="table-th-padding">Created</th>
+                  <th scope="col" class="text-end table-th-padding">Actions / Status</th>
+                </tr>
+              </thead>
+              <tbody>
+              {% for s in stories %}
+                {% set draft = draft_map.get(s.id) %}
+                {% set can_finish = draft and not draft.completion_text %}
+                {% set can_mcq = draft and draft.completion_text %}
+                {% set assigned_cnt = (assign_map.get(s.id) if assign_map is defined else 0) or 0 %}
+                {% set mcq_ready = s.mcq_questions_json is not none and (s.mcq_questions_json|string)|length > 2 %}
+                <tr>
+                  <td onclick="window.location='{{ url_for('admin_story_detail', slug=s.slug) }}'" role="button" class="table-td-padding">
+                    <div class="fw-bold text-coral-dark admin-text-body" title="{{ s.title }}">{{ s.title }}</div>
+                  </td>
+                  <td class="d-none d-md-table-cell table-td-padding" onclick="window.location='{{ url_for('admin_story_detail', slug=s.slug) }}'" role="button">
+                    <span class="text-muted small admin-text-body">
+                      {{ s.prompt[:64] }}{% if s.prompt|length > 64 %}…{% endif %}
+                    </span>
+                  </td>
+                  <td onclick="window.location='{{ url_for('admin_story_detail', slug=s.slug) }}'" role="button" class="table-td-padding">
+                    <div class="story-tags-wrap">
+                      <div class="story-tag tag-lang-v7 admin-text-tag">{{ s.language|upper }}</div>
+                      <div class="story-tag tag-level-v7 admin-text-tag">{{ s.level }}</div>
+                    </div>
+                  </td>
+                  <td class="d-none d-md-table-cell table-td-padding" onclick="window.location='{{ url_for('admin_story_detail', slug=s.slug) }}'" role="button">
+                    <span class="small text-muted admin-text-body">{{ s.author_name }}</span>
+                  </td>
+                  <td onclick="window.location='{{ url_for('admin_story_detail', slug=s.slug) }}'" role="button" class="table-td-padding">
+                    <span class="small text-muted admin-text-body">{{ s.created_at|dt("%Y-%m-%d %H:%M") }}</span>
+                  </td>
+
+                  <td class="text-end table-td-padding">
+                    <div class="d-flex flex-column align-items-end gap-2 mb-2">
+
+                      {# MCQ generate button: only if story is fully completed and MCQs not yet ready #}
+                      {% if can_mcq and not mcq_ready %}
+                      <form method="post"
+                            action="{{ url_for('admin_generate_mcq', slug=s.slug) }}"
+                            class="mcq-gen-form">
+                        <button type="submit"
+                                class="btn btn-sm rounded-pill btn-action-outline-v7 admin-text-button btn-mcq-gen">
+                          <i class="bi bi-question-circle me-1"></i>
+                          Generate MCQ
+                        </button>
+                      </form>
+                      {% endif %}
+
+                      <button
+                        type="button"
+                        class="btn btn-sm rounded-pill btn-action-outline-v7 admin-text-button"
+                        data-bs-toggle="modal"
+                        data-bs-target="#assignModal"
+                        data-story-title="{{ s.title }}"
+                        data-assign-url="{{ url_for('admin_assign_story', slug=s.slug) }}"
+                        data-can-finish="{{ 1 if can_finish else 0 }}"
+                        data-can-mcq="{{ 1 if can_mcq else 0 }}"
+                        data-mcq-ready="{{ 1 if mcq_ready else 0 }}"
+                        {% if not draft %}disabled{% endif %}
+                      >
+                        <i class="bi bi-person-check me-1"></i>
+                        Assign
+                      </button>
+
+                      {% if s.is_shared_library %}
+                      <button
+                        type="button"
+                        class="btn btn-sm rounded-pill btn-action-danger-outline-v7 admin-text-button btn-share-library"
+                        data-bs-toggle="modal"
+                        data-bs-target="#shareModal"
+                        data-story-title="{{ s.title }}"
+                        data-share-url="{{ url_for('admin_unshare_story', slug=s.slug) }}"
+                        data-share-mode="unshare"
+                      >
+                        <i class="bi bi-bookmark-dash me-1"></i>
+                        Unshare
+                      </button>
+                      {% else %}
+                      <button
+                        type="button"
+                        class="btn btn-sm rounded-pill btn-action-success-outline-v7 admin-text-button btn-share-library"
+                        data-bs-toggle="modal"
+                        data-bs-target="#shareModal"
+                        data-story-title="{{ s.title }}"
+                        data-share-url="{{ url_for('admin_share_story', slug=s.slug) }}"
+                        data-share-mode="share"
+                      >
+                        <i class="bi bi-bookmark-plus me-1"></i>
+                        Share
+                      </button>
+                      {% endif %}
+                    </div>
+
+                    <div class="small mt-1 d-flex flex-column align-items-end gap-1">
+                      <span class="status-pill status-assigned-v7-{{ 'yes' if assigned_cnt > 0 else 'no' }}">
+                        {% if assigned_cnt > 0 %}
+                          Assigned to {{ assigned_cnt }} student{% if assigned_cnt > 1 %}s{% endif %}
+                        {% else %}
+                          Not assigned
+                        {% endif %}
+                      </span>
+                    </div>
+                  </td>
+                </tr>
+              {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        {% else %}
+        <div class="py-4 text-center text-muted small admin-text-body">
+          No stories yet. Try creating one from the <a href="{{ url_for('story_new') }}">AI Story Generator</a>.
+        </div>
+        {% endif %}
+      </div>
+      <div class="tab-pane fade {% if active_tab == 'review' %}show active{% endif %}" id="review-pane" role="tabpanel" aria-labelledby="review-tab">
+        <h2 class="fw-bold mb-3 admin-title-v7" style="font-size: 1.75rem;">
+          Assignment Grading <i class="bi bi-award"></i>
+        </h2>
+
+        {% if submissions_to_review %}
+
+          <div class="accordion accordion-flush admin-table-shell-v7" id="submissionsAccordion">
+            {% for sub in submissions_to_review %}
+            {% set submission_id = sub.submission_id %}
+            {% set is_open = (fragment == 'submission-' ~ submission_id) %}
+            <div class="accordion-item">
+              <h2 class="accordion-header" id="heading-{{ submission_id }}">
+                <button class="accordion-button {% if not is_open %}collapsed{% endif %} fw-bold admin-text-title" type="button" data-bs-toggle="collapse"
+                        data-bs-target="#collapse-{{ submission_id }}" aria-expanded="{{ 'true' if is_open else 'false' }}" aria-controls="collapse-{{ submission_id }}">
+
+                  <div class="d-flex align-items-center justify-content-between w-100 pe-3">
+                    <span class="text-coral-dark">
+                        {{ sub.assignee_username }}
+                        <span class="text-muted fw-normal small"> · {{ sub.story_title }}</span>
+                    </span>
+
+                    <div class="d-flex gap-2 align-items-center">
+                        {% if sub.current_score is not none %}
+                            <span class="badge bg-success-v7 admin-text-body">Score: {{ sub.current_score|int }}%</span>
+                        {% endif %}
+                        <span class="status-pill admin-text-body" style="background: {{ sub.review_status_color }}; color: #fff;">
+                            {{ sub.review_status_label }}
+                        </span>
+                    </div>
+                  </div>
+                </button>
+              </h2>
+              <div id="collapse-{{ submission_id }}" class="accordion-collapse collapse {% if is_open %}show{% endif %}" aria-labelledby="heading-{{ submission_id }}" data-bs-parent="#submissionsAccordion">
+                <div class="accordion-body p-4">
+                  <div class="row g-4">
+
+                    <div class="col-md-7">
+                      <h5 class="fw-bold text-coral-dark mb-3 admin-text-title" style="font-size: 1.2rem;">Student's Completed Story</h5>
+
+                      <div class="bg-light-soft-blue-v7 rounded-3 p-3 mb-3 small admin-text-body">
+                          <p class="mb-0 text-muted">Submitted: {{ sub.submitted_at|dt("%Y-%m-%d %H:%M") }}</p>
+                          <p class="mb-0 text-muted">Assignment: {{ sub.assignment_title }}</p>
+                      </div>
+
+                      <div class="border rounded-3 p-3 bg-white admin-text-body" style="border-left: 4px solid var(--coral-main);">
+                        <p class="fw-bold text-decoration-underline text-coral-dark">Student's Ending:</p>
+                        <p class="mb-0" style="white-space: pre-wrap;">{{ sub.completion_text }}</p>
+                      </div>
+
+                      {% if sub.admin_comment %}
+                        <div class="alert alert-success-v7 mt-3 p-3 small admin-text-body">
+                            <p class="fw-bold mb-0">Previous Feedback:</p>
+                            <p class="mb-0" style="white-space: pre-wrap;">{{ sub.admin_comment }}</p>
+                        </div>
+                      {% endif %}
+
+                    </div>
+
+                    <div class="col-md-5">
+                      <h5 class="fw-bold text-coral-dark mb-3 admin-text-title" style="font-size: 1.2rem;">Leave Feedback</h5>
+
+                      <form method="POST" action="{{ url_for('admin_review_submission', submission_id=submission_id) }}">
+
+                        <div class="mb-3">
+                          <label for="score-{{ submission_id }}" class="form-label admin-text-label">Score (0-100%)</label>
+                          <input type="number" step="1" min="0" max="100" class="form-control rounded-3 admin-text-body" id="score-{{ submission_id }}" name="score"
+                                 value="{{ sub.current_score|int if sub.current_score is not none else 100 }}" required>
+                        </div>
+
+                        <div class="mb-3">
+                          <label for="comment-{{ submission_id }}" class="form-label admin-text-label">Comments / Feedback</label>
+                          <textarea class="form-control rounded-3 admin-text-body" id="comment-{{ submission_id }}" name="comment" rows="5" placeholder="Great vocabulary use! Be careful with past tense verbs.">{{ sub.admin_comment }}</textarea>
+                        </div>
+
+                        <button type="submit" class="btn btn-action-primary-v7 rounded-pill shadow-sm admin-text-button w-100">
+                          <i class="bi bi-save me-1"></i> Save Grade & Comment
+                        </button>
+                      </form>
+                    </div>
+
+                  </div>
+                </div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+
+        {% else %}
+          <div class="alert alert-success aa-card p-4 text-center admin-text-body">
+            <i class="bi bi-check-circle-fill me-1"></i> All submitted finish-writing assignments have been reviewed!
+          </div>
+        {% endif %}
+      </div>
+      </div>
+
+
   </div>
 </div>
 
 <div class="modal fade" id="assignModal" tabindex="-1" aria-labelledby="assignModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered modal-lg">
-    <div class="modal-content rounded-5 modal-content-v2">
+    <div class="modal-content rounded-5 modal-content-v7">
       <div class="modal-header border-0 pb-0">
-        <h5 class="modal-title fw-semibold text-deep-blue" id="assignModalLabel">
+        <h5 class="modal-title fw-semibold text-coral-dark admin-text-title" id="assignModalLabel">
           Assign Story
         </h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -164,111 +293,111 @@
         <div class="modal-body pt-2">
 
           <div class="mb-3">
-            <label class="form-label small text-uppercase fw-bold text-secondary-light mb-1">
+            <label class="form-label small text-uppercase fw-bold text-muted mb-1 admin-text-label">
               Assignment Title
             </label>
             <input type="text"
-                   class="form-control form-control-sm rounded-3"
+                   class="form-control form-control-sm rounded-3 admin-text-body"
                    name="assignment_title"
                    id="assignTitleInput"
                    placeholder="e.g. Week 2 · Reading Quiz">
-            <div class="form-text small text-muted">
+            <div class="form-text small text-muted admin-text-body">
               Shown on the student's assignment page.
             </div>
           </div>
 
-          <div class="mb-3 p-3 rounded-4 bg-light-soft-blue">
-            <label class="form-label small text-uppercase fw-bold text-deep-blue mb-2">
+          <div class="mb-3 p-3 rounded-4 bg-light-soft-blue-v7">
+            <label class="form-label small text-uppercase fw-bold text-coral-dark mb-2 admin-text-label">
               Assignment Type
             </label>
             <div class="d-flex flex-column gap-2">
               <div class="form-check">
-                <input class="form-check-input" type="radio" name="assignment_type"
+                <input class="form-check-input check-coral-v7" type="radio" name="assignment_type"
                        id="assignTypeFinish" value="finish">
-                <label class="form-check-label fw-medium" for="assignTypeFinish">
+                <label class="form-check-label fw-medium admin-text-body" for="assignTypeFinish">
                   Finish writing (students complete the ending)
                 </label>
               </div>
               <div class="form-check">
-                <input class="form-check-input" type="radio" name="assignment_type"
+                <input class="form-check-input check-coral-v7" type="radio" name="assignment_type"
                        id="assignTypeMcq" value="mcq">
-                <label class="form-check-label fw-medium" for="assignTypeMcq">
+                <label class="form-check-label fw-medium admin-text-body" for="assignTypeMcq">
                   Reading comprehension MCQ (fully AI-completed story)
                 </label>
               </div>
             </div>
-            <div class="small text-warning-v2 mt-2" id="assignTypeHint"></div>
+            <div class="small text-warning-v7 mt-2 admin-text-body" id="assignTypeHint"></div>
           </div>
 
           <div class="mb-2">
-            <label class="form-label small text-uppercase fw-bold text-secondary-light mb-1">
+            <label class="form-label small text-uppercase fw-bold text-muted mb-1 admin-text-label">
               Select Students
             </label>
 
             {% if users %}
-            <div class="border rounded-4 p-3 admin-student-list-v2">
+            <div class="border rounded-4 p-3 admin-student-list-v7">
               {% for u in users %}
               <div class="form-check small mb-1">
-                <input class="form-check-input" type="checkbox"
+                <input class="form-check-input check-coral-v7" type="checkbox"
                        name="user_ids" value="{{ u.id }}"
                        id="assign_user_{{ u.id }}">
-                <label class="form-check-label fw-medium" for="assign_user_{{ u.id }}">
+                <label class="form-check-label fw-medium admin-text-body" for="assign_user_{{ u.id }}">
                   {{ u.username }}
-                  <span class="text-secondary-light">· {{ u.email }}</span>
+                  <span class="text-muted">· {{ u.email }}</span>
                 </label>
               </div>
               {% endfor %}
             </div>
-            <div class="form-text small text-muted mt-1">Assign this story to one or more students.</div>
+            <div class="form-text small text-muted mt-1 admin-text-body">Assign this story to one or more students.</div>
             {% else %}
-            <p class="small text-muted mb-0">No students found. Ask students to sign up first.</p>
+            <p class="small text-muted mb-0 admin-text-body">No students found. Ask students to sign up first.</p>
             {% endif %}
           </div>
         </div>
 
         <div class="modal-footer border-0 d-flex justify-content-between pt-0">
-          <button type="button" class="btn btn-outline-secondary rounded-pill" data-bs-dismiss="modal">
+          <button type="button" class="btn btn-outline-secondary rounded-pill admin-text-button" data-bs-dismiss="modal">
             Cancel
           </button>
-          <button type="submit" class="btn btn-action-primary rounded-pill shadow-sm">
+          <button type="submit" class="btn btn-action-primary-v7 rounded-pill shadow-sm admin-text-button">
             <i class="bi bi-send me-1"></i> Assign Story
           </button>
         </div>
       </form>
     </div>
-    <p class="small text-muted mt-2 mb-0 text-center">Story: <span class="fw-bold text-deep-blue" id="assignStoryTitle"></span></p>
+    <p class="small text-muted mt-2 mb-0 text-center admin-text-body">Story: <span class="fw-bold text-coral-dark" id="assignStoryTitle"></span></p>
   </div>
 </div>
 
 <div class="modal fade" id="shareModal" tabindex="-1" aria-labelledby="shareModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content rounded-5 modal-content-v2">
+    <div class="modal-content rounded-5 modal-content-v7">
       <div class="modal-header border-0 pb-0">
-        <h5 class="modal-title fw-semibold text-deep-blue" id="shareModalLabel">Share to Library</h5>
+        <h5 class="modal-title fw-semibold text-coral-dark admin-text-title" id="shareModalLabel">Share to Library</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <form id="shareForm" method="post" class="share-gen-form">
         <div class="modal-body">
-          <p class="small text-muted mb-2 pb-2">
-            Story: <span class="fw-bold text-deep-blue" id="shareStoryTitle"></span>
+          <p class="small text-muted mb-2 pb-2 admin-text-body">
+            Story: <span class="fw-bold text-coral-dark" id="shareStoryTitle"></span>
           </p>
-          <p class="small mb-0" id="shareBodyMain">
-            This will add the story to the <span class="fw-bold text-success">Library</span> so students can read it anytime.
+          <p class="small mb-0 admin-text-body" id="shareBodyMain">
+            This will add the story to the <span class="fw-bold text-success-v7">Library</span> so students can read it anytime.
           </p>
-          <p class="small text-muted mb-2" id="shareBodySub">
+          <p class="small text-muted mb-2 admin-text-body" id="shareBodySub">
             If this story has **no cover image**, a simple book-style cover will be generated automatically.
             **This process may take a few seconds.**
           </p>
-           <div class="d-flex align-items-center small text-secondary-light mt-2">
-             <i class="bi bi-image me-1 text-deep-blue"></i>
+           <div class="d-flex align-items-center small text-muted mt-2 admin-text-body">
+             <i class="bi bi-image me-1 text-coral-dark"></i>
              <span>All library stories must have a cover image.</span>
            </div>
         </div>
         <div class="modal-footer border-0 d-flex justify-content-between pt-0">
-          <button type="button" class="btn btn-outline-secondary rounded-pill" data-bs-dismiss="modal">
+          <button type="button" class="btn btn-outline-secondary rounded-pill admin-text-button" data-bs-dismiss="modal">
             Cancel
           </button>
-          <button type="submit" class="btn btn-success rounded-pill shadow-sm btn-share-submit" id="shareSubmitBtn">
+          <button type="submit" class="btn btn-success-v7 rounded-pill shadow-sm btn-share-submit admin-text-button" id="shareSubmitBtn">
             Share to Library
           </button>
         </div>
@@ -282,10 +411,10 @@
      class="position-fixed top-0 start-0 w-100 h-100 d-none"
      style="background: rgba(15,23,42,0.65); z-index: 1055;">
   <div class="d-flex flex-column align-items-center justify-content-center h-100">
-    <div class="spinner-grow text-white mb-3" role="status" style="width: 2.5rem; height: 2.5rem;">
+    <div class="spinner-grow text-coral-main mb-3" role="status" style="width: 2.5rem; height: 2.5rem;">
       <span class="visually-hidden">Loading...</span>
     </div>
-    <div class="text-white small fw-bold p-2 rounded-3" style="background: rgba(0,0,0,0.2);">
+    <div class="text-white small fw-bold p-2 rounded-3 admin-text-body" style="background: rgba(0,0,0,0.2);">
       <i class="bi bi-magic me-1"></i> Generating MCQ questions with AI…
     </div>
   </div>
@@ -296,260 +425,15 @@
      class="position-fixed top-0 start-0 w-100 h-100 d-none"
      style="background: rgba(15,23,42,0.65); z-index: 1056;">
   <div class="d-flex flex-column align-items-center justify-content-center h-100">
-    <div class="spinner-grow text-white mb-3" role="status" style="width: 2.5rem; height: 2.5rem;">
+    <div class="spinner-grow text-coral-main mb-3" role="status" style="width: 2.5rem; height: 2.5rem;">
       <span class="visually-hidden">Loading...</span>
     </div>
-    <div class="text-white small fw-bold p-2 rounded-3" style="background: rgba(0,0,0,0.2);">
+    <div class="text-white small fw-bold p-2 rounded-3 admin-text-body" style="background: rgba(0,0,0,0.2);">
       <i class="bi bi-book me-1"></i> Sharing to Library... Generating cover image if needed.
     </div>
   </div>
 </div>
 
-<style>
-/* New Color Palette & Variables */
-:root {
-  --color-primary-light: #FFB347; /* Sunny Orange */
-  --color-primary-dark: #FF8C00;  /* Deep Orange */
-  --color-deep-blue: #0A3D62;    /* Dark Text/Headings */
-  --color-secondary-light: #6C757D; /* Soft Gray */
-  --color-success-v2: #4CAF50;
-  --color-danger-v2: #F44336;
-  --color-warning-v2: #FFC107;
-  --color-light-blue: #E0F7FA; /* Light Blue background for table head/modal element */
-  --color-soft-yellow: #FFFBEA; /* Soft Yellow hover */
-  --table-padding-v2: 1.2rem; /* Consistent table cell padding */
-}
-
-/* Helper Classes */
-.text-deep-blue { color: var(--color-deep-blue) !important; }
-.text-secondary-light { color: var(--color-secondary-light) !important; }
-.bg-light-soft-blue { background-color: var(--color-light-blue) !important; }
-.text-warning-v2 { color: var(--color-warning-v2) !important; }
-.border-dashed { border-style: dashed !important; }
-
-/* Main Wrapper */
-.admin-stories-wrap-v2 {
-  max-width: 1300px;
-  margin-inline: auto;
-}
-
-/* Card Shell */
-.admin-stories-card-v2 {
-  /* Soft, playful gradient background */
-  background:
-    radial-gradient(circle at 10% 10%, rgba(255, 179, 71, 0.1) 0, transparent 40%),
-    radial-gradient(circle at 90% 90%, rgba(135, 206, 250, 0.1) 0, transparent 40%),
-    #ffffff;
-  overflow: hidden;
-  position: relative;
-  /* Lifted effect */
-  box-shadow: 0 1rem 3rem rgba(0,0,0,0.08), 0 0 0 1px rgba(0,0,0,0.02);
-}
-
-/* Custom Card Glow */
-.custom-card-glow::before {
-  content: '';
-  position: absolute;
-  top: -2px;
-  left: -2px;
-  right: -2px;
-  bottom: -2px;
-  background: linear-gradient(45deg, var(--color-primary-light), #87CEFA);
-  z-index: -1;
-  filter: blur(8px);
-  opacity: 0.3;
-  border-radius: 1.5rem;
-  transition: opacity 0.3s;
-}
-
-/* Header pill icon (v2) */
-.admin-pill-icon-v2 {
-  width: 48px;
-  height: 48px;
-  border-radius: 1rem;
-  /* More vibrant gradient */
-  background: linear-gradient(135deg, var(--color-primary-light), var(--color-primary-dark));
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.5rem;
-  color: #fff;
-  /* Playful shadow */
-  box-shadow: 0 0.5rem 1rem rgba(255, 140, 0, 0.35);
-}
-
-/* Action Primary Button (New Story / Assign) */
-.btn-action-primary {
-  background-color: var(--color-primary-dark);
-  border-color: var(--color-primary-dark);
-  color: #fff;
-  font-weight: 600;
-  padding: 0.4rem 1rem;
-  transition: all 0.2s;
-}
-.btn-action-primary:hover {
-  background-color: #ff9933;
-  border-color: #ff9933;
-  transform: translateY(-1px);
-}
-
-/* Table container (v2) */
-.admin-table-shell-v2 {
-  border-radius: 1.5rem;
-  overflow: hidden;
-  border: 1px solid rgba(135, 206, 250, 0.2); /* Soft blue border */
-  background: #ffffff;
-  box-shadow: 0 0.5rem 1.5rem rgba(0,0,0,0.04);
-}
-
-/* Table head (v2) */
-.story-table-v2 thead {
-  background: var(--color-light-blue); /* Light blue header */
-}
-.story-table-v2 thead th {
-  border-bottom: 0;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  font-size: 0.65rem;
-  color: var(--color-deep-blue);
-  /* Use class for uniform padding */
-}
-
-/* Table padding helper classes */
-.table-th-padding {
-    padding-top: 1rem !important;
-    padding-bottom: 1rem !important;
-}
-
-.table-td-padding {
-    padding-top: var(--table-padding-v2) !important;
-    padding-bottom: var(--table-padding-v2) !important;
-}
-
-/* Table body rows (v2) */
-.story-table-v2 tbody tr td {
-  border-top-color: rgba(0,0,0,0.08);
-}
-.story-table-v2 tbody tr {
-  transition: background-color .15s ease, transform .15s ease;
-}
-.story-table-v2 tbody tr:hover {
-  background-color: var(--color-soft-yellow); /* Soft yellow hover */
-  transform: scale(1.005);
-}
-
-/* Status Pills (New) - ONLY ASSIGNED REMAINS */
-.status-pill {
-  display: inline-block;
-  padding: 0.2rem 0.6rem;
-  border-radius: 0.8rem;
-  font-size: 0.65rem;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  line-height: 1;
-}
-
-/* Assigned Status Colors */
-.status-assigned-yes { background-color: #E0F2FE; color: #2563EB; } /* Blue */
-.status-assigned-no { background-color: #F3F4F6; color: #6B7280; } /* Gray */
-
-
-/* Action Button Outlines (New) */
-.btn-action-secondary-outline {
-  color: var(--color-deep-blue);
-  border-color: #D9E3F1;
-  background-color: #fff;
-  transition: all 0.2s;
-  font-weight: 500;
-}
-.btn-action-secondary-outline:hover {
-  background-color: #F0F4F8;
-  border-color: #c0cff0;
-  color: var(--color-deep-blue);
-}
-
-.btn-action-success-outline {
-  color: var(--color-success-v2);
-  border-color: rgba(76, 175, 80, 0.5);
-  background-color: #fff;
-}
-.btn-action-success-outline:hover {
-  background-color: #E8F5E9;
-  color: var(--color-success-v2);
-}
-
-.btn-action-danger-outline {
-  color: var(--color-danger-v2);
-  border-color: rgba(244, 67, 54, 0.5);
-  background-color: #fff;
-}
-.btn-action-danger-outline:hover {
-  background-color: #FFEBEE;
-  color: var(--color-danger-v2);
-}
-
-/* Language/Level Tags */
-.story-tag {
-  display: inline-block;
-  padding: 0.1rem 0.4rem;
-  border-radius: 0.5rem;
-  font-size: 0.65rem;
-  font-weight: 600;
-  margin-right: 0.25rem;
-  margin-bottom: 0.25rem;
-}
-.tag-lang {
-  background-color: #FAE5FF;
-  color: #9333EA;
-}
-.tag-level {
-  background-color: #E0F2FE;
-  color: #2563EB;
-}
-
-/* Modal tweaks (v2) */
-.modal-content-v2 {
-  border: 0;
-  border-radius: 1.5rem !important;
-  box-shadow: 0 2rem 4rem rgba(0,0,0,0.2); /* Deep shadow for pop */
-  background: #fff;
-}
-.admin-student-list-v2 {
-  max-height: 200px;
-  overflow-y: auto;
-  background: #fcfcfc;
-  border: 1px solid #eee;
-  padding: 1rem !important;
-}
-
-/* Custom Checkbox/Radio for better child-like feel */
-.form-check-input {
-  border-radius: 0.35em; /* Slightly rounded squares */
-  border-width: 2px;
-}
-.form-check-input:checked {
-  background-color: var(--color-primary-dark);
-  border-color: var(--color-primary-dark);
-}
-.form-check-input[type="radio"] {
-  border-radius: 50%; /* Circles for radio buttons */
-}
-
-/* Small adjustments for inputs */
-.form-control-sm {
-  padding: 0.5rem 0.75rem;
-}
-
-/* Ensure the loading overlays are visually distinct and always on top */
-#mcqLoadingOverlay { z-index: 1055; }
-#shareLoadingOverlay { z-index: 1056; }
-</style>
-
-{% endblock %}
-
-{% block scripts %}
 <script>
 (function(){
   // Assign modal logic
@@ -599,22 +483,22 @@
         typeFinish.checked = true;
         if (canMcq && !mcqReady) {
           typeHint.innerHTML =
-            "This story is completed, but MCQ questions are not generated yet. Use the **Generate MCQ Questions** button first.";
+            "This story is completed, but MCQ questions are not generated yet. Use the <b>Generate MCQ Questions</b> button first.";
         } else {
           typeHint.innerHTML =
-            "This story has an unfinished draft, so you can only use the **finish-writing** assignment.";
+            "This story has an unfinished draft, so you can only use the <b>finish-writing</b> assignment.";
         }
       } else if (!canFinish && canMcq && mcqReady) {
         typeMcq.checked = true;
         typeHint.innerHTML =
-          "This story is fully completed with MCQ questions ready, so you can only use the **MCQ reading** assignment.";
+          "This story is fully completed with MCQ questions ready, so you can only use the <b>MCQ reading</b> assignment.";
       } else if (canFinish && canMcq && mcqReady) {
         typeFinish.checked = true;
         typeHint.innerHTML =
           "Choose whether students will finish the story or answer MCQ reading questions.";
       } else {
         typeHint.innerHTML =
-          "This story is missing a usable draft; you may need to **regenerate** it.";
+          "This story is missing a usable draft; you may need to <b>regenerate</b> it.";
       }
     });
   }
@@ -627,7 +511,7 @@
   const shareBodyMain = document.getElementById('shareBodyMain');
   const shareBodySub = document.getElementById('shareBodySub');
   const shareSubmitBtn = document.getElementById('shareSubmitBtn');
-  const shareLoadingOverlay = document.getElementById('shareLoadingOverlay'); // ADDED
+  const shareLoadingOverlay = document.getElementById('shareLoadingOverlay');
 
   if (shareModal) {
     shareModal.addEventListener('show.bs.modal', function (event) {
@@ -643,27 +527,27 @@
 
       if (mode === 'unshare') {
         shareModalLabel.textContent = 'Unshare from Library';
-        shareBodyMain.innerHTML = 'This will <span class="fw-bold text-danger">remove</span> the story from the Library list for students.';
-        shareBodySub.innerHTML = 'Assignments that already use this story will not be deleted.'; // Corrected: use innerHTML to remove bolding from previous context
+        shareBodyMain.innerHTML = 'This will <span class="fw-bold text-danger-v7">remove</span> the story from the Library list for students.';
+        shareBodySub.innerHTML = 'Assignments that already use this story will not be deleted.';
         shareSubmitBtn.textContent = 'Unshare';
-        // Use standard Bootstrap classes for color handling
-        shareSubmitBtn.classList.remove('btn-success');
-        shareSubmitBtn.classList.add('btn-danger');
+        // Use custom v7 classes for color handling
+        shareSubmitBtn.classList.remove('btn-success-v7');
+        shareSubmitBtn.classList.add('btn-danger-v7');
       } else {
         shareModalLabel.textContent = 'Share to Library';
-        shareBodyMain.innerHTML = 'This will add the story to the <span class="fw-bold text-success">Library</span> so students can read it anytime.';
+        shareBodyMain.innerHTML = 'This will add the story to the <span class="fw-bold text-success-v7">Library</span> so students can read it anytime.';
         shareBodySub.innerHTML = 'If this story has <b>no cover image</b>, a simple book-style cover will be generated automatically. <b>This process may take a few seconds.</b>';
         shareSubmitBtn.textContent = 'Share to Library';
-        // Use standard Bootstrap classes for color handling
-        shareSubmitBtn.classList.remove('btn-danger');
-        shareSubmitBtn.classList.add('btn-success');
+        // Use custom v7 classes for color handling
+        shareSubmitBtn.classList.remove('btn-danger-v7');
+        shareSubmitBtn.classList.add('btn-success-v7');
       }
     });
 
     // Handle form submission for sharing/unsharing
     shareForm.addEventListener('submit', function (event) {
         // Only show loading for the 'share' action, not 'unshare'
-        if (shareSubmitBtn.classList.contains('btn-success')) {
+        if (shareSubmitBtn.classList.contains('btn-success-v7')) {
             shareSubmitBtn.disabled = true;
             if (shareLoadingOverlay) { // Ensure overlay exists
                 shareLoadingOverlay.classList.remove('d-none');
@@ -674,7 +558,7 @@
   }
 
   // MCQ generation loading overlay
-  const mcqLoadingOverlay = document.getElementById('mcqLoadingOverlay'); // RENAMED TO AVOID COLLISION
+  const mcqLoadingOverlay = document.getElementById('mcqLoadingOverlay');
   const mcqButtons = document.querySelectorAll('.btn-mcq-gen');
 
   mcqButtons.forEach(btn => {
@@ -687,6 +571,366 @@
       // Let the form submit normally; overlay will disappear on page reload
     });
   });
+
+  // Script to handle tab persistence on page load (NEW)
+  const activeTab = '{{ active_tab }}';
+  const fragment = '{{ fragment }}';
+  if (activeTab === 'review' || fragment) {
+    const tabEl = document.getElementById('review-tab');
+    if (tabEl) {
+        // Use Bootstrap's JS method to show the tab pane
+        new bootstrap.Tab(tabEl).show();
+    }
+
+    if (fragment) {
+        // Attempt to open the specific accordion item
+        const targetAccordion = document.getElementById(fragment);
+        if (targetAccordion) {
+            new bootstrap.Collapse(targetAccordion, { toggle: false }).show();
+            // Scroll to the element
+            targetAccordion.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    }
+  }
 })();
 </script>
+
+<style>
+/* --- V7 ADMIN COLOR PALETTE & VARIABLES --- */
+:root {
+  --coral-main: #ff6b6b; /* Main primary color */
+  --coral-light: #ffd7cc; /* Light accent for backgrounds/borders */
+  --coral-dark: #cc5555; /* Dark text/headings */
+  --success-v7: #10b981; /* Success color */
+  --danger-v7: #ef4444;  /* Danger color */
+  --warning-v7: #f59e0b; /* Warning color */
+  --light-soft-blue-v7: #ffece5; /* Soft background for modal elements/table head */
+  --soft-yellow-v7: #fff7e5; /* Very light background for hover/table */
+  --table-padding-v2: 1.5rem; /* INCREASED PADDING (Keep value) */
+}
+
+/* --- FONT STYLING (V7) --- */
+.admin-title-v7, .admin-text-title, .admin-text-button {
+    font-family: 'Baloo 2', cursive;
+    font-weight: 700;
+}
+.admin-text-body, .admin-text-label, .admin-text-tag {
+    font-family: 'Fredoka', 'Nunito', sans-serif;
+}
+.admin-title-v7 {
+    font-size: 2.25rem;
+    color: var(--coral-dark); /* Use dark coral for titles */
+}
+.admin-text-title { font-size: 1.5rem; }
+.admin-text-label { font-weight: 600 !important; }
+.admin-text-button { font-weight: 600 !important; }
+/* --- END FONT STYLING --- */
+
+
+/* Helper Classes (Updated for V7) */
+.text-coral-dark { color: var(--coral-dark) !important; }
+.text-success-v7 { color: var(--success-v7) !important; }
+.text-danger-v7 { color: var(--danger-v7) !important; }
+.text-warning-v7 { color: var(--warning-v7) !important; }
+.bg-light-soft-blue-v7 { background-color: var(--light-soft-blue-v7) !important; }
+
+
+/* Main Wrapper */
+.admin-stories-wrap-v2 {
+  max-width: 1300px;
+  margin-inline: auto;
+}
+
+/* Header pill icon (v7) */
+.admin-pill-icon-v7 {
+  width: 52px;
+  height: 52px;
+  border-radius: 1.25rem;
+  /* Coral gradient */
+  background: linear-gradient(135deg, var(--coral-main), var(--coral-dark));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.75rem;
+  color: #fff;
+  box-shadow: 0 0.5rem 1rem rgba(255, 107, 107, 0.4);
+}
+
+/* Action Primary Button (V7 Coral) */
+.btn-action-primary-v7 {
+  background-color: var(--coral-main);
+  border-color: var(--coral-main);
+  color: #fff;
+  font-weight: 600;
+  padding: 0.5rem 1.2rem;
+  transition: all 0.2s;
+  box-shadow: 0 4px 8px rgba(255, 107, 107, 0.3);
+}
+.btn-action-primary-v7:hover {
+  background-color: #e86060;
+  border-color: #e86060;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(255, 107, 107, 0.4);
+}
+
+/* Table container (v7) */
+.admin-table-shell-v7 {
+  border-radius: 1.5rem;
+  overflow: hidden;
+  border: 2px solid var(--coral-light); /* Soft coral border */
+  background: #ffffff;
+  box-shadow: 0 0.5rem 1.5rem rgba(255, 107, 107, 0.15); /* Coral shadow */
+}
+/* Table outer padding (new class for margin around table) */
+.table-padding-outer {
+    padding: 1.5rem !important;
+}
+
+/* Table head (v7) */
+.story-table-v7 thead {
+  /* Soft yellow/pink gradient */
+  background: linear-gradient(90deg, #ffece5, #fff7e5);
+  border-bottom: 2px solid var(--coral-light);
+}
+.story-table-v7 thead th {
+  border-bottom: 0;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.75rem;
+  color: var(--coral-dark); /* Dark coral headings */
+}
+
+/* Table padding helper classes (Using new increased --table-padding-v2) */
+.table-th-padding {
+    padding-top: 1.2rem !important;
+    padding-bottom: 1.2rem !important;
+}
+.table-td-padding {
+    padding-top: var(--table-padding-v2) !important;
+    padding-bottom: var(--table-padding-v2) !important;
+}
+
+/* Table body rows (v7) */
+.story-table-v7 tbody tr td {
+  border-top-color: rgba(0,0,0,0.08);
+}
+.story-table-v7 tbody tr {
+  transition: background-color .15s ease, transform .15s ease;
+}
+.story-table-v7 tbody tr:hover {
+  background-color: var(--soft-yellow-v7); /* Soft coral hover */
+  transform: scale(1.005);
+}
+
+/* Status Pills (V7) */
+.status-pill {
+  padding: 0.3rem 0.8rem;
+  border-radius: 1rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+/* Assigned Status Colors (V7) */
+.status-assigned-v7-yes { background-color: #d1fae5; color: #047857; } /* Soft green */
+.status-assigned-v7-no { background-color: #F3F4F6; color: #6B7280; }
+
+
+/* Action Button Outlines (V7) */
+.btn-action-outline-v7 {
+  color: var(--coral-dark);
+  border-color: var(--coral-light);
+  background-color: #fff;
+  transition: all 0.2s;
+  font-weight: 600;
+  padding: 0.4rem 1rem;
+}
+.btn-action-outline-v7:hover {
+  background-color: #ffece5;
+  border-color: var(--coral-main);
+  color: var(--coral-dark);
+}
+.btn-action-success-outline-v7 {
+  color: var(--success-v7);
+  border-color: rgba(16, 185, 129, 0.4);
+  background-color: #fff;
+}
+.btn-action-success-outline-v7:hover {
+  background-color: #E8F5E9;
+  color: var(--success-v7);
+}
+.btn-action-danger-outline-v7 {
+  color: var(--danger-v7);
+  border-color: rgba(239, 68, 68, 0.4);
+  background-color: #fff;
+}
+.btn-action-danger-outline-v7:hover {
+  background-color: #FFEBEE;
+  color: var(--danger-v7);
+}
+/* Share button uses standard success button */
+.btn-success-v7 {
+  background-color: var(--success-v7);
+  border-color: var(--success-v7);
+  color: #fff;
+  box-shadow: 0 4px 8px rgba(16, 185, 129, 0.3);
+}
+.btn-success-v7:hover {
+  background-color: #0e9f6e;
+  border-color: #0e9f6e;
+}
+.btn-danger-v7 {
+  background-color: var(--danger-v7);
+  border-color: var(--danger-v7);
+  color: #fff;
+  box-shadow: 0 4px 8px rgba(239, 68, 68, 0.3);
+}
+.btn-danger-v7:hover {
+  background-color: #dc3939;
+  border-color: #dc3939;
+}
+
+/* --- LANGUAGE/LEVEL TAGS (V7 COLORS) --- */
+.story-tags-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.story-tag {
+  padding: 0.3rem 0.7rem;
+  border-radius: 1rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.tag-lang-v7 {
+  background-color: #fcece5; /* Soft coral */
+  color: var(--coral-dark);
+}
+.tag-level-v7 {
+  background-color: #d1fae5; /* Soft green */
+  color: #047857;
+}
+
+/* --- END TAG IMPROVEMENTS --- */
+
+/* Modal tweaks (v7) */
+.modal-content-v7 {
+  border: 0;
+  border-radius: 1.5rem !important;
+  box-shadow: 0 2rem 4rem rgba(255, 107, 107, 0.2), 0 0 0 1px rgba(0,0,0,0.05); /* Coral shadow */
+  background: #fff;
+}
+.admin-student-list-v7 {
+  max-height: 200px;
+  overflow-y: auto;
+  background: #fcfcfc;
+  border: 1px solid #eee;
+  padding: 1rem !important;
+  border-radius: 1rem !important;
+}
+
+/* Custom Checkbox/Radio (V7 Coral) */
+.form-check-input {
+  border-radius: 0.45em;
+  border-width: 2px;
+}
+.form-check-input:focus {
+  box-shadow: 0 0 0 0.25rem rgba(255, 107, 107, 0.3); /* Coral focus ring */
+  border-color: var(--coral-main);
+}
+.form-check-input:checked {
+  background-color: var(--coral-main);
+  border-color: var(--coral-main);
+}
+.form-check-input[type="radio"] {
+  border-radius: 50%;
+}
+
+/* Small adjustments for inputs */
+.form-control-sm {
+  padding: 0.6rem 0.85rem;
+}
+
+/* Loading overlays */
+#mcqLoadingOverlay .spinner-grow,
+#shareLoadingOverlay .spinner-grow {
+    color: var(--coral-main) !important;
+}
+
+/* Accordion for Review Pane (V7 Styling) */
+.accordion-item {
+    border: none;
+    margin-bottom: 0.75rem;
+    border-radius: 1rem; /* Match card radius */
+}
+.accordion-button {
+    background-color: #fff;
+    border-radius: 1rem !important;
+    border: 1px solid var(--coral-light);
+    transition: background-color 0.2s, box-shadow 0.2s;
+    padding: 1.25rem 1.5rem;
+    font-size: 1.1rem;
+    color: var(--coral-dark);
+}
+.accordion-button:not(.collapsed) {
+    background-color: var(--soft-yellow-v7);
+    color: var(--coral-dark);
+    box-shadow: none;
+    border-bottom-left-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+    border-bottom: 1px solid var(--coral-light);
+}
+.accordion-button:focus {
+    box-shadow: 0 0 0 0.25rem rgba(255, 107, 107, 0.3);
+}
+.accordion-body {
+    background: #fff;
+    border: 1px solid var(--coral-light);
+    border-top: none;
+    border-bottom-left-radius: 1rem;
+    border-bottom-right-radius: 1rem;
+}
+.alert-success-v7 {
+    background-color: #d1fae5;
+    color: #047857;
+    border: 1px solid rgba(16, 185, 129, 0.4);
+}
+
+/* NEW: Nav Tabs Styling to match V7 Buttons */
+.nav-pills .nav-item {
+    padding: 0;
+}
+.nav-pills .nav-link {
+    font-family: 'Baloo 2', cursive;
+    font-weight: 600;
+    border-radius: 999px; /* Pill shape */
+    padding: .5rem 1.2rem;
+
+    /* Default/Non-active state: Matches Outline Button */
+    color: var(--coral-dark);
+    border: 1px solid var(--coral-light);
+    background: #fff;
+    transition: all 0.2s;
+}
+
+.nav-pills .nav-link:hover:not(.active) {
+    background-color: var(--soft-yellow-v7);
+    border-color: var(--coral-main);
+    color: var(--coral-dark);
+}
+
+.nav-pills .nav-link.active, .nav-pills .nav-link.active:hover {
+    /* Active state: Matches Primary Button */
+    color: #fff;
+    background: var(--coral-main);
+    border-color: var(--coral-main);
+    box-shadow: 0 4px 8px rgba(255, 107, 107, 0.3);
+    transform: none; /* Override potential hover transform */
+}
+</style>
+
 {% endblock %}

@@ -7,18 +7,15 @@
   <div class="card-body p-3 p-md-4 p-lg-5 position-relative">
     <div class="story-inner mx-auto">
 
-      <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
-        <div>
-          <h3 class="mb-1 fw-semibold story-title">AI Story Generator</h3>
-          <p class="text-muted small mb-0">Make a story together in three tiny steps.</p>
-        </div>
+      <div class="mb-4">
+        <h1 class="mb-1 fw-semibold main-story-title">AI Story Generator</h1>
+        <p class="text-muted story-text-body lead-subtext mb-0">Make a story together in three tiny steps.</p>
       </div>
 
       <form method="post" id="storyForm">
-        <!-- Fixed language: English -->
         <input type="hidden" name="language" value="en">
 
-        <!-- Wizard progress with labels -->
+        <!-- Wizard indicator -->
         <div class="wizard-indicator d-flex align-items-center justify-content-between mb-3 mb-md-4">
           <div class="wizard-item text-center">
             <div class="wizard-dot active"><span>1</span></div>
@@ -27,7 +24,7 @@
 
           <div class="wizard-line flex-grow-1 mx-1 mx-md-2"></div>
 
-          <div class="wizard-item text-center">
+          <div class="wizard-item text-center wizard-item-center">
             <div class="wizard-dot"><span>2</span></div>
             <div class="wizard-label mt-1">Story Setup</div>
           </div>
@@ -40,27 +37,28 @@
           </div>
         </div>
 
-        <!-- STEP 1 -->
+        <!-- STEP 1: ONE INPUT PER ROW -->
         <div class="wizard-step" data-step="1">
-          <div class="step-card p-3 p-md-3 mb-2">
-            <div class="row g-3 align-items-end">
-              <div class="col-md-7">
-                <label class="form-label step-label">Title</label>
-                <div class="input-group input-group-lg lp-input">
-                  <span class="input-group-text"><i class="bi bi-journal-text"></i></span>
-                  <input name="title" class="form-control" placeholder="Story title">
-                </div>
-              </div>
-
-              <div class="col-md-5">
-                <label class="form-label step-label">Author</label>
-                <div class="input-group input-group-lg lp-input">
-                  <span class="input-group-text"><i class="bi bi-person"></i></span>
-                  <input name="author_name" class="form-control" placeholder="Name">
-                </div>
+          <div class="step-card p-3 p-md-4 mb-2">
+            <!-- Title -->
+            <div class="mb-3">
+              <label class="form-label step-label">Title</label>
+              <div class="input-group input-group-lg lp-input">
+                <span class="input-group-text"><i class="bi bi-journal-text"></i></span>
+                <input name="title" class="form-control" placeholder="Story title">
               </div>
             </div>
 
+            <!-- Author -->
+            <div class="mb-3">
+              <label class="form-label step-label">Author</label>
+              <div class="input-group input-group-lg lp-input">
+                <span class="input-group-text"><i class="bi bi-person"></i></span>
+                <input name="author_name" class="form-control" placeholder="Name">
+              </div>
+            </div>
+
+            <!-- Phonics / Vocabulary -->
             <div class="mt-3">
               <label class="form-label step-label">Phonics / Vocabulary</label>
               <div class="input-group input-group-lg lp-input">
@@ -71,110 +69,107 @@
           </div>
         </div>
 
-        <!-- STEP 2: Story Setup -->
+        <!-- STEP 2: ONE SELECT PER ROW -->
         <div class="wizard-step d-none" data-step="2">
-          <div class="step-card p-3 p-md-3 mb-2">
-            <div class="row g-3">
-              <!-- English Level -->
-              <div class="col-md-6">
-                <label class="form-label step-label">
-                  English Level (for young students)
-                </label>
-                <select name="english_level" class="form-select form-select-lg lp-input">
-                  <option value="beginner" selected>Beginner</option>
-                  <option value="intermediate">Intermediate</option>
-                  <option value="advanced">Advanced</option>
-                </select>
-              </div>
+          <div class="step-card p-3 p-md-4 mb-2">
+            <!-- English Level -->
+            <div class="mb-3">
+              <label class="form-label step-label">
+                English Level (for young students)
+              </label>
+              <select name="english_level" class="form-select form-select-lg lp-input">
+                <option value="beginner" selected>Beginner</option>
+                <option value="intermediate">Intermediate</option>
+                <option value="advanced">Advanced</option>
+              </select>
+            </div>
 
-              <!-- Story type -->
-              <div class="col-md-6">
-                <label class="form-label step-label">
-                  Story Type
-                </label>
-                <select name="story_type" class="form-select form-select-lg lp-input">
-                  <option value="adventure" selected>Adventure</option>
-                  <option value="everyday-life">Everyday life</option>
-                  <option value="feelings">Feelings / emotions</option>
-                  <option value="mystery">Mystery / puzzle</option>
-                  <option value="fantasy">Fantasy / magic</option>
-                  <option value="school-life">School life</option>
-                </select>
-              </div>
+            <!-- Story Type -->
+            <div class="mb-3">
+              <label class="form-label step-label">
+                Story Type
+              </label>
+              <select name="story_type" class="form-select form-select-lg lp-input">
+                <option value="adventure" selected>Adventure</option>
+                <option value="everyday-life">Everyday life</option>
+                <option value="feelings">Feelings / emotions</option>
+                <option value="mystery">Mystery / puzzle</option>
+                <option value="fantasy">Fantasy / magic</option>
+                <option value="school-life">School life</option>
+              </select>
+            </div>
 
-              <!-- Setting -->
-              <div class="col-md-6">
-                <label class="form-label step-label">
-                  Setting (story background)
-                </label>
-                <select name="setting" class="form-select form-select-lg lp-input">
-                  <option value="forest" selected>Forest</option>
-                  <option value="school">School</option>
-                  <option value="seaside">Seaside / beach</option>
-                  <option value="city-park">City park</option>
-                  <option value="home">Home</option>
-                  <option value="space">Space</option>
-                </select>
-              </div>
+            <!-- Setting -->
+<!--            <div class="mb-3">-->
+<!--              <label class="form-label step-label">-->
+<!--                Setting (story background)-->
+<!--              </label>-->
+<!--              <select name="setting" class="form-select form-select-lg lp-input">-->
+<!--                <option value="forest" selected>Forest</option>-->
+<!--                <option value="school">School</option>-->
+<!--                <option value="seaside">Seaside / beach</option>-->
+<!--                <option value="city-park">City park</option>-->
+<!--                <option value="home">Home</option>-->
+<!--                <option value="space">Space</option>-->
+<!--              </select>-->
+<!--            </div>-->
 
-              <!-- Characters -->
-              <div class="col-md-6">
-                <label class="form-label step-label">
-                  Main Characters
-                </label>
-                <select name="character_kind" class="form-select form-select-lg lp-input">
-                  <option value="children" selected>Children / students</option>
-                  <option value="animals">Animal friends</option>
-                  <option value="family">Family</option>
-                  <option value="imaginary-friends">Imaginary friends</option>
-                  <option value="mixed">Mixed (people + animals / imaginary)</option>
-                </select>
-              </div>
+            <!-- Main Characters -->
+<!--            <div class="mb-3">-->
+<!--              <label class="form-label step-label">-->
+<!--                Main Characters-->
+<!--              </label>-->
+<!--              <select name="character_kind" class="form-select form-select-lg lp-input">-->
+<!--                <option value="children" selected>Children / students</option>-->
+<!--                <option value="animals">Animal friends</option>-->
+<!--                <option value="family">Family</option>-->
+<!--                <option value="imaginary-friends">Imaginary friends</option>-->
+<!--                <option value="mixed">Mixed (people + animals / imaginary)</option>-->
+<!--              </select>-->
+<!--            </div>-->
 
-              <!-- Emotion tone -->
-              <div class="col-md-6">
-                <label class="form-label step-label">
-                  Emotion Tone
-                </label>
-                <select name="emotion_tone" class="form-select form-select-lg lp-input">
-                  <option value="warm-and-happy" selected>Warm and happy</option>
-                  <option value="calm-and-peaceful">Calm and peaceful</option>
-                  <option value="excited-and-fun">Excited and fun</option>
-                  <option value="worried-but-hopeful">A little worried but hopeful</option>
-                  <option value="brave-and-growing">Brave and growing</option>
-                </select>
-              </div>
+            <!-- Emotion Tone -->
+            <div class="mb-3">
+              <label class="form-label step-label">
+                Emotion Tone
+              </label>
+              <select name="emotion_tone" class="form-select form-select-lg lp-input">
+                <option value="warm-and-happy" selected>Warm and happy</option>
+                <option value="calm-and-peaceful">Calm and peaceful</option>
+                <option value="excited-and-fun">Excited and fun</option>
+                <option value="worried-but-hopeful">A little worried but hopeful</option>
+                <option value="brave-and-growing">Brave and growing</option>
+              </select>
+            </div>
 
-              <!-- Tense -->
-              <div class="col-md-6">
-                <label class="form-label step-label">
-                  Tense
-                </label>
-                <select name="tense" class="form-select form-select-lg lp-input">
-                  <option value="present-simple" selected>Present simple (e.g., He walks)</option>
-                  <option value="past-simple">Past simple (e.g., He walked)</option>
-                  <option value="present-progressive">Present progressive (e.g., He is walking)</option>
-                </select>
-              </div>
+            <!-- Tense -->
+            <div class="mb-0">
+              <label class="form-label step-label">
+                Tense
+              </label>
+              <select name="tense" class="form-select form-select-lg lp-input">
+                <option value="present-simple" selected>Present simple (e.g., He walks)</option>
+                <option value="past-simple">Past simple (e.g., He walked)</option>
+                <option value="present-progressive">Present progressive (e.g., He is walking)</option>
+              </select>
             </div>
           </div>
         </div>
 
-        <!-- STEP 3 -->
+        <!-- STEP 3: ONE TOGGLE PER ROW -->
         <div class="wizard-step d-none" data-step="3">
-          <div class="step-card p-3 p-md-3 mb-2">
+          <div class="step-card p-3 p-md-4 mb-2">
             <div class="row g-3">
 
-              <!-- Student ending -->
-              <div class="col-md-6">
-                <div class="toggle-row d-flex align-items-center justify-content-between px-2 py-2">
-                  <div class="d-flex align-items-center gap-2">
+              <div class="col-12">
+                <div class="toggle-row d-flex align-items-center justify-content-between px-3 py-2">
+                  <div class="d-flex align-items-center gap-3">
                     <div class="toggle-icon-wrap">
                       <i class="bi bi-pencil-square"></i>
                     </div>
                     <div>
                       <div class="toggle-title">Student ending</div>
-                      <div class="toggle-sub">Students write the ending</div>
+                      <div class="toggle-sub story-text-body">Students write the ending</div>
                     </div>
                   </div>
 
@@ -184,16 +179,15 @@
                 </div>
               </div>
 
-              <!-- Cover image -->
-              <div class="col-md-6">
-                <div class="toggle-row d-flex align-items-center justify-content-between px-2 py-2">
-                  <div class="d-flex align-items-center gap-2">
+              <div class="col-12">
+                <div class="toggle-row d-flex align-items-center justify-content-between px-3 py-2">
+                  <div class="d-flex align-items-center gap-3">
                     <div class="toggle-icon-wrap toggle-icon-cover">
                       <i class="bi bi-image"></i>
                     </div>
                     <div>
                       <div class="toggle-title">Cover image</div>
-                      <div class="toggle-sub">Create a kid-friendly cover</div>
+                      <div class="toggle-sub story-text-body">Create a kid-friendly cover</div>
                     </div>
                   </div>
 
@@ -207,13 +201,13 @@
           </div>
         </div>
 
-        <!-- Navigation buttons -->
+        <!-- Buttons -->
         <div class="d-flex flex-wrap gap-2 justify-content-end mt-3 mt-md-4">
-          <button type="button" class="btn btn-outline-secondary btn-lg px-3 px-md-4" id="wizardPrev" disabled>
+          <button type="button" class="btn btn-outline-secondary btn-lg px-4" id="wizardPrev" disabled>
             <i class="bi bi-arrow-left-short me-1"></i> Back
           </button>
 
-          <button type="button" class="btn btn-sky-solid btn-lg px-3 px-md-4" id="genBtn">
+          <button type="button" class="btn btn-sky-solid btn-lg px-4" id="genBtn">
             <span class="label-next">
               Next <i class="bi bi-arrow-right-short ms-1"></i>
             </span>
@@ -228,30 +222,30 @@
   </div>
 </div>
 
-<!-- Rainbow Loading Overlay -->
+<!-- Overlay -->
 <div id="genOverlay" class="gen-overlay" aria-hidden="true">
   <div class="rainbow-spinner-box">
     <div class="rainbow-spinner"></div>
-    <h6 class="mt-3 fw-semibold text-white rainbow-text">Creating your story...</h6>
+    <h6 class="mt-3 fw-semibold text-white rainbow-text main-story-title">Creating your story...</h6>
   </div>
 </div>
 
-<!-- Success Modal -->
+<!-- Modal -->
 <div class="modal fade" id="generatedModal" tabindex="-1" aria-labelledby="generatedModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content rounded-4">
       <div class="modal-header border-0">
-        <h5 class="modal-title story-title small-title" id="generatedModalLabel">Story ready!</h5>
+        <h5 class="modal-title main-story-title small-title" id="generatedModalLabel">Story ready!</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
-      <div class="modal-body pt-0">
+      <div class="modal-body pt-0 story-text-body">
         Your story has been generated. What would you like to do next?
       </div>
       <div class="modal-footer border-0 d-flex flex-wrap gap-2 justify-content-end">
-        <a href="{{ url_for('library') }}" class="btn btn-outline-secondary">
+        <a href="{{ url_for('library') }}" class="btn btn-outline-secondary btn-lg">
           Go to Library
         </a>
-        <a id="goFinishBtn" href="{{ url_for('index') }}" class="btn btn-sky-solid">
+        <a id="goFinishBtn" href="{{ url_for('index') }}" class="btn btn-sky-solid btn-lg">
           Finish the Story
         </a>
       </div>
@@ -260,85 +254,96 @@
 </div>
 
 <style>
-/* FONTS */
-@import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600&family=Nunito:wght@400;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600&family=Baloo+2:wght@500;700&display=swap');
 
 body{
-  font-family:"Nunito", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family:'Fredoka', 'Nunito', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   background: radial-gradient(circle at top, #fffaf3 0, #fffdf8 40%, #ffffff 100%);
 }
 
-/* Title font */
+/* Title */
+.main-story-title {
+  font-family:"Baloo 2", system-ui;
+  font-weight: 700 !important;
+  font-size: clamp(1.8rem, 3.5vw, 2.8rem);
+  color: #333;
+}
+.lead-subtext {
+  font-size: 1.15rem;
+  color: #6b7280 !important;
+}
 .story-title{
   font-family:"Baloo 2", system-ui;
+  font-weight: 700 !important;
+}
+.story-text-body {
+  font-family:'Fredoka', 'Nunito', sans-serif;
+  font-weight: 400;
 }
 
-/* Inner max width */
 .story-inner{
   max-width:720px;
 }
 
-/* Colors */
 :root{
   --sun-50:#fff9e6;
   --sun-300:#ffd569;
-  --coral-500:#ff7b72;
+  --coral-500:#ff6b6b;
   --teal-300:#7ad3c8;
   --teal-500:#22b3aa;
   --lp-border:#e5eaf3;
 }
 
-/* Background Shell – match card tone */
+/* Shell */
 .story-shell{
   background:#fffaf3;
   position: relative;
 }
 
-/* Card style – softer, modern shadow */
 .lp-card-modern{
-  border-radius:22px;
-  box-shadow:0 6px 16px rgba(15,23,42,.06);
-  background:#fffcf7;
+  border-radius:28px;
+  background:radial-gradient(circle at top, #fffaf3 0, #fffdf8 40%, #ffffff 100%);
 }
 
-/* Step cards smaller + softer shadow */
+/* Step card */
 .step-card{
-  border-radius:16px;
+  border-radius:20px;
   background:#fffdf6;
-  border:1px solid rgba(254,215,170,.75);
-  box-shadow:0 2px 6px rgba(148,163,184,.10);
+  border:2px solid rgba(254,215,170,.9);
+  box-shadow:0 4px 10px rgba(148,163,184,.15);
 }
 
 /* Labels */
 .step-label{
-  font-size:.8rem;
-  font-weight:700;
-  text-transform:uppercase;
-  letter-spacing:.06em;
-  color:#94a3b8;
+  font-size:.9rem;
+  font-weight:600;
+  color:#475569;
+  margin-bottom: 0.25rem;
 }
 
-/* Wizard Dots */
+/* Wizard */
 .wizard-dot{
-  width:34px;height:34px;border-radius:999px;
-  border:2px solid var(--lp-border);
+  width:44px;height:44px;
+  border-radius:999px;
+  border:3px solid var(--lp-border);
   display:flex;align-items:center;justify-content:center;
-  font-size:.85rem;font-weight:600;color:#9ca3af;
+  font-size:1.2rem;
+  font-weight:700;color:#9ca3af;
   background:#fff;
   transition:.18s ease;
 }
 .wizard-dot.active{
   border-color:var(--coral-500);
   background:var(--sun-50);
-  color:#fb7185;
+  color:var(--coral-500);
 }
 .wizard-dot.completed{
-  background:#22b3aa;
-  border-color:#22b3aa;
+  background:var(--teal-500);
+  border-color:var(--teal-500);
   color:#fff;
 }
 .wizard-line{
-  height:2px;
+  height:4px;
   background:var(--lp-border);
   border-radius:999px;
   transition:.2s ease;
@@ -347,113 +352,167 @@ body{
   background:linear-gradient(90deg,var(--sun-300),var(--teal-500));
 }
 
+.wizard-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.wizard-item-center {
+  min-width: 100px;
+}
+.wizard-label {
+  font-family: 'Fredoka', 'Nunito', sans-serif;
+  font-size: 0.95rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
 /* Inputs */
 .lp-input .input-group-text{
-  border-radius:1rem 0 0 1rem;
+  border-radius:1.25rem 0 0 1.25rem;
   background:#f1f5f9;
-  color:#ff7086;
+  color:var(--coral-500);
+  font-size:1.25rem;
+}
+.lp-input .form-control,
+.lp-input .form-select{
+  border-radius:1.25rem;
+  padding: 0.6rem 1rem;
+  font-size: 1.1rem;
 }
 .lp-input .form-control{
-  border-radius:0 1rem 1rem 0;
-}
-.lp-input .form-select{
-  border-radius:1rem;
+  border-radius:0 1.25rem 1.25rem 0;
 }
 
 /* Toggles */
 .toggle-row{
-  border-radius:999px;
+  border-radius:18px;
   background:#fff;
-  border:1px solid rgba(254,215,170,.9);
+  border:2px solid rgba(254,215,170,.9);
+  padding: 0.75rem 1rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
 }
 .toggle-icon-wrap{
-  width:30px;height:30px;
+  width:40px;height:40px;
   border-radius:999px;
   background:#fee2e2;
   display:flex;align-items:center;justify-content:center;
   color:#fb7185;
+  font-size: 1.2rem;
 }
 .toggle-icon-cover{
   background:#ccfbf1;
   color:#0f766e;
 }
 .toggle-title{
-  font-size:.9rem;font-weight:600;
+  font-size:1.1rem;font-weight:600;
+  line-height: 1.1;
 }
 .toggle-sub{
-  font-size:.75rem;
+  font-size:.85rem;
   color:#6b7280;
 }
 
 /* Switch */
 .lp-switch .form-check-input{
-  width:3.1rem;height:1.6rem;
+  width:3.5rem;height:1.8rem;
   background:#e5e7eb;
   border-color:#e5e7eb;
   border-radius:999px;
   position:relative;
 }
 .lp-switch .form-check-input::before{
-  content:"";
-  position:absolute;
-  inset:3px auto 3px 3px;
-  width:1.2rem;
-  background:#fff;
-  border-radius:999px;
-  transition:.18s;
+  inset:4px auto 4px 4px;
+  width:1.4rem;
 }
 .lp-switch .form-check-input:checked{
   background:linear-gradient(90deg,#22c55e,#14b8a6);
 }
 .lp-switch .form-check-input:checked::before{
-  inset:3px 3px 3px auto;
+  inset:4px 4px 4px auto;
 }
 
 /* Buttons */
 .btn-sky-solid{
-  background:#fb7185;
-  border-color:#fb7185;
+  background:var(--coral-500);
+  border-color:var(--coral-500);
   border-radius:999px;
-  box-shadow:0 6px 14px rgba(248,113,113,.28);
+  box-shadow:0 8px 18px rgba(255,107,107,.35);
   font-family:"Baloo 2", system-ui;
+  font-weight: 700;
+  color: white;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.btn-sky-solid:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px rgba(255,107,107,.45);
+}
+.btn-outline-secondary {
+  border-radius: 999px;
+  font-weight: 600;
+}
+.btn-lg {
+  padding: 0.75rem 1.5rem;
+  font-size: 1.1rem;
 }
 
-/* RAINBOW LOADING SPINNER */
+/* Overlay + spinner */
 .gen-overlay{
-    position:fixed;
-    inset:0;
-    display:none;
-    place-items:center;
-    background:rgba(15,23,42,.45);
-    backdrop-filter:blur(5px);
-    z-index:2000;
+  position:fixed;
+  inset:0;
+  display:grid;
+  place-items:center;
+  background:rgba(15,23,42,.45);
+  backdrop-filter:blur(5px);
+  z-index:2000;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s;
 }
-.gen-overlay.show{display:grid}
-
+.gen-overlay[aria-hidden="false"] {
+  opacity: 1;
+  visibility: visible;
+}
 .rainbow-spinner-box{
-    text-align:center;
-    padding:2rem 2.5rem;
-    border-radius:1.25rem;
+  text-align:center;
+  padding:2.5rem 3rem;
+  border-radius:1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
-
 .rainbow-spinner{
-    width:70px;
-    height:70px;
-    border-radius:50%;
-    border:8px solid transparent;
-    border-top-color:#ff6b6b;
-    border-right-color:#ffd93d;
-    border-bottom-color:#6bcb77;
-    border-left-color:#4d96ff;
-    animation:rainbowSpin 1.1s linear infinite;
-    box-shadow:0 4px 12px rgba(0,0,0,.25);
+  width:80px;
+  height:80px;
+  border:10px solid transparent;
+  border-top-color:#ff6b6b;
+  border-right-color:#ffd93d;
+  border-bottom-color:#6bcb77;
+  border-left-color:#4d96ff;
+  animation:rainbowSpin 1.1s linear infinite;
+  box-shadow:0 6px 16px rgba(0,0,0,.3);
 }
 @keyframes rainbowSpin{
-    0%{ transform:rotate(0deg); }
-    100%{ transform:rotate(360deg); }
+  0%{ transform:rotate(0deg); }
+  100%{ transform:rotate(360deg); }
 }
 .rainbow-text{
-    text-shadow:0 2px 8px rgba(0,0,0,.45);
+  text-shadow:0 2px 8px rgba(0,0,0,.45);
+  font-family: 'Baloo 2', cursive;
+}
+
+/* Modal */
+.modal-content {
+  background: #fffdf8;
+  border: 2px solid #ffefe2;
+  box-shadow: 0 12px 25px rgba(0, 0, 0, 0.15);
+}
+.modal-title.small-title {
+  font-size: 1.5rem;
+}
+.modal-footer {
+  padding-top: 0;
 }
 </style>
 
@@ -506,12 +565,12 @@ body{
 
   form.addEventListener('submit', ()=>{
     genBtn.disabled = true;
-    overlay.classList.add('show');
+    overlay.setAttribute('aria-hidden', 'false');
   });
 
   update();
 
-  // Modal after redirect
+  // After redirect, show modal if ?generated=1
   const params = new URLSearchParams(window.location.search);
   if (params.get('generated') === '1') {
     const modalEl = document.getElementById('generatedModal');
@@ -521,6 +580,7 @@ body{
     if (finishUrl) goBtn.href = finishUrl;
 
     const showModal = () => {
+      overlay.setAttribute('aria-hidden', 'true');
       if (window.bootstrap?.Modal) {
         new window.bootstrap.Modal(modalEl, { backdrop: 'static' }).show();
       }

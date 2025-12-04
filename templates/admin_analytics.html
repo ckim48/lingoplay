@@ -1,660 +1,929 @@
-{% extends "base2.html" %}
-{% block title %}Class Analytics · EduWeaver Admin{% endblock %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Class Analytics · LexiTale</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Baloo+2:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    /* V7 THEME COLORS */
+    :root{
+      --coral-main: #ff6b6b;
+      --coral-light: #ffd7cc;
+      --ink: #111827;
+      --muted: #6b7280;
+      --bg-game-light: #fffcf8;
+      --bg-game-dark: #fff7e5;
+      --card-border: #fcece4;
+      --card-shadow: 0 5px 20px rgba(255, 107, 107, 0.1);
+    }
+    body{
+      font-family:"Fredoka", system-ui, sans-serif;
+      background: var(--bg-game-dark);
+      min-height:100vh;
+      padding-top:72px;
+      color: var(--ink);
+    }
+    /* --- Navbar --- */
+    nav.navbar{
+      background:#ffffff;
+      border-bottom:1px solid rgba(0,0,0,.06);
+    }
+    .brand-text{
+      font-family:"Baloo 2";
+      font-size:1.75rem;
+      font-weight:700;
+      color: var(--coral-main);
+    }
+    .btn-sky{
+      background: var(--coral-main);
+      color:#fff;
+      border-radius:999px;
+      padding:.45rem 1.25rem;
+      font-family:"Baloo 2";
+      font-weight: 600;
+    }
+    .btn-sky:hover{
+      background: #e86060;
+      color:#fff;
+    }
+    footer{
+      margin-top:4rem;
+      padding:2rem 0;
+      text-align:center;
+      font-size:.9rem;
+      color: var(--muted);
+    }
+    /* ---------- ANALYTICS THEME ---------- */
+    .admin-analytics {
+      font-family: "Fredoka", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    .text-aa-heading { color: var(--ink); }
+    .text-aa-muted   { color: var(--muted); }
+    .badge.bg-aa-pill{
+      background: var(--coral-light);
+      color: var(--coral-main);
+      border-radius: 999px;
+      font-weight: 600;
+      font-size: .85rem;
+      padding: .4em .9em;
+    }
+    .aa-card{
+      border-radius: 20px;
+      background: var(--bg-game-light);
+      border: 2px solid var(--card-border);
+      box-shadow: var(--card-shadow);
+    }
+    .aa-metric-label{
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--muted);
+    }
+    .card-body h6{
+      font-family: 'Baloo 2', cursive;
+      font-weight: 700;
+      color: var(--ink);
+    }
+    /* Fixed-height chart box */
+    .chart-box{
+      position: relative;
+      height: 220px;
+      width: 100%;
+    }
+    .chart-box canvas{
+      position:absolute;
+      inset:0;
+    }
+    /* Toggle pills for Top 10 chart */
+    .aa-toggle-group{
+      border-radius:999px;
+      background:rgba(255,255,255,0.7);
+      padding:2px;
+    }
+    .aa-toggle-pill{
+      border-radius:999px!important;
+      border:none;
+      font-size:.8rem;
+      padding:.2rem .8rem;
+      font-weight:600;
+      color:var(--muted);
+      background:transparent;
+    }
+    .aa-toggle-pill.active{
+      background:var(--coral-main);
+      color:#fff;
+    }
+    /* Nav Tabs Styling for V7 look */
+    .nav-pills .nav-link {
+        font-family: 'Baloo 2', cursive;
+        font-weight: 600;
+        color: var(--muted);
+        background: transparent;
+        border-radius: 12px;
+        padding: .5rem 1.2rem;
+    }
+    .nav-pills .nav-link.active, .nav-pills .nav-link:hover {
+        color: var(--coral-main);
+        background: var(--coral-light);
+    }
+    /* Keyword chips (if you reuse later) */
+    .aa-keyword-list{
+      list-style: none;
+      padding-left: 0;
+      margin: 0;
+    }
+    .aa-keyword-list li{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: .4rem;
+      padding: .2rem 0;
+      font-size: .85rem;
+    }
+    .aa-keyword{
+      background: var(--coral-light);
+      border-radius: 999px;
+      padding: 0.15rem .6rem;
+      border: 1px solid var(--coral-main);
+      color: var(--coral-main);
+      font-weight: 500;
+    }
+    .aa-keyword-count{
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+<nav class="navbar navbar-expand-lg fixed-top">
+  <div class="container">
+    <a class="navbar-brand d-flex align-items-center gap-2" href="{{ url_for('index') }}">
+      <span class="brand-text">LexiTale</span>
+    </a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+            data-bs-target="#navbarMain">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarMain">
+      <ul class="navbar-nav ms-auto align-items-lg-center gap-lg-2">
+        {% if current_user and current_user.username == "testtest" %}
+        <li class="nav-item">
+          <a class="nav-link" href="{{ url_for('story_new') }}">Create Story</a>
+        </li>
+        {% endif %}
+        <li class="nav-item">
+          <a class="nav-link" href="{{ url_for('library') }}">Library</a>
+        </li>
+        {% if current_user and current_user.username != "testtest"%}
+        <li class="nav-item">
+          <a class="nav-link" href="{{ url_for('assignments_list') }}">Assignments</a>
+        </li>
+        {% endif %}
+        {% if current_user %}
+        <li class="nav-item">
+          <a class="nav-link" href="{{ url_for('word_scramble') }}">Word Scramble</a>
+        </li>
+        {% endif %}
+        {% if current_user and current_user.username == "testtest" %}
+        <li class="nav-item">
+          <a class="nav-link" href="{{ url_for('admin_stories') }}">Dashboard</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link active" href="{{ url_for('admin_analytics') }}">Analytics</a>
+        </li>
+        {% endif %}
+        {% if current_user %}
+          <li class="nav-item ms-lg-3 mt-2 mt-lg-0">
+            <a class="btn btn-sky" href="{{ url_for('logout') }}">Logout</a>
+          </li>
+        {% else %}
+          <li class="nav-item ms-lg-3 mt-2 mt-lg-0">
+            <a class="btn btn-sky" href="{{ url_for('login') }}">Login</a>
+          </li>
+        {% endif %}
+      </ul>
+    </div>
+  </div>
+</nav>
 
-{% block content %}
 <div class="container mt-4 admin-analytics">
+
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
     <div>
-      <h3 class="fw-bold mb-1 text-aa-heading">
-        Class Analytics
+      <h3 class="fw-bold mb-1 text-aa-heading" style="font-family:'Baloo 2', cursive;">
+        {% if view_mode == 'user' %}
+          Analytics · {{ user_data.user.username }}
+        {% else %}
+          Class Analytics
+        {% endif %}
       </h3>
       <p class="text-aa-muted mb-0">
-        Compare L1 vs L2 learners and drill down into a single student.
+        {% if view_mode == 'user' %}
+          {{ user_data.user.l1_language|title }} vs {{ user_data.user.l2_language|title }} Learner Details (Mock)
+        {% else %}
+          L1 vs L2 learners · aggregated data (mock).
+        {% endif %}
       </p>
     </div>
     <div class="badge bg-aa-pill text-wrap">
-      <span class="me-1">●</span> Teacher view
+      <i class="bi bi-person-circle me-1"></i> Teacher view
     </div>
   </div>
 
-  <!-- Nav Tabs -->
-  <ul class="nav nav-tabs mb-3 aa-nav-tabs" role="tablist">
-    <li class="nav-item" role="presentation">
-      <button class="nav-link active" id="tab-overview-tab"
-              data-bs-toggle="tab" data-bs-target="#tab-overview"
-              type="button" role="tab" aria-controls="tab-overview"
-              aria-selected="true">
-        L1 vs L2 Overview
-      </button>
+  <ul class="nav nav-pills mb-4">
+    <li class="nav-item">
+      <a class="nav-link {% if view_mode == 'class' %}active{% endif %}" aria-current="page" href="{{ url_for('admin_analytics') }}">
+        <i class="bi bi-clipboard-data me-1"></i> Class Overview
+      </a>
     </li>
-    <li class="nav-item" role="presentation">
-      <button class="nav-link" id="tab-student-tab"
-              data-bs-toggle="tab" data-bs-target="#tab-student"
-              type="button" role="tab" aria-controls="tab-student"
-              aria-selected="false">
-        Single Student
-      </button>
+    <li class="nav-item">
+      {% set target_user_id = selected_user_id or (all_users[0].id if all_users and all_users|length > 0 else none) %}
+      {% set target_url = url_for('admin_analytics', user_id=target_user_id) if target_user_id else '#' %}
+
+      <a class="nav-link {% if view_mode == 'user' %}active{% endif %}" href="{{ target_url }}">
+        <i class="bi bi-person-lines-fill me-1"></i> User Detail
+      </a>
     </li>
   </ul>
-
   <div class="tab-content">
-    <!-- ===================== TAB 1: OVERVIEW ===================== -->
-    <div class="tab-pane fade show active" id="tab-overview" role="tabpanel"
-         aria-labelledby="tab-overview-tab">
 
-      <!-- CHART ROW: L1 vs L2 -->
-      <div class="row g-3 mb-4">
-        <div class="col-md-6">
-          <div class="card border-0 shadow-sm aa-card h-100">
-            <div class="card-body">
-              <div class="d-flex justify-content-between align-items-center mb-2">
-                <h6 class="fw-bold mb-0">Assignments · L1 vs L2</h6>
-                <span class="small text-aa-muted">Avg score & completion</span>
-              </div>
-              <canvas id="aaAssignmentsChart" height="180"></canvas>
+    <div class="tab-pane fade {% if view_mode == 'class' %}show active{% endif %}" id="class-overview">
+      {% if view_mode == 'class' %}
+        <div class="row g-3 mb-4">
+          <div class="col-md-6"><div class="card border-0 aa-card h-100"><div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h6 class="mb-0">Word Scramble · L1 vs L2</h6>
+              <span class="small text-aa-muted">Accuracy (%)</span>
             </div>
-          </div>
-        </div>
-
-        <div class="col-md-6">
-          <div class="card border-0 shadow-sm aa-card h-100">
-            <div class="card-body">
-              <div class="d-flex justify-content-between align-items-center mb-2">
-                <h6 class="fw-bold mb-0">Practice · L1 vs L2</h6>
-                <span class="small text-aa-muted">Scramble & dictionary</span>
-              </div>
-              <canvas id="aaPracticeChart" height="180"></canvas>
+            <div class="chart-box"><canvas id="chartScramble"></canvas></div>
+          </div></div></div>
+          <div class="col-md-6"><div class="card border-0 aa-card h-100"><div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h6 class="mb-0">MCQ · L1 vs L2</h6>
+              <span class="small text-aa-muted">Score & attempts</span>
             </div>
-          </div>
-        </div>
-      </div>
-      <!-- END CHART ROW -->
-
-      <div class="row g-3 mb-3">
-        {% for g in group_list %}
-        <div class="col-md-6">
-          <div class="card border-0 shadow-sm aa-card h-100">
-            <div class="card-body">
-              <div class="d-flex justify-content-between align-items-start mb-2">
-                <div>
-                  <div class="badge aa-pill-label">
-                    {{ g.code }}
-                  </div>
-                  <h5 class="fw-bold mb-1">{{ g.label }}</h5>
-                  <div class="small text-aa-muted">
-                    {{ g.student_count }} student{{ g.student_count != 1 and 's' or '' }}
-                  </div>
-                </div>
-                <div class="aa-big-number text-end">
-                  {% if g.assignments_avg_score %}
-                  {{ "%.1f"|format(g.assignments_avg_score) }}%
-                  {% else %}
-                  –
-                  {% endif %}
-                  <div class="aa-big-caption">Avg. Assignment Score</div>
-                </div>
-              </div>
-
-              <div class="row g-3 small mt-1">
-                <div class="col-6">
-                  <div class="aa-metric-label">Assignments</div>
-                  <div class="d-flex align-items-center justify-content-between">
-                    <span class="fw-semibold">
-                      {{ g.assignments_completed }}/{{ g.assignments_total }}
-                    </span>
-                    <span class="text-aa-muted">
-                      {% if g.assignments_total %}
-                        {{ "%.0f"|format(100 * g.assignments_completed / g.assignments_total) }}% completed
-                      {% else %}
-                        No data
-                      {% endif %}
-                    </span>
-                  </div>
-                  <div class="progress aa-progress mt-1">
-                    <div class="progress-bar aa-progress-bar"
-                         role="progressbar"
-                         style="width: {{ g.assignments_total and (100 * g.assignments_completed / g.assignments_total) or 0 }}%"
-                         aria-valuenow="{{ g.assignments_total and (100 * g.assignments_completed / g.assignments_total) or 0 }}"
-                         aria-valuemin="0" aria-valuemax="100"></div>
-                  </div>
-                  <div class="small text-aa-muted mt-1">
-                    Avg attempts: {{ "%.1f"|format(g.assignments_avg_attempts or 0) }}
-                  </div>
-                </div>
-
-                <div class="col-6">
-                  <div class="aa-metric-label">Word Scramble</div>
-                  <div class="d-flex align-items-center justify-content-between">
-                    <span class="fw-semibold">{{ g.scramble_sessions }}</span>
-                    <span class="text-aa-muted">
-                      {% if g.scramble_total_questions %}
-                        {{ "%.1f"|format(g.scramble_accuracy) }}% correct
-                      {% else %}
-                        No sessions yet
-                      {% endif %}
-                    </span>
-                  </div>
-                  <div class="progress aa-progress mt-1">
-                    <div class="progress-bar aa-progress-bar-soft"
-                         role="progressbar"
-                         style="width: {{ g.scramble_accuracy or 0 }}%"
-                         aria-valuenow="{{ g.scramble_accuracy or 0 }}"
-                         aria-valuemin="0" aria-valuemax="100"></div>
-                  </div>
-                  <div class="small text-aa-muted mt-1">
-                    Correct: {{ g.scramble_total_correct }}/{{ g.scramble_total_questions }}
-                  </div>
-                </div>
-              </div>
-
-              <hr class="my-3">
-
-              <div class="row g-3 small">
-                <div class="col-6">
-                  <div class="aa-metric-label mb-1">Dictionary Lookups</div>
-                  <div class="fw-semibold">{{ g.dict_lookups }}</div>
-                  <div class="text-aa-muted">
-                    Across {{ g.student_count or 0 }} student{{ g.student_count != 1 and 's' or '' }}
-                  </div>
-                </div>
-                <div class="col-6">
-                  <div class="aa-metric-label mb-1">Top Keywords</div>
-                  {% if g.top_queries %}
-                    <ul class="aa-keyword-list">
-                      {% for q in g.top_queries %}
-                      <li>
-                        <span class="aa-keyword">{{ q.query }}</span>
-                        <span class="aa-keyword-count">{{ q.cnt }}</span>
-                      </li>
-                      {% endfor %}
-                    </ul>
-                  {% else %}
-                    <div class="text-aa-muted fst-italic">No lookups yet.</div>
-                  {% endif %}
-                </div>
-              </div>
-
+            <div class="chart-box"><canvas id="chartMCQ"></canvas></div>
+          </div></div></div>
+          <div class="col-md-6"><div class="card border-0 aa-card h-100"><div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h6 class="mb-0">Writing · L1 vs L2</h6>
+              <span class="small text-aa-muted">Avg score (%)</span>
             </div>
-          </div>
+            <div class="chart-box"><canvas id="chartWriting"></canvas></div>
+          </div></div></div>
+          <div class="col-md-6"><div class="card border-0 aa-card h-100"><div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h6 class="mb-0">Overall Engagement</h6>
+              <span class="small text-aa-muted">Scramble · MCQ · Writing</span>
+            </div>
+            <div class="chart-box"><canvas id="chartEngagement"></canvas></div>
+          </div></div></div>
         </div>
-        {% endfor %}
-      </div>
 
-      <div class="alert alert-light border-aa-soft mt-2 small" role="alert">
-        Hint: You can encourage more L2 students to use the dictionary during reading activities,
-        or assign extra scramble sessions if accuracy is low.
-      </div>
-    </div>
-
-    <!-- ===================== TAB 2: SINGLE STUDENT ===================== -->
-    <div class="tab-pane fade" id="tab-student" role="tabpanel"
-         aria-labelledby="tab-student-tab">
-
-      <form method="get" action="{{ url_for('admin_analytics') }}"
-            class="row g-2 align-items-end mb-3">
-        <div class="col-md-4">
-          <label class="form-label small text-aa-muted">Select student</label>
-          <select name="user_id" class="form-select">
-            {% for s in students %}
-            <option value="{{ s.id }}"
-                    {% if selected_user and s.id == selected_user.id %}selected{% endif %}>
-              {{ s.username }}{% if s.is_english_native == 1 %} · L1{% elif s.is_english_native == 0 %} · L2{% endif %}
-            </option>
-            {% endfor %}
-          </select>
+        <div class="row g-3 mb-4">
+          <div class="col-md-6"><div class="card border-0 aa-card h-100"><div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h6 class="mb-0">Progress Over Time</h6>
+              <span class="small text-aa-muted">
+                Weekly average MCQ score · L1 vs L2 (mock)
+              </span>
+            </div>
+            <div class="chart-box"><canvas id="chartProgress"></canvas></div>
+          </div></div></div>
+          <div class="col-md-6"><div class="card border-0 aa-card h-100"><div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h6 class="mb-0">Top 10 Dictionary Searches · L1 vs L2</h6>
+              <div class="aa-toggle-group btn-group btn-group-sm" role="group" aria-label="Toggle L1 / L2">
+                <button type="button" class="btn aa-toggle-pill active" data-dataset="L1">L1</button>
+                <button type="button" class="btn aa-toggle-pill" data-dataset="L2">L2</button>
+              </div>
+            </div>
+            <div class="chart-box"><canvas id="chartDictTop"></canvas></div>
+          </div></div></div>
         </div>
-        <div class="col-md-2">
-          <button type="submit" class="btn btn-aa w-100">View</button>
-        </div>
-      </form>
-
-      {% if not selected_user %}
-      <div class="alert alert-warning small">
-        No students found yet. Ask students to register first.
-      </div>
       {% else %}
-      <div class="row g-3">
-        <!-- Student summary card -->
-        <div class="col-lg-4">
-          <div class="card border-0 shadow-sm aa-card h-100">
-            <div class="card-body">
-              <div class="d-flex justify-content-between align-items-start">
-                <div>
-                  <div class="badge aa-pill-label">
-                    {{ selected_user.username }}
-                  </div>
-                  <h5 class="fw-bold mb-1">
-                    {{ selected_user.username }}
-                  </h5>
-                  <div class="small text-aa-muted">
-                    {{ selected_user.email }}
-                  </div>
-                  <div class="small text-aa-muted mt-1">
-                    Group:
-                    {% if selected_user.is_english_native == 1 %}
-                      L1 · Native English
-                    {% elif selected_user.is_english_native == 0 %}
-                      L2 · Non-native
-                    {% else %}
-                      Not set
-                    {% endif %}
-                  </div>
-                </div>
-              </div>
-
-              {% if student_assign_stats %}
-              <hr class="my-3">
-              <div class="small">
-                <div class="aa-metric-label">Assignments</div>
-                <div class="fw-semibold">
-                  {{ student_assign_stats.total }} total,
-                  {{ student_assign_stats.completed }} submitted
-                </div>
-                <div class="text-aa-muted">
-                  Avg score:
-                  {% if student_assign_stats.avg_score %}
-                    {{ "%.1f"|format(student_assign_stats.avg_score) }}%
-                  {% else %}
-                    –
-                  {% endif %}
-                  · Avg attempts:
-                  {{ "%.1f"|format(student_assign_stats.avg_attempts or 0) }}
-                </div>
-
-                {% if student_assign_stats.by_type %}
-                <div class="mt-2">
-                  {% for t, info in student_assign_stats.by_type.items() %}
-                  <div class="d-flex justify-content-between">
-                    <span class="text-aa-muted">
-                      {{ t|capitalize }}
-                    </span>
-                    <span>
-                      {{ info.completed }}/{{ info.count }} submitted
-                    </span>
-                  </div>
-                  {% endfor %}
-                </div>
-                {% endif %}
-              </div>
-              {% else %}
-              <hr class="my-3">
-              <div class="small text-aa-muted">
-                No assignments for this student yet.
-              </div>
-              {% endif %}
-
-              {% if student_scramble_summary %}
-              <hr class="my-3">
-              <div class="small">
-                <div class="aa-metric-label">Word Scramble</div>
-                <div class="fw-semibold">
-                  {{ student_scramble_summary.sessions }} session{{ student_scramble_summary.sessions != 1 and 's' or '' }}
-                </div>
-                <div class="text-aa-muted">
-                  Correct: {{ student_scramble_summary.total_correct }}/{{ student_scramble_summary.total_questions }}
-                  {% if student_scramble_summary.total_questions %}
-                    ({{ "%.1f"|format(student_scramble_summary.accuracy) }}%)
-                  {% endif %}
-                </div>
-              </div>
-              {% endif %}
-            </div>
-          </div>
-        </div>
-
-        <!-- Assignments list -->
-        <div class="col-lg-4">
-          <div class="card border-0 shadow-sm aa-card h-100">
-            <div class="card-body">
-              <h6 class="fw-bold mb-2">Recent Assignments</h6>
-              {% if student_assign_list %}
-              <div class="aa-list small">
-                {% for a in student_assign_list[:8] %}
-                <div class="aa-list-row">
-                  <div>
-                    <div class="fw-semibold">
-                      {{ a.assignment_title or "Untitled" }}
-                    </div>
-                    <div class="text-aa-muted">
-                      Type: {{ a.assignment_type or "?" }} ·
-                      {% if a.status == "submitted" %}
-                        Submitted
-                      {% else %}
-                        Pending
-                      {% endif %}
-                    </div>
-                  </div>
-                  <div class="text-end">
-                    {% if a.score is not none %}
-                      <div class="fw-semibold">
-                        {{ "%.0f"|format(a.score) }}%
-                      </div>
-                    {% else %}
-                      <div class="text-aa-muted">–</div>
-                    {% endif %}
-                    <div class="text-aa-muted">
-                      tries: {{ a.attempt_count or 0 }}
-                    </div>
-                  </div>
-                </div>
-                {% endfor %}
-              </div>
-              {% else %}
-              <div class="small text-aa-muted">
-                No assignments recorded.
-              </div>
-              {% endif %}
-            </div>
-          </div>
-        </div>
-
-        <!-- Dict & scramble sessions -->
-        <div class="col-lg-4">
-          <div class="card border-0 shadow-sm aa-card h-100">
-            <div class="card-body">
-              <h6 class="fw-bold mb-2">Dictionary & Scramble Details</h6>
-
-              <div class="small mb-3">
-                <div class="aa-metric-label mb-1">Recent Dictionary Lookups</div>
-                {% if student_lookups %}
-                <ul class="aa-keyword-list">
-                  {% for l in student_lookups %}
-                  <li class="justify-content-between">
-                    <span class="aa-keyword">{{ l.query }}</span>
-                    <span class="aa-keyword-count">
-                      {{ l.created_at|dt("%m-%d") }}
-                    </span>
-                  </li>
-                  {% endfor %}
-                </ul>
-                {% else %}
-                <div class="text-aa-muted fst-italic">
-                  No lookups yet.
-                </div>
-                {% endif %}
-              </div>
-
-              {% if student_scramble_sessions %}
-              <div class="small">
-                <div class="aa-metric-label mb-1">Last Scramble Sessions</div>
-                <div class="aa-list small">
-                  {% for s in student_scramble_sessions %}
-                  <div class="aa-list-row">
-                    <div>
-                      <div class="text-aa-muted">
-                        Session #{{ s.id }}
-                      </div>
-                    </div>
-                    <div class="text-end">
-                      <div>
-                        {{ s.correct_count }}/{{ s.total }} correct
-                      </div>
-                    </div>
-                  </div>
-                  {% endfor %}
-                </div>
-              </div>
-              {% endif %}
-            </div>
-          </div>
-        </div>
-      </div>
+        <div class="alert alert-info aa-card p-3">Switching views...</div>
       {% endif %}
     </div>
-  </div>
+    <div class="tab-pane fade {% if view_mode == 'user' %}show active{% endif %}" id="user-detail-tab">
+
+      <div class="d-flex align-items-center gap-3 mb-4">
+        <label for="userSelector" class="fw-bold text-aa-heading mb-0">Select Student:</label>
+        <select class="form-select w-auto" id="userSelector" onchange="window.location.href = this.value">
+          <option value="{{ url_for('admin_analytics') }}">-- Select a user --</option>
+          {% for user in all_users %}
+            <option value="{{ url_for('admin_analytics', user_id=user.id) }}"
+                    {% if selected_user_id == user.id %}selected{% endif %}>
+              {{ user.username }} (#{{ user.id }})
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      {% if view_mode == 'user' %}
+
+        <div class="row g-3 mb-4">
+          <div class="col-md-4">
+            <div class="card border-0 aa-card h-100">
+              <div class="card-body">
+                <h6 class="mb-3">Student Profile</h6>
+                <p class="mb-1 small">
+                  <span class="text-aa-muted">Username:</span>
+                  <span class="fw-bold text-aa-heading">{{ user_data.user.username }}</span>
+                </p>
+                <p class="mb-1 small">
+                  <span class="text-aa-muted">L1 / L2:</span>
+                  {{ user_data.user.l1_language|title }} / {{ user_data.user.l2_language|title }}
+                </p>
+                <p class="mb-0 small">
+                  <span class="text-aa-muted">Current Level:</span>
+                  <span class="fw-bold badge bg-aa-pill">{{ user_data.current_level|title }}</span>
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-md-8">
+            <div class="card border-0 aa-card h-100">
+              <div class="card-body">
+                <h6 class="mb-3">Adjust Student Level</h6>
+                <form method="POST" action="{{ url_for('admin_update_user_level') }}" class="d-flex gap-3 align-items-center">
+                  <input type="hidden" name="user_id" value="{{ user_data.user.id }}">
+                  <select name="new_level" class="form-select w-auto">
+                    {% set levels = ['beginner', 'intermediate', 'advanced'] %}
+                    {% for level in levels %}
+                      <option value="{{ level }}" {% if user_data.current_level|lower == level %}selected{% endif %}>
+                        {{ level|title }}
+                      </option>
+                    {% endfor %}
+                  </select>
+                  <button type="submit" class="btn btn-sky btn-sm">
+                    <i class="bi bi-arrow-clockwise me-1"></i> Update Level
+                  </button>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="row g-3 mb-4">
+          <div class="col-md-6"><div class="card border-0 aa-card h-100"><div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h6 class="mb-0">Word Scramble · User Accuracy</h6>
+              <span class="small text-aa-muted">Accuracy (%)</span>
+            </div>
+            <div class="chart-box"><canvas id="chartScramble"></canvas></div>
+          </div></div></div>
+          <div class="col-md-6"><div class="card border-0 aa-card h-100"><div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h6 class="mb-0">MCQ · User Performance</h6>
+              <span class="small text-aa-muted">Score & attempts</span>
+            </div>
+            <div class="chart-box"><canvas id="chartMCQ"></canvas></div>
+          </div></div></div>
+          <div class="col-md-6"><div class="card border-0 aa-card h-100"><div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h6 class="mb-0">Writing · User Avg Score</h6>
+              <span class="small text-aa-muted">Avg score (%)</span>
+            </div>
+            <div class="chart-box"><canvas id="chartWriting"></canvas></div>
+          </div></div></div>
+          <div class="col-md-6"><div class="card border-0 aa-card h-100"><div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h6 class="mb-0">Overall Engagement (User)</h6>
+              <span class="small text-aa-muted">Scramble · MCQ · Writing</span>
+            </div>
+            <div class="chart-box"><canvas id="chartEngagement"></canvas></div>
+          </div></div></div>
+        </div>
+
+        <div class="row g-3 mb-4">
+          <div class="col-md-12">
+            <div class="card border-0 aa-card h-100">
+              <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <h6 class="mb-0">Top 10 Dictionary Searches (User)</h6>
+                  <span class="small text-aa-muted">User queries are displayed.</span>
+                </div>
+                <div class="chart-box"><canvas id="chartDictTop"></canvas></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      {% elif selected_user_id is none and all_users %}
+        <div class="alert alert-warning aa-card p-3">
+          Please select a student from the dropdown above to view their individual analytics.
+        </div>
+      {% endif %}
+
+    </div>
+    </div>
+
 </div>
 
-<style>
-/* Palette: soft peach/orange, matching EduWeaverPlay */
-.admin-analytics {
-  font-family: "Nunito", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-}
-
-.text-aa-heading { color: #402b2b; }
-.text-aa-muted   { color: #8b8b9b; }
-
-.badge.bg-aa-pill{
-  background: #ffe2c8;
-  color: #7a4130;
-  border-radius: 999px;
-  font-weight: 600;
-}
-
-/* Tabs */
-.aa-nav-tabs .nav-link{
-  border: none;
-  border-bottom: 2px solid transparent;
-  font-weight: 600;
-  color: #b38064;
-}
-.aa-nav-tabs .nav-link.active{
-  color: #f97316;
-  border-color: #f97316;
-  background-color: #fff7ec;
-}
-
-/* Cards */
-.aa-card{
-  border-radius: 18px;
-  background: #ffffff;
-  border: 1px solid #f3e1d4;
-}
-.border-aa-soft{
-  border-color: #f3e1d4 !important;
-}
-
-/* Main metric */
-.aa-big-number{
-  font-size: 1.8rem;
-  font-weight: 800;
-  color: #f97316;
-}
-.aa-big-caption{
-  font-size: 0.75rem;
-  color: #a78b7c;
-  text-transform: uppercase;
-  letter-spacing: .08em;
-}
-
-/* Labels / text */
-.aa-metric-label{
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: .08em;
-  color: #a78b7c;
-}
-
-/* Progress bars */
-.aa-progress{
-  height: 6px;
-  background-color: #ffe9d7;
-  border-radius: 999px;
-}
-.aa-progress-bar{
-  background: linear-gradient(90deg, #f97316, #fb923c);
-}
-.aa-progress-bar-soft{
-  background: linear-gradient(90deg, #fbbf24, #f97316);
-}
-
-/* Pill for L1/L2 labels */
-.aa-pill-label{
-  background: #fff1df;
-  color: #b45309;
-  border-radius: 999px;
-  padding: 0.1rem .6rem;
-  font-size: 0.7rem;
-}
-
-/* Keyword chips */
-.aa-keyword-list{
-  list-style: none;
-  padding-left: 0;
-  margin: 0;
-}
-.aa-keyword-list li{
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: .4rem;
-  padding: .2rem 0;
-  font-size: .85rem;
-}
-.aa-keyword{
-  background: #fff7ed;
-  border-radius: 999px;
-  padding: 0.15rem .6rem;
-  border: 1px solid #fed7aa;
-}
-.aa-keyword-count{
-  font-size: 0.75rem;
-  color: #a78b7c;
-}
-
-/* Simple list rows */
-.aa-list{
-  border-top: 1px dashed #f4d2b8;
-}
-.aa-list-row{
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: .5rem;
-  padding: .4rem 0;
-  border-bottom: 1px dashed #f4d2b8;
-}
-.btn-aa{
-  background-color: #f97316;
-  color: #fff;
-  border-radius: 999px;
-  border: none;
-}
-.btn-aa:hover{
-  background-color: #ea580c;
-  color: #fff;
-}
-</style>
-{% endblock %}
-
-{% block scripts %}
-{{ super() }}
+<footer>
+  LexiTale · AI-powered Story Classroom
+</footer>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-(function() {
-  // We know group_list[0] = L1, group_list[1] = L2 from the view
-  const l1 = {
-    avgScore: {{ group_list[0].assignments_avg_score or 0 }},
-    completed: {{ group_list[0].assignments_completed or 0 }},
-    totalAssign: {{ group_list[0].assignments_total or 0 }},
-    scrambleAccuracy: {{ group_list[0].scramble_accuracy or 0 }},
-    dictLookups: {{ group_list[0].dict_lookups or 0 }},
-    studentCount: {{ group_list[0].student_count or 0 }}
-  };
-  const l2 = {
-    avgScore: {{ group_list[1].assignments_avg_score or 0 }},
-    completed: {{ group_list[1].assignments_completed or 0 }},
-    totalAssign: {{ group_list[1].assignments_total or 0 }},
-    scrambleAccuracy: {{ group_list[1].scramble_accuracy or 0 }},
-    dictLookups: {{ group_list[1].dict_lookups or 0 }},
-    studentCount: {{ group_list[1].student_count or 0 }}
-  };
-
-  const labels = ['L1', 'L2'];
-
-  // Helpers
-  function completionPct(group) {
-    return group.totalAssign ? (100 * group.completed / group.totalAssign) : 0;
-  }
-  function avgLookupsPerStudent(group) {
-    return group.studentCount ? (group.dictLookups / group.studentCount) : 0;
-  }
-
-  // --- Assignments chart ---
-  const assignCtx = document.getElementById('aaAssignmentsChart');
-  if (assignCtx) {
-    new Chart(assignCtx.getContext('2d'), {
-      type: 'bar',
-      data: {
-        labels: labels,
-        datasets: [
-          {
-            label: 'Avg score (%)',
-            data: [l1.avgScore, l2.avgScore],
-            backgroundColor: '#f97316'
-          },
-          {
-            label: 'Completion (%)',
-            data: [completionPct(l1), completionPct(l2)],
-            backgroundColor: '#fed7aa'
-          }
-        ]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: {
-            labels: { color: '#7a5540', font: { size: 11 } }
-          }
+// V7 color palette for charts
+const V7_COLORS = {
+  coralMain: '#ff6b6b',
+  coralLight: '#ffd7cc',
+  ink: '#111827',
+  muted: '#6b7280',
+  secondary: '#065f46',
+  secondaryLight: '#d1fae5',
+  cardBorder: '#fcece4',
+  bgGameLight: '#fffcf8'
+};
+Chart.defaults.color = V7_COLORS.ink;
+Chart.defaults.font.family = "'Fredoka', 'Nunito', sans-serif";
+Chart.defaults.font.weight = '500';
+const chartGlobalOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  animation: { duration: 0 },
+  plugins: {
+    legend: {
+      labels: {
+        font: {
+          family: "'Fredoka', 'Nunito', sans-serif",
+          size: 14,
+          weight: '500'
         },
-        scales: {
-          x: {
-            ticks: { color: '#b38064' },
-            grid: { display: false }
-          },
-          y: {
-            beginAtZero: true,
-            max: 100,
-            ticks: { color: '#b38064' },
-            grid: { color: '#ffe9d7' }
-          }
-        }
+        color: V7_COLORS.ink
       }
+    },
+    tooltip: {
+      bodyFont: { family: "'Fredoka', 'Nunito', sans-serif", weight: '500' },
+      titleFont: { family: "'Baloo 2', cursive", weight: '700' },
+      backgroundColor: 'rgba(255, 252, 248, 0.95)',
+      titleColor: V7_COLORS.coralMain,
+      bodyColor: V7_COLORS.ink,
+      borderColor: V7_COLORS.cardBorder,
+      borderWidth: 1,
+      borderRadius: 8,
+      padding: 12
+    }
+  },
+  scales: {
+    x: {
+      ticks: { color: V7_COLORS.muted },
+      grid: { color: V7_COLORS.cardBorder }
+    },
+    y: {
+      ticks: { color: V7_COLORS.muted },
+      grid: { color: V7_COLORS.cardBorder }
+    },
+    r: {
+      ticks: { backdropColor: V7_COLORS.bgGameLight, color: V7_COLORS.muted },
+      pointLabels: { color: V7_COLORS.ink, font: { family: "'Baloo 2', cursive", weight: '600', size: 13 } },
+      grid: { color: V7_COLORS.cardBorder }
+    }
+  }
+};
+const datasetL1 = {
+  backgroundColor: V7_COLORS.coralMain,
+  borderColor: V7_COLORS.coralMain,
+  borderWidth: 2,
+  borderRadius: 6,
+  hoverBackgroundColor: V7_COLORS.coralMain,
+  label: "L1"
+};
+const datasetL2 = {
+  backgroundColor: V7_COLORS.secondary,
+  borderColor: V7_COLORS.secondary,
+  borderWidth: 2,
+  borderRadius: 6,
+  hoverBackgroundColor: V7_COLORS.secondary,
+  label: "L2"
+};
+const radarDatasetL1 = {
+  backgroundColor: 'rgba(255, 107, 107, 0.2)',
+  borderColor: V7_COLORS.coralMain,
+  pointBackgroundColor: V7_COLORS.coralMain,
+  pointBorderColor: '#fff',
+  pointHoverBackgroundColor: '#fff',
+  pointHoverBorderColor: V7_COLORS.coralMain,
+  borderWidth: 2,
+  label: "L1"
+};
+const radarDatasetL2 = {
+  backgroundColor: 'rgba(6, 95, 70, 0.2)',
+  borderColor: V7_COLORS.secondary,
+  pointBackgroundColor: V7_COLORS.secondary,
+  pointBorderColor: '#fff',
+  pointHoverBackgroundColor: '#fff',
+  pointHoverBorderColor: V7_COLORS.secondary,
+  borderWidth: 2,
+  label: "L2"
+};
+document.addEventListener("DOMContentLoaded", function() {
+  console.log("Analytics JS running (V7 Theme)");
+  const groups = {{ group_list|tojson|safe }};
+  const viewMode = '{{ view_mode }}'; // Get the current view mode
+
+  function safeNum(v) {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  function getGroup(code) {
+    // If in user mode, the groups array only has one item (the selected user's stats)
+    if (viewMode === 'user' && groups.length > 0) {
+        return groups[0];
+    }
+    // If in class mode, find L1/L2
+    return groups.find(g => g.code === code) || {};
+  }
+
+  let L1, L2;
+
+  if (viewMode === 'user') {
+    // In user mode, all data comes from the single group entry
+    const user = getGroup("User");
+    L1 = user;
+    L2 = user;
+    // Special labels for user mode
+    labelGroups = ["User"];
+  } else {
+    // Class mode: L1 and L2 comparison
+    L1 = getGroup("L1");
+    L2 = getGroup("L2");
+    labelGroups = ["L1", "L2"];
+  }
+
+  function baseOptions(extra = {}) {
+    return Object.assign({}, chartGlobalOptions, extra);
+  }
+
+  // Helper to create datasets for class view (L1 vs L2)
+  function createComparisonDataset(key, labels) {
+    if (viewMode === 'user') {
+        // User view: single bar/point, label "User"
+        return [{
+            label: "User",
+            data: [safeNum(L1[key])],
+            backgroundColor: V7_COLORS.coralMain,
+            borderRadius: 6
+        }];
+    } else {
+        // Class view: L1 vs L2 comparison
+        return [{
+          label: labels[0],
+          data: [safeNum(L1[key])],
+          backgroundColor: V7_COLORS.coralMain,
+          borderRadius: 6
+        },
+        {
+          label: labels[1],
+          data: [safeNum(L2[key])],
+          backgroundColor: V7_COLORS.secondary,
+          borderRadius: 6
+        }];
+    }
+  }
+
+
+  // 1. Scramble accuracy
+  const ctxScramble = document.getElementById("chartScramble");
+  if (ctxScramble) {
+    new Chart(ctxScramble.getContext("2d"), {
+      type: "bar",
+      data: {
+        labels: viewMode === 'user' ? ["Accuracy"] : labelGroups,
+        datasets: createComparisonDataset("scramble_accuracy", ["L1", "L2"])
+      },
+      options: baseOptions({
+        scales: {
+          y: { beginAtZero: true, max: 100 }
+        }
+      })
     });
   }
 
-  // --- Practice chart (scramble + dict) ---
-  const practiceCtx = document.getElementById('aaPracticeChart');
-  if (practiceCtx) {
-    new Chart(practiceCtx.getContext('2d'), {
-      type: 'bar',
+
+  // 2. MCQ Score vs Attempts
+  const ctxMCQ = document.getElementById("chartMCQ");
+  if (ctxMCQ) {
+    const l1Score = safeNum(L1.mcq_avg_score);
+    const l2Score = safeNum(L2.mcq_avg_score);
+    const l1Attempts = safeNum(L1.mcq_avg_attempts);
+    const l2Attempts = safeNum(L2.mcq_avg_attempts);
+
+    let datasets;
+
+    if (viewMode === 'user') {
+        datasets = [
+            {
+                label: "Avg MCQ Score (%)",
+                data: [l1Score], // Only one point for the user
+                backgroundColor: V7_COLORS.coralMain,
+                borderRadius: 6
+            },
+            {
+                label: "Avg Attempts (scaled)",
+                data: [l1Attempts * 10], // Only one point for the user
+                backgroundColor: V7_COLORS.coralLight,
+                borderRadius: 6
+            }
+        ];
+    } else {
+        datasets = [
+            {
+                label: "Avg MCQ Score (%)",
+                data: [l1Score, l2Score],
+                backgroundColor: [V7_COLORS.coralMain, V7_COLORS.secondary],
+                borderRadius: 6
+            },
+            {
+                label: "Avg Attempts (scaled)",
+                data: [l1Attempts * 10, l2Attempts * 10],
+                backgroundColor: [V7_COLORS.coralLight, V7_COLORS.secondaryLight],
+                borderRadius: 6
+            }
+        ];
+    }
+
+    new Chart(ctxMCQ.getContext("2d"), {
+      type: "bar",
       data: {
-        labels: labels,
-        datasets: [
-          {
-            label: 'Scramble accuracy (%)',
-            data: [l1.scrambleAccuracy, l2.scrambleAccuracy],
-            backgroundColor: '#fb923c'
-          },
-          {
-            label: 'Avg dict lookups / student',
-            data: [avgLookupsPerStudent(l1), avgLookupsPerStudent(l2)],
-            backgroundColor: '#facc15'
-          }
-        ]
+        labels: viewMode === 'user' ? ["User"] : labelGroups,
+        datasets: datasets
       },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
+      options: baseOptions({
         plugins: {
-          legend: {
-            labels: { color: '#7a5540', font: { size: 11 } }
+          tooltip: {
+            callbacks: {
+              label: function(ctx) {
+                const label = ctx.dataset.label || "";
+                if (label.indexOf("Attempts") !== -1) {
+                  const raw = ctx.parsed.y / 10;
+                  return "Avg attempts: " + raw.toFixed(1);
+                }
+                return label + ": " + ctx.parsed.y.toFixed(1) + "%";
+              }
+            }
           }
         },
         scales: {
-          x: {
-            ticks: { color: '#b38064' },
-            grid: { display: false }
-          },
-          y: {
-            beginAtZero: true,
-            ticks: { color: '#b38064' },
-            grid: { color: '#ffe9d7' }
-          }
+          y: { beginAtZero: true, max: 100 }
         }
-      }
+      })
     });
   }
-})();
+
+  // 3. Writing scores
+  const ctxWriting = document.getElementById("chartWriting");
+  if (ctxWriting) {
+    new Chart(ctxWriting.getContext("2d"), {
+      type: "bar",
+      data: {
+        labels: viewMode === 'user' ? ["Score"] : labelGroups,
+        datasets: createComparisonDataset("writing_avg_score", ["L1", "L2"])
+      },
+      options: baseOptions({
+        scales: {
+          y: { beginAtZero: true, max: 100 }
+        }
+      })
+    });
+  }
+
+  // 4. Overall engagement (radar)
+  const ctxEngagement = document.getElementById("chartEngagement");
+  if (ctxEngagement) {
+    let radarDatasets;
+
+    if (viewMode === 'user') {
+        radarDatasets = [
+            Object.assign({}, radarDatasetL1, {
+                label: "User Metrics",
+                data: [
+                    safeNum(L1.scramble_accuracy),
+                    safeNum(L1.mcq_avg_score),
+                    safeNum(L1.writing_avg_score)
+                ]
+            })
+        ];
+    } else {
+        radarDatasets = [
+            Object.assign({}, radarDatasetL1, {
+                data: [
+                    safeNum(L1.scramble_accuracy),
+                    safeNum(L1.mcq_avg_score),
+                    safeNum(L1.writing_avg_score)
+                ]
+            }),
+            Object.assign({}, radarDatasetL2, {
+                data: [
+                    safeNum(L2.scramble_accuracy),
+                    safeNum(L2.mcq_avg_score),
+                    safeNum(L2.writing_avg_score)
+                ]
+            })
+        ];
+    }
+
+    new Chart(ctxEngagement.getContext("2d"), {
+      type: "radar",
+      data: {
+        labels: ["Scramble", "MCQ", "Writing"],
+        datasets: radarDatasets
+      },
+      options: baseOptions({
+        elements: { line: { tension: 0.1 } },
+        scales: {
+          r: { beginAtZero: true, max: 100 }
+        }
+      })
+    });
+  }
+
+  // 5. Progress over time (Line Chart - Class View Only)
+  const ctxProgress = document.getElementById("chartProgress");
+  if (ctxProgress && viewMode === 'class') {
+    const weeks = ["W1", "W2", "W3", "W4", "W5"];
+    // Simple mock curves centred around the current avg MCQ score
+    const baseL1 = safeNum(L1.mcq_avg_score) || 80;
+    const baseL2 = safeNum(L2.mcq_avg_score) || 70;
+    const l1Series = [
+      Math.max(0, Math.min(100, baseL1 - 4)),
+      Math.max(0, Math.min(100, baseL1 - 2)),
+      Math.max(0, Math.min(100, baseL1)),
+      Math.max(0, Math.min(100, baseL1 + 2)),
+      Math.max(0, Math.min(100, baseL1 + 3))
+    ];
+    const l2Series = [
+      Math.max(0, Math.min(100, baseL2 - 5)),
+      Math.max(0, Math.min(100, baseL2 - 3)),
+      Math.max(0, Math.min(100, baseL2)),
+      Math.max(0, Math.min(100, baseL2 + 2)),
+      Math.max(0, Math.min(100, baseL2 + 4))
+    ];
+    new Chart(ctxProgress.getContext("2d"), {
+      type: "line",
+      data: {
+        labels: weeks,
+        datasets: [
+          {
+            label: "L1 MCQ Avg (%)",
+            data: l1Series,
+            borderColor: V7_COLORS.coralMain,
+            backgroundColor: "rgba(255,107,107,0.15)",
+            tension: 0.3,
+            fill: true,
+            pointRadius: 3,
+            pointBackgroundColor: V7_COLORS.coralMain
+          },
+          {
+            label: "L2 MCQ Avg (%)",
+            data: l2Series,
+            borderColor: V7_COLORS.secondary,
+            backgroundColor: "rgba(6,95,70,0.15)",
+            tension: 0.3,
+            fill: true,
+            pointRadius: 3,
+            pointBackgroundColor: V7_COLORS.secondary
+          }
+        ]
+      },
+      options: baseOptions({
+        scales: {
+          y: { beginAtZero: true, max: 100 }
+        }
+      })
+    });
+  }
+
+  // 6. Top 10 Dictionary Searches · L1 vs L2 with toggle
+  const ctxDictTop = document.getElementById("chartDictTop");
+  let dictChart = null;
+  if (ctxDictTop) {
+    const l1Top = Array.isArray(L1.top_queries) ? L1.top_queries : [];
+    const l2Top = Array.isArray(L2.top_queries) ? L2.top_queries : [];
+    const wordMap = new Map();
+
+    // Only process the relevant data for the current view
+    if (viewMode === 'user') {
+        // User view: only process L1/User data, L2 is ignored for display but included in list to rank
+        l1Top.forEach(item => {
+            const key = item.query;
+            if (!wordMap.has(key)) {
+              wordMap.set(key, { word: key, l1: 0, l2: 0 });
+            }
+            wordMap.get(key).l1 = safeNum(item.cnt);
+        });
+        // Mock L2 data for the comparison dataset (hidden initially)
+        if (l1Top.length > 0) {
+            l1Top.forEach(item => {
+                wordMap.get(item.query).l2 = safeNum(item.cnt) * 0.5;
+            });
+        }
+    } else {
+        // Class view: Process L1 and L2 data
+        l1Top.forEach(item => {
+            const key = item.query;
+            if (!wordMap.has(key)) {
+              wordMap.set(key, { word: key, l1: 0, l2: 0 });
+            }
+            wordMap.get(key).l1 = safeNum(item.cnt);
+        });
+        l2Top.forEach(item => {
+            const key = item.query;
+            if (!wordMap.has(key)) {
+              wordMap.set(key, { word: key, l1: 0, l2: 0 });
+            }
+            wordMap.get(key).l2 = safeNum(item.cnt);
+        });
+    }
+
+    const merged = Array.from(wordMap.values());
+    merged.sort((a, b) => (b.l1 + b.l2) - (a.l1 + a.l2));
+    const top10 = merged.slice(0, 10);
+    const labels = top10.map(x => x.word);
+    const l1Counts = top10.map(x => x.l1);
+    const l2Counts = top10.map(x => x.l2);
+
+    let datasets;
+
+    // In user mode, we display the user's data as the only relevant dataset,
+    // but we use the L1/L2 structure for easy toggling (even if L2 is just filler mock data)
+    datasets = [
+      Object.assign({}, datasetL1, {
+        label: (viewMode === 'user' ? 'Searches' : 'L1'), // Change label in user mode
+        data: l1Counts
+      }),
+      Object.assign({}, datasetL2, {
+        label: (viewMode === 'user' ? 'Mock Comparison' : 'L2'), // Change label in user mode
+        data: l2Counts,
+        hidden: true // L2 hidden by default (as requested)
+      })
+    ];
+
+    dictChart = new Chart(ctxDictTop.getContext("2d"), {
+      type: "bar",
+      data: {
+        labels,
+        datasets
+      },
+      options: baseOptions({
+        indexAxis: "y",
+        scales: {
+          x: { beginAtZero: true, grid: { display: false } },
+          y: { ticks: { color: V7_COLORS.ink } }
+        }
+      })
+    });
+
+    // Toggle buttons for L1 / L2 on/off (Only if the controls exist)
+    const toggleButtons = document.querySelectorAll('.aa-toggle-pill[data-dataset]');
+    if (viewMode === 'class' && toggleButtons.length > 0) {
+        toggleButtons.forEach(btn => {
+          btn.addEventListener('click', () => {
+            const name = btn.getAttribute('data-dataset');
+            const ds = dictChart.data.datasets.find(d => d.label === name);
+            if (!ds) return;
+
+            const currentlyActive = btn.classList.contains('active');
+            // If currently active -> turn off
+            if (currentlyActive) {
+              btn.classList.remove('active');
+              ds.hidden = true;
+            } else {
+              btn.classList.add('active');
+              ds.hidden = false;
+            }
+            dictChart.update();
+          });
+        });
+    } else if (viewMode === 'user') {
+        // Hide toggle buttons in user view since the second dataset is mocked/not needed
+        const toggleGroup = document.querySelector('#user-detail-tab .aa-toggle-group');
+        if (toggleGroup) toggleGroup.style.display = 'none';
+
+        // Hide the second legend item in user mode
+        if (dictChart.options.plugins && dictChart.options.plugins.legend) {
+            dictChart.options.plugins.legend.display = false;
+        }
+
+    }
+
+    if (viewMode === 'user') {
+        // In user mode, we hide all comparison datasets except the primary one
+        dictChart.data.datasets.forEach((ds, index) => {
+            if (index > 0) ds.hidden = true;
+        });
+
+    }
+  }
+});
 </script>
-{% endblock %}
+</body>
+</html>

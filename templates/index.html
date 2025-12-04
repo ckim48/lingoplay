@@ -84,15 +84,37 @@
 </div>
 
 <style>
-/* Define Coral Theme Variables based on Login Page */
+/* 🎨 FONT UPDATE: Switched to 'Fredoka' for a bolder, rounded, and playful look. */
+
+/* Import Fredoka, Nunito, and Baloo 2 */
+@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@700&display=swap');
+
+
 :root {
     --coral-main: #ff6b6b;
     --coral-light: #ffd7cc;
-    --ink: #111827; /* Dark text */
-    --muted: #6b7280; /* Muted text */
+    --ink: #111827;
+    --muted: #6b7280;
     --paper: #ffffff;
-    --bg-wash: #fffaf3; /* Background wash from login/base */
-    --shadow-md-v7: 0 10px 30px rgba(255, 107, 107, 0.15), 0 4px 8px rgba(0, 0, 0, 0.05);
+    --bg-wash: #fffaf3;
+    --shadow-md-v7: 0 15px 40px rgba(255, 107, 107, 0.18), 0 6px 10px rgba(0, 0, 0, 0.08);
+
+    /* NEW Label Colors */
+    --label-story-bg: #ffe0e0; /* Very light coral */
+    --label-story-text: #b91c1c; /* Dark red */
+    --label-assign-bg: #dcfce7; /* Light green */
+    --label-assign-text: #166534; /* Dark green */
+    --label-library-bg: #fef3c7; /* Light yellow */
+    --label-library-text: #a16207; /* Dark amber */
+    --label-game-bg: #fce7f6; /* Light pink */
+    --label-game-text: #a21c61; /* Dark magenta */
+}
+
+/* Apply new, friendly font stack */
+.home-page-v7, .feature-card-v7 {
+    font-family: 'Fredoka', 'Nunito', sans-serif;
 }
 
 /* Reset base styles */
@@ -108,19 +130,19 @@ footer {
   display: none;
 }
 
-/* Title Section V7 */
+/* --- Title Section V7 --- */
 .title-chip-v7 {
   display: inline-flex;
   align-items: center;
   gap: .6rem;
   padding: .3rem 1.1rem;
   border-radius: 999px;
-  /* CORAL THEME */
-  background: #fff4ef; /* Light pink background */
-  border: 1px solid var(--coral-light);
-  font-size: .9rem;
-  font-weight: 600;
+  background: #fff4ef;
+  border: 2px solid var(--coral-main);
+  font-size: .95rem;
+  font-weight: 500;
   color: var(--coral-main);
+  font-family: 'Nunito', sans-serif;
 }
 .title-chip-v7 .sparkle {
   color: var(--coral-main);
@@ -128,97 +150,115 @@ footer {
 }
 .title-main-v7 {
   margin-top: .75rem;
-  font-family: "Baloo 2";
-  font-size: clamp(2.2rem, 3.5vw, 3.2rem);
+  font-family: 'Baloo 2', cursive;
+  font-size: clamp(2.4rem, 3.8vw, 3.5rem);
   color: var(--ink);
   font-weight: 700;
 }
 .title-main-v7 span { color: var(--coral-main); }
 
-/* ----- Feature Cards V7 ----- */
+/* --- Feature Cards V7 --- */
 .feature-card-v7 {
-  position: relative;
-  border: none;
-  border-radius: 20px;
-  background: var(--paper);
+  border-radius: 25px;
   padding: 2.5rem 1.5rem;
   box-shadow: var(--shadow-md-v7);
-  transition: transform .25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow .25s ease;
-  overflow: hidden;
+  transition: transform .3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow .3s ease;
+  border: 3px solid #f9d8c9;
 }
 
 /* Hover effect */
 .feature-card-v7:hover {
-  transform: translateY(-8px);
-  /* CORAL THEME SHADOW ON HOVER */
-  box-shadow: 0 18px 40px rgba(255, 107, 107, 0.25), 0 4px 12px rgba(255, 107, 107, 0.1);
+  transform: translateY(-8px) rotate(-0.5deg);
+  box-shadow: 0 20px 45px rgba(255, 107, 107, 0.28), 0 5px 14px rgba(255, 107, 107, 0.1);
 }
 
-/* Top Label */
+/* --- TOP LABEL V7 (REFINED DESIGN) --- */
 .feature-top-label-v7 {
   position: absolute;
   top: 15px;
   right: 15px;
-  padding: 0.2rem 0.6rem;
-  border-radius: 6px;
-  font-size: .75rem;
-  font-weight: 600;
-  color: white;
-  background: rgba(0, 0, 0, 0.2);
+  /* Increased padding and radius for a pill shape */
+  padding: 0.35rem 0.9rem;
+  border-radius: 999px;
+  /* Increased size and weight */
+  font-size: .85rem;
+  font-weight: 700;
+
+  /* Resetting default dark styles */
+  background: none;
+  color: #333;
+  /* Use Nunito for contrast and readability on the label */
+  font-family: 'Nunito', sans-serif;
 }
+
+/* Specific Label Colors matching the icon themes */
+.feature-story-v7 .feature-top-label-v7 {
+    background: var(--label-story-bg);
+    color: var(--label-story-text);
+}
+.feature-assign-v7 .feature-top-label-v7 {
+    background: var(--label-assign-bg);
+    color: var(--label-assign-text);
+}
+.feature-library-v7 .feature-top-label-v7 {
+    background: var(--label-library-bg);
+    color: var(--label-library-text);
+}
+.feature-game-v7 .feature-top-label-v7 {
+    background: var(--label-game-bg);
+    color: var(--label-game-text);
+}
+/* --- END TOP LABEL V7 --- */
 
 /* Icon bubble V7 */
 .icon-wrap-v7 {
-  width: 4.5rem;
-  height: 4.5rem;
+  width: 5rem;
+  height: 5rem;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 2.2rem;
+  font-size: 2.5rem;
   color: #fff;
   margin-inline: auto;
   margin-top: 0.5rem;
-  margin-bottom: 1.5rem !important;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+  margin-bottom: 1.8rem !important;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+  border: 3px dashed white;
 }
 
-/* Specific Card Colors */
-/* CORAL BORDERS REMOVED for clean white look, relying on shadow */
-
-/* Gradients for icons (using the CORAL theme) */
+/* Specific Card Colors (Gradient retained for icons) */
 .feature-story-v7 .icon-wrap-v7 {
-  /* STORY: Primary Coral */
   background: linear-gradient(135deg, var(--coral-main), #f87171);
 }
 .feature-assign-v7 .icon-wrap-v7 {
-  /* ASSIGNMENTS: Secondary Green */
   background: linear-gradient(135deg, #10b981, #34d399);
 }
 .feature-library-v7 .icon-wrap-v7 {
-  /* LIBRARY: Tertiary Amber */
   background: linear-gradient(135deg, #f59e0b, #fcd34d);
 }
 .feature-game-v7 .icon-wrap-v7 {
-  /* GAME: Secondary Pink/Red */
   background: linear-gradient(135deg, #f87171, #fb9292);
 }
 
 /* Labels and Subtext */
 .feature-title-v7 {
-  font-size: 1.25rem;
-  font-weight: 700;
+  font-size: 1.4rem;
+  font-weight: 500;
   color: var(--ink);
+  line-height: 1.1;
 }
 .feature-sub-v7 {
-  font-size: .9rem;
+  font-size: 1rem;
+  font-weight: 400;
   color: var(--muted) !important;
-  min-height: 1.2rem;
+  min-height: 1.4rem;
+  margin-top: 0.4rem !important;
 }
 
 @media (max-width: 991px) {
   .home-hero-v7 .row > div {
-    max-width: 320px;
+    max-width: 340px;
   }
 }
 </style>

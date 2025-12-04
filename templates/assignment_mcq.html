@@ -3,19 +3,22 @@
 
 {% block content %}
 
-<div class="container mt-4">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Baloo+2:wght@700;800&display=swap" rel="stylesheet">
+
+<div class="container mt-4 mb-5">
   <div class="row justify-content-center">
-    <div class="col-lg-8">
-      <div class="card border-0 shadow-sm rounded-4">
-        <div class="card-body p-4">
-          <h3 class="h4 mb-2">Reading Comprehension</h3>
-          <p class="text-muted mb-3">
-            Story: <strong>{{ story.title }}</strong>
+    <div class="col-12">
+      <div class="card border-0 quiz-card-v8">
+        <div class="card-body p-4 p-md-5">
+
+          <h1 class="mb-2 quiz-main-title">Reading Quiz</h1>
+          <p class="mb-4 quiz-sub-text">
+            Story: <strong class="text-deep-blue">{{ story.title }}</strong>
           </p>
 
           {% if assignment.instructions %}
-            <div class="alert alert-info small">
-              <strong>Instructions:</strong><br>
+            <div class="alert alert-info quiz-alert-v8 small quiz-text-body">
+              <strong class="fw-bold">Instructions:</strong><br>
               {{ assignment.instructions | nl2br }}
             </div>
           {% endif %}
@@ -24,8 +27,8 @@
           {% set score = submission.score if submission and submission.score is not none else assignment.score %}
 
           {% if score is not none %}
-            <div class="alert alert-success small">
-              Your current score: <strong>{{ '%.1f'|format(score) }}%</strong>
+            <div class="alert alert-success quiz-alert-v8 quiz-score-alert quiz-text-body">
+              Your current score: <strong class="score-number-highlight">{{ '%.1f'|format(score) }}%</strong>
               You can submit again to update your score.
             </div>
           {% endif %}
@@ -34,21 +37,22 @@
             {% if questions %}
               {% for q in questions %}
                 {% set q_index = loop.index0 %}
-                <div class="mb-4">
-                  <div class="fw-semibold mb-1">
+                <div class="mb-5 question-block-v8">
+                  <div class="fw-semibold mb-2 quiz-question-text">
                     Q{{ loop.index }}. {{ q.question }}
                   </div>
-                  <div class="ms-1">
+                  <div class="ms-1 quiz-options-wrap">
                     {% for opt in q.options %}
-                      <div class="form-check">
+                      <div class="form-check form-check-lg quiz-form-check">
                         <input
-                          class="form-check-input"
+                          class="form-check-input quiz-radio-input"
                           type="radio"
                           name="q{{ q_index }}"
                           id="q{{ q_index }}_opt{{ loop.index0 }}"
                           value="{{ loop.index0 }}"
+                          required
                         >
-                        <label class="form-check-label" for="q{{ q_index }}_opt{{ loop.index0 }}">
+                        <label class="form-check-label quiz-text-body" for="q{{ q_index }}_opt{{ loop.index0 }}">
                           {{ opt }}
                         </label>
                       </div>
@@ -57,14 +61,14 @@
                 </div>
               {% endfor %}
             {% else %}
-              <p class="text-muted">No questions are available for this assignment.</p>
+              <p class="text-muted quiz-text-body">No questions are available for this assignment.</p>
             {% endif %}
 
-            <div class="d-flex justify-content-between mt-3">
-              <a href="{{ url_for('assignments_list') }}" class="btn btn-outline-secondary">
-                Back to assignments
+            <div class="d-flex justify-content-between mt-4 pt-3 border-top-soft">
+              <a href="{{ url_for('assignments_list') }}" class="btn btn-lg btn-outline-secondary quiz-text-button rounded-pill">
+                Back to missions
               </a>
-              <button type="submit" class="btn btn-primary">
+              <button type="submit" class="btn btn-lg btn-action-primary quiz-text-button rounded-pill shadow-lg">
                 Submit answers
               </button>
             </div>
@@ -81,33 +85,33 @@
    ---------------------------- #}
 <div class="modal fade" id="scoreModal" tabindex="-1" aria-labelledby="scoreModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content rounded-4 border-0 shadow">
-      <div class="modal-header border-0">
-        <h5 class="modal-title fw-semibold" id="scoreModalLabel">Well done!</h5>
+    <div class="modal-content rounded-5 border-0 modal-content-v8 shadow-lg">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title fw-semibold quiz-main-title" id="scoreModalLabel">Amazing Job! 🎉</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
-      <div class="modal-body pb-3">
+      <div class="modal-body pb-3 pt-2">
         {% if score is not none %}
-          <p class="mb-1">
+          <p class="mb-1 quiz-text-body">
             You scored:
           </p>
-          <p class="display-6 fw-bold mb-2">
+          <p class="display-5 fw-bold mb-2 modal-score-text">
             {{ '%.1f'|format(score) }}%
           </p>
-          <p class="text-muted small mb-0">
-            You can try the quiz again to improve your score, or go back to see your other assignments.
+          <p class="text-muted small mb-0 quiz-text-body">
+            You can try the quiz again to improve your score, or go back to see your other missions.
           </p>
         {% else %}
-          <p class="mb-0">
+          <p class="mb-0 quiz-text-body">
             Your answers were submitted.
           </p>
         {% endif %}
       </div>
-      <div class="modal-footer border-0 d-flex justify-content-between">
-        <a href="{{ url_for('assignments_list') }}" class="btn btn-outline-secondary">
-          Back to assignments
+      <div class="modal-footer border-0 d-flex justify-content-between pt-0">
+        <a href="{{ url_for('assignments_list') }}" class="btn btn-lg btn-outline-secondary quiz-text-button rounded-pill">
+          Back to missions
         </a>
-        <button type="button" class="btn btn-primary" data-bs-dismiss="modal">
+        <button type="button" class="btn btn-lg btn-action-primary quiz-text-button rounded-pill" data-bs-dismiss="modal">
           Try again
         </button>
       </div>
@@ -126,5 +130,151 @@
   });
 </script>
 {% endif %}
+
+<style>
+/* Define Child-Like Theme Variables */
+:root {
+    --coral-main: #ff6b6b;
+    --coral-light: #ffd7cc;
+    --ink: #111827;
+    --muted: #6b7280;
+    --paper: #ffffff;
+    --success-color: #10b981;
+    --info-color: #3b82f6;
+    --deep-blue: #0A3D62;
+    --shadow-soft: 0 10px 30px rgba(255, 107, 107, 0.1), 0 4px 8px rgba(0, 0, 0, 0.05);
+}
+
+/* --- Font Application --- */
+.quiz-main-title {
+    font-family: 'Baloo 2', cursive;
+    font-weight: 800;
+    color: var(--coral-main);
+    font-size: 2.2rem;
+    line-height: 1.1;
+}
+.quiz-question-text {
+    font-family: 'Baloo 2', cursive;
+    font-weight: 700 !important;
+    color: var(--ink);
+    font-size: 1.4rem;
+}
+.quiz-sub-text, .quiz-text-body, .quiz-text-button {
+    font-family: 'Fredoka', 'Nunito', sans-serif;
+}
+.quiz-text-body {
+    font-weight: 500;
+    color: var(--muted) !important;
+}
+.quiz-text-button {
+    font-weight: 600 !important;
+}
+.text-deep-blue {
+    color: var(--deep-blue);
+}
+
+/* --- Card & Layout --- */
+.quiz-card-v8 {
+    border-radius: 1.75rem; /* Large rounded corners */
+    background: #fffcf8; /* Soft off-white background */
+    box-shadow: 0 1rem 3rem rgba(255, 107, 107, 0.15); /* Coral shadow */
+    border: 3px solid var(--coral-light) !important;
+}
+.border-top-soft {
+    border-top: 1px solid rgba(255, 107, 107, 0.2) !important;
+}
+.modal-content-v8 {
+    background: #fffdf8;
+    border: 3px solid var(--coral-light) !important;
+}
+.modal-score-text {
+    color: var(--success-color);
+}
+.modal-header .quiz-main-title {
+    color: var(--ink);
+}
+
+/* --- Alerts & Score Display --- */
+.quiz-alert-v8 {
+    border-radius: 1rem;
+    padding: 1rem 1.25rem;
+}
+.alert-info {
+    background-color: #e6f0ff;
+    border-color: #c9e0ff;
+    color: var(--info-color);
+}
+.alert-success {
+    background-color: #dcfce7;
+    border-color: #a7f3d0;
+    color: var(--success-color);
+}
+.quiz-score-alert strong {
+    font-size: 1.5rem;
+    color: var(--success-color);
+    font-family: 'Baloo 2', cursive;
+}
+
+/* --- Questions & Options --- */
+.question-block-v8 {
+    padding: 1.5rem; /* Increased padding */
+    border-radius: 1rem; /* Rounded block */
+    background: #fff;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08); /* More defined shadow */
+    /* REMOVE LEFT BORDER */
+    border-left: none;
+    border: 1px solid rgba(0, 0, 0, 0.05); /* Soft full border */
+}
+.quiz-options-wrap {
+    margin-top: 1rem;
+}
+
+/* Radio Button Styling (Large and custom color) */
+.form-check-input {
+    width: 1.5em; /* Bigger radio button */
+    height: 1.5em;
+    border-radius: 50%;
+    border: 2px solid var(--muted);
+    transition: all 0.2s;
+    margin-top: 0.15em;
+}
+.form-check-input:checked {
+    background-color: var(--coral-main);
+    border-color: var(--coral-main);
+}
+.form-check-label {
+    font-size: 1.15rem; /* Larger text for options */
+    padding-left: 0.5rem;
+}
+.quiz-form-check {
+    margin-bottom: 0.5rem;
+}
+
+
+/* --- Buttons --- */
+.btn-lg {
+    padding: 0.75rem 1.5rem;
+}
+.rounded-pill {
+    border-radius: 999px !important;
+}
+
+.btn-action-primary {
+    background-color: var(--coral-main);
+    border-color: var(--coral-main);
+    color: white;
+    box-shadow: 0 6px 14px rgba(255, 107, 107, 0.35);
+    transition: all 0.2s ease;
+}
+.btn-action-primary:hover {
+    background-color: #e86060;
+    border-color: #e86060;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 16px rgba(255, 107, 107, 0.5);
+}
+.btn-outline-secondary {
+    font-weight: 500;
+}
+</style>
 
 {% endblock %}

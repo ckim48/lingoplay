@@ -3,21 +3,23 @@
 
 {% block content %}
 
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Baloo+2:wght@700;800&display=swap" rel="stylesheet">
+
 <div class="row justify-content-center mt-4">
   <div class="col-lg-7">
-    <div class="card border-0 shadow-lg rounded-4 game-bg-v7">
+    <div class="card border-0 rounded-4 game-bg-v7">
       <div class="card-body p-4 p-md-5">
 
         <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4 pb-3 border-bottom-soft">
           <div>
             <h3 class="fw-bolder mb-1 game-title-v7">Word Unscrambler Challenge!</h3>
-            <p class="text-muted small mb-0">
+            <p class="text-muted small mb-0 game-text-body">
               Unjumble the letters to reveal the secret word. Good luck!
             </p>
           </div>
           <div class="text-end score-box-v7">
-            <div class="small text-muted">Progress</div>
-            <div class="fs-4 fw-bold">
+            <div class="small text-muted game-text-body">Progress</div>
+            <div class="score-number-v7">
               <span id="scoreCorrect">0</span>/<span id="scoreTotal">{{ puzzles|length }}</span>
             </div>
           </div>
@@ -32,18 +34,18 @@
           <div class="input-feedback-area text-center">
             <form id="scrambleForm" class="d-flex justify-content-center gap-3">
               <input type="text"
-                     class="form-control form-control-lg rounded-pill scramble-input-v7"
+                     class="form-control form-control-lg scramble-input-v7"
                      placeholder="Type your guess here"
                      autocomplete="off"
                      autocapitalize="off"
                      id="scrambleInput">
-              <button class="btn btn-lg btn-coral-v7 rounded-pill px-4" type="submit" id="checkButton">Check</button>
+              <button class="btn btn-lg btn-coral-v7" type="submit" id="checkButton">Check</button>
             </form>
 
             <div id="feedbackContainer" class="feedback-container-v7">
                 </div>
 
-            <button id="nextButton" class="btn btn-lg btn-success rounded-pill mt-4 px-5" style="display: none;">
+            <button id="nextButton" class="btn btn-lg btn-success-v7 mt-4 px-5" style="display: none;">
                 Next Puzzle <i class="bi bi-arrow-right"></i>
             </button>
             <button id="restartButton" class="btn btn-outline-secondary btn-sm rounded-pill mt-4" style="display: none;">
@@ -53,7 +55,7 @@
         </div>
 
         {% else %}
-        <div class="py-4 text-center text-muted small">
+        <div class="py-4 text-center text-muted small game-text-body">
           No words yet. Read a story or wait for your teacher to assign.
         </div>
         {% endif %}
@@ -63,141 +65,7 @@
   </div>
 </div>
 
-<style>
-/* Define Coral Theme Variables based on Login Page */
-:root {
-    --coral-main: #ff6b6b;
-    --coral-light: #ffd7cc;
-    --ink: #111827;
-    --muted: #6b7280;
-    --success-color: #10b981;
-}
 
-/* ----- Layout & Container Styles ----- */
-.game-bg-v7 {
-    background: linear-gradient(140deg, #fff7e5 0%, #ffeef7 50%, #f6f8ff 100%) !important;
-    border: 1px solid rgba(255, 107, 107, 0.1);
-}
-.game-title-v7 {
-    color: var(--coral-main);
-}
-.score-box-v7 {
-    color: var(--ink);
-}
-.border-bottom-soft {
-    border-bottom: 1px solid rgba(0, 0, 0, 0.05) !important;
-}
-
-/* ----- Puzzle Display ----- */
-.puzzle-display-v7 {
-    min-height: 120px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 1.5rem;
-    border-radius: 12px;
-    background: #fff;
-    border: 1px solid var(--coral-light);
-    box-shadow: 0 4px 15px rgba(255, 107, 107, 0.08);
-}
-.scramble-letters-v7 {
-    display:flex;
-    gap: 0.8rem;
-    flex-wrap:wrap;
-    justify-content:center;
-}
-.scramble-letter-v7 {
-    min-width: 45px;
-    min-height: 45px;
-    border-radius: 8px; /* Squared off for modern look */
-    background: #fff;
-    border: 2px solid var(--coral-main);
-    color: var(--coral-main);
-    font-size: 1.5rem;
-    font-weight: 800;
-    display:flex;
-    justify-content:center;
-    align-items:center;
-    box-shadow: 0 4px 0 var(--coral-light);
-    transform: translateY(0);
-    transition: transform 0.2s;
-}
-.scramble-letter-v7:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 0 var(--coral-light);
-}
-.scramble-letter-space-v7 { min-width: 20px; }
-
-/* ----- Input & Button ----- */
-.scramble-input-v7 {
-  max-width: 300px;
-  height: 55px;
-  text-align: center;
-  font-size: 1.25rem;
-  border: 1px solid var(--coral-light);
-  border-radius: 999px !important;
-}
-.scramble-input-v7:focus {
-  border-color: var(--coral-main) !important;
-  box-shadow: 0 0 0 .2rem rgba(255,107,107,.25) !important;
-}
-.btn-coral-v7 {
-  background: var(--coral-main);
-  color: #fff;
-  border: none;
-  font-weight: 700;
-  box-shadow: 0 4px 10px rgba(255,107,107,.35);
-}
-.btn-coral-v7:hover {
-  background: #e86060;
-  color: #fff;
-}
-
-/* ----- Animated Feedback ----- */
-.feedback-container-v7 {
-    margin-top: 1.5rem;
-    min-height: 40px;
-}
-.feedback-message {
-    font-size: 1.5rem;
-    font-weight: 700;
-    opacity: 0;
-    transform: translateY(10px);
-    transition: opacity 0.3s, transform 0.3s;
-}
-.feedback-message.active {
-    opacity: 1;
-    transform: translateY(0);
-}
-.feedback-icon {
-    font-size: 2.5rem;
-    margin-right: 10px;
-    vertical-align: middle;
-}
-
-/* Successful Check Styling */
-.scramble-card.correct .scramble-letter-v7 {
-    background: var(--success-color);
-    color: white;
-    border-color: #15803d;
-    box-shadow: 0 4px 0 #86efac;
-}
-
-/* Animation Keyframes */
-@keyframes shake {
-  0%, 100% { transform: translateX(0); }
-  20%, 60% { transform: translateX(-10px); }
-  40%, 80% { transform: translateX(10px); }
-}
-.shake {
-    animation: shake 0.5s ease-in-out;
-}
-</style>
-
-{% endblock %}
-
-{% block scripts %}
 <script>
 (function () {
   const puzzles = {{ puzzles | tojson }}; // Puzzles array from Flask
@@ -240,8 +108,19 @@
     puzzleDisplay.innerHTML = `
       <div class="scramble-number-circle mb-3">${currentPuzzleIndex + 1}</div>
       ${renderLetters(puzzle.scrambled)}
-      ${puzzle.definition ? `<div class="small text-muted mt-3">Hint: ${puzzle.definition}</div>` : ''}
+      ${puzzle.definition ? `<div class="small text-muted mt-3 game-text-body">Hint: ${puzzle.definition}</div>` : ''}
     `;
+
+    // Ensure success styles are removed when loading a new puzzle
+    puzzleDisplay.querySelectorAll('.scramble-letter-v7').forEach(el => {
+        el.classList.remove('correct');
+        el.style.backgroundColor = '';
+        el.style.color = '';
+        el.style.borderColor = '';
+        el.style.boxShadow = '';
+        el.style.transform = '';
+    });
+
 
     scrambleInput.value = '';
     scrambleInput.disabled = false;
@@ -263,9 +142,9 @@
 
   function showFinalScore() {
     puzzleDisplay.innerHTML = `
-        <h4 class="fw-bold text-success">Game Complete! 🎉</h4>
-        <p class="fs-3">${correctCount} out of ${puzzles.length} correct.</p>
-        <p class="text-muted">You did great!</p>
+        <h4 class="fw-bold game-title-v7">Game Complete! 🎉</h4>
+        <p class="score-number-v7">${correctCount} out of ${puzzles.length} correct.</p>
+        <p class="text-muted game-text-body">You did great!</p>
     `;
     checkButton.style.display = 'none';
     scrambleInput.style.display = 'none';
@@ -280,19 +159,23 @@
     msgElement.className = 'feedback-message';
 
     if (isCorrect) {
-        msgElement.innerHTML = `<span class="feedback-icon text-success">🤩</span> ${message}`;
+        // Use Bootstrap Check Icon
+        msgElement.innerHTML = `<span class="feedback-icon text-success-v7"><i class="bi bi-check-circle-fill"></i></span> ${message}`;
         msgElement.style.color = 'var(--success-color)';
-        // Animate the letters green on success
+
+        // Success animation for letters (Ink text on success background)
         puzzleDisplay.querySelectorAll('.scramble-letter-v7').forEach(el => {
             el.classList.add('correct');
             el.style.backgroundColor = 'var(--success-color)';
-            el.style.color = 'white';
-            el.style.borderColor = '#15803d';
-            el.style.boxShadow = '0 4px 0 #86efac';
-            el.style.transform = 'translateY(0)';
+            el.style.color = 'white'; /* White text on colored background */
+            el.style.borderColor = 'var(--success-dark-color)';
+            el.style.boxShadow = '0 5px 0 var(--success-dark-color-light)'; /* Subtle 3D success shadow */
+            el.style.transform = 'translateY(-2px)'; // Slight pop up on success
         });
+
     } else {
-        msgElement.innerHTML = `<span class="feedback-icon text-danger"><i class="bi bi-emoji-dizzy-fill"></i></span> ${message}`;
+        // Use Bootstrap X Icon
+        msgElement.innerHTML = `<span class="feedback-icon text-danger"><i class="bi bi-x-circle-fill"></i></span> ${message}`;
         msgElement.style.color = 'var(--coral-main)';
         // Animate the input field red and shake
         scrambleForm.classList.add('shake');
@@ -353,4 +236,191 @@
   loadNextPuzzle();
 })();
 </script>
+<style>
+:root {
+    --coral-main: #ff6b6b;
+    --coral-light: #ffd7cc;
+    --ink: #111827;
+    --muted: #6b7280;
+    --paper: #ffffff;
+    --success-color: #10b981;
+    --success-dark-color: #047857;
+    --success-light-color: #a7f3d0;
+    --success-dark-color-light: #4ade80;
+}
+
+/* Fonts */
+.game-title-v7, .score-number-v7, .btn, .feedback-message {
+    font-family: 'Baloo 2', cursive;
+    font-weight: 700;
+}
+.game-text-body, .scramble-input-v7, .scramble-letter-v7 {
+    font-family: 'Fredoka', 'Nunito', sans-serif;
+}
+.score-box-v7, .game-title-v7 {
+    color: var(--ink);
+}
+
+/* --- Layout & Container Styles --- */
+.game-bg-v7 {
+    background: linear-gradient(145deg, #fff7e5 0%, #fff2f2 50%, #fefcfb 100%) !important;
+    border: 3px solid var(--coral-light);
+    border-radius: 30px !important;
+    box-shadow: 0 10px 30px rgba(255, 107, 107, 0.15);
+}
+.game-title-v7 {
+    color: var(--coral-main);
+    font-size: 2rem;
+}
+.score-number-v7 {
+    font-size: 2.25rem;
+    color: var(--ink);
+}
+.border-bottom-soft {
+    border-bottom: 2px solid rgba(255, 107, 107, 0.15) !important;
+}
+
+/* --- Puzzle Display --- */
+.puzzle-display-v7 {
+    min-height: 150px;
+    padding: 2rem 1.5rem;
+    border-radius: 20px;
+    background: var(--paper);
+    border: 2px solid var(--coral-light);
+    box-shadow: 0 4px 15px rgba(255, 107, 107, 0.12);
+
+    /* center everything inside */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+
+/* Container for the letter tiles */
+.scramble-letters-v7 {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+}
+
+/* Individual letter tiles */
+.scramble-letter-v7 {
+    width: 60px;
+    height: 60px;
+    border-radius: 12px;
+    background: transparent;
+    color: var(--ink);
+    border: 3px solid var(--coral-light);
+    font-size: 1.8rem;
+    font-weight: 800;
+    text-transform: uppercase;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    /* removed shadows */
+    box-shadow: none;
+    transform: translateY(0);
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+                border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.scramble-letter-v7:hover {
+    transform: translateY(-2px);
+    border-color: var(--coral-main);
+    cursor: grab;
+
+    /* no shadow on hover */
+    box-shadow: none;
+}
+
+.scramble-number-circle {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--coral-main);
+    color: white;
+    font-size: 1.25rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 3px 8px rgba(255, 107, 107, 0.3);
+}
+
+/* --- Input & Button --- */
+.scramble-input-v7 {
+  max-width: 350px;
+  height: 60px;
+  text-align: center;
+  font-size: 1.5rem;
+  border: 2px solid var(--coral-light);
+  border-radius: 999px !important;
+}
+.scramble-input-v7:focus {
+  border-color: var(--coral-main) !important;
+  box-shadow: 0 0 0 .3rem rgba(255,107,107,.35) !important;
+}
+.btn-coral-v7 {
+  height: 60px;
+  background: var(--coral-main);
+  border-radius: 999px !important;
+  box-shadow: 0 5px 12px rgba(255,107,107,.4);
+  font-size: 1.25rem;
+}
+.btn-coral-v7:hover {
+  background: #e86060;
+  box-shadow: 0 7px 14px rgba(255,107,107,.5);
+  transform: translateY(-1px);
+}
+.btn-success-v7 {
+    background-color: var(--success-color);
+    border-color: var(--success-color);
+    border-radius: 999px !important;
+    box-shadow: 0 5px 12px rgba(16, 185, 129, 0.4);
+    font-size: 1.25rem;
+}
+.btn-success-v7:hover {
+    background-color: #0e9f6e;
+    box-shadow: 0 7px 14px rgba(16, 185, 129, 0.5);
+    transform: translateY(-1px);
+}
+
+/* ----- Animated Feedback ----- */
+.feedback-container-v7 {
+    margin-top: 1.5rem;
+    min-height: 40px;
+}
+.feedback-message {
+    font-size: 1.75rem;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 0.3s, transform 0.3s;
+}
+.feedback-message.active {
+    opacity: 1;
+    transform: translateY(0);
+}
+.feedback-icon {
+    font-size: 3rem;
+    margin-right: 10px;
+    vertical-align: middle;
+}
+.text-success-v7 { color: var(--success-color); }
+.text-danger { color: var(--coral-main) !important; }
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-10px); }
+  40%, 80% { transform: translateX(10px); }
+}
+.shake {
+    animation: shake 0.5s ease-in-out;
+}
+</style>
+
 {% endblock %}

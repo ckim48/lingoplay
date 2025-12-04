@@ -3,30 +3,23 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Register · EduWeaverPlay</title>
-
-  <!-- Bootstrap -->
+  <title>Register · LexiTale</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-
-  <!-- Fonts -->
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&family=Baloo+2:wght@500;600&display=swap" rel="stylesheet">
-
   <style>
     body{
       font-family:"Nunito", system-ui, sans-serif;
-      background:#fffaf3; /* SAME as login */
+      background:#fffaf3;
       min-height:100vh;
       display:flex;
       align-items:center;
       justify-content:center;
       padding:30px;
     }
-
-    /* MAIN CARD */
     .register-card{
       width:100%;
-      max-width:480px;
+      max-width:590px;
       background:#ffffff;
       border-radius:20px;
       border:1px solid rgba(0,0,0,.06);
@@ -35,8 +28,6 @@
       position:relative;
       overflow:hidden;
     }
-
-    /* Warm coral glow (same style as login glow) */
     .register-card::before{
       content:"";
       position:absolute;
@@ -46,28 +37,22 @@
       filter:blur(40px);
       z-index:-1;
     }
-
     .brand-title{
       font-family:"Baloo 2";
       font-size:2rem;
       font-weight:600;
       color:#ff6b6b;
     }
-
     .subtitle{
       font-size:1rem;
       color:#857f7f;
       margin-bottom:1.5rem;
     }
-
-    /* Label */
     .form-label{
       font-weight:700;
       font-size:.9rem;
       color:#857f7f;
     }
-
-    /* Input group */
     .input-group-text{
       background:#fff4ef;
       border:1px solid #ffd7cc;
@@ -76,20 +61,16 @@
       border-radius:12px 0 0 12px;
       font-size:1.1rem;
     }
-
     .form-control{
       border-radius:0 12px 12px 0;
       border:1px solid #ffd7cc;
       border-left:0;
       padding:.85rem 1rem;
     }
-
     .form-control:focus{
       border-color:#ff6b6b;
       box-shadow:0 0 0 .2rem rgba(255,107,107,.25);
     }
-
-    /* Select and number */
     .form-select{
       border-radius:12px;
       border:1px solid #ffd7cc;
@@ -99,8 +80,6 @@
       border-color:#ff6b6b;
       box-shadow:0 0 0 .2rem rgba(255,107,107,.25);
     }
-
-    /* Coral button */
     .btn-coral{
       background:#ff6b6b;
       color:#fff;
@@ -117,7 +96,20 @@
       background:#e86060;
       color:#fff;
     }
-
+    .btn-soft{
+      border-radius:14px;
+      border:1px solid #ffd7cc;
+      background:#fff7f3;
+      color:#aa7d72;
+      font-weight:600;
+      padding:.65rem 1rem;
+      width:100%;
+      font-size:.95rem;
+    }
+    .btn-soft:hover{
+      background:#ffe9df;
+      color:#8f5e52;
+    }
     .muted-link{
       color:#8c8787;
       text-decoration:none;
@@ -125,43 +117,77 @@
     .muted-link:hover{
       color:#ff6b6b;
     }
-
-    fieldset{
-      border:1px dashed #ffd7cc;
-      border-radius:14px;
-      padding:14px 16px;
-      background:#fffdf8;
-    }
-
-    legend{
-      font-size:.9rem;
-      color:#857f7f;
-      padding:0 6px;
-      font-weight:600;
-      font-family:"Nunito";
-    }
-
     .help{
       color:#9a9494;
       font-size:.85rem;
     }
-
+    .section-heading{
+      font-size:0.9rem;
+      font-weight:700;
+      color:#857f7f;
+      margin-top:0.75rem;
+      margin-bottom:0.25rem;
+      text-transform:uppercase;
+      letter-spacing:0.06em;
+    }
+    hr.section-divider{
+      margin:0.25rem 0 0.75rem 0;
+      border-top:1px dashed #ffd7cc;
+    }
+    /* Level test styles */
+    .level-section{
+      margin-top:1rem;
+      margin-left:-1rem;
+      margin-right:-1rem;
+      padding:1rem 1.5rem 0.75rem;
+      border-radius:18px;
+      background:#fff8f4;
+      border:1px solid #ffd7cc;
+    }
+    .question-block{
+      margin-bottom:1rem;
+      padding:0.75rem 0.85rem;
+      border-radius:12px;
+      background:#fff2ea;
+      border:1px dashed #ffd7cc;
+    }
+    .question-title{
+      font-weight:600;
+      font-size:0.9rem;
+      margin-bottom:4px;
+      color:#5c5555;
+    }
+    .question-meta{
+      font-size:0.78rem;
+      color:#a19a9a;
+      margin-bottom:6px;
+    }
+    .level-result-text{
+      font-size:0.9rem;
+      margin-top:0.35rem;
+    }
+    /* Fade panels (step 1 / step 2) */
+    .fade-panel{
+      opacity:0;
+      display:none;
+      transition:opacity .25s ease-in-out;
+    }
+    .fade-panel.active{
+      display:block;
+      opacity:1;
+    }
   </style>
 </head>
-
 <body>
-
 <div class="register-card">
-
   <h2 class="brand-title">Create Account</h2>
-  <p class="subtitle">Join EduWeaverPlay to read, learn & create stories!</p>
+  <p class="subtitle">Join LexiTale to read, learn, and grow with stories.</p>
 
-  <!-- Flash messages -->
   {% with messages = get_flashed_messages(with_categories=True) %}
     {% if messages %}
       <div class="mb-3">
         {% for category, msg in messages %}
-          <div class="alert alert-{{ 'danger' if category=='danger' else category }} alert-dismissible fade show" role="alert">
+          <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
             {{ msg }}
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
           </div>
@@ -170,117 +196,521 @@
     {% endif %}
   {% endwith %}
 
-  <form action="/register" method="post" class="vstack gap-3">
+  <form action="{{ url_for('register') }}" method="post" class="vstack gap-3" id="registerForm">
+    <!-- STEP 1 -->
+    <div id="stepAccount" class="fade-panel active">
+      <div>
+        <div class="section-heading">Step 1 · Account</div>
+        <hr class="section-divider">
 
-    <!-- Username -->
-    <div>
-      <label class="form-label">Username</label>
-      <div class="input-group">
-        <span class="input-group-text"><i class="bi bi-person"></i></span>
-        <input type="text" name="username" class="form-control" placeholder="yourname" required>
-      </div>
-      <div class="help mt-1">3–32 characters; letters, numbers, _, ., -</div>
-    </div>
-
-    <!-- Email -->
-    <div>
-      <label class="form-label">Email</label>
-      <div class="input-group">
-        <span class="input-group-text"><i class="bi bi-envelope"></i></span>
-        <input type="email" name="email" class="form-control" placeholder="you@example.com" required>
-      </div>
-    </div>
-
-    <!-- Password -->
-    <div>
-      <label class="form-label">Password</label>
-      <div class="input-group">
-        <span class="input-group-text"><i class="bi bi-shield-lock"></i></span>
-        <input id="pw" type="password" name="password" class="form-control"
-               placeholder="At least 8 characters" minlength="8" required>
-      </div>
-    </div>
-
-    <!-- Confirm password -->
-    <div>
-      <label class="form-label">Confirm Password</label>
-      <div class="input-group">
-        <span class="input-group-text"><i class="bi bi-check2-square"></i></span>
-        <input id="pw2" type="password" name="confirm" class="form-control"
-               placeholder="Type it again" minlength="8" required>
-      </div>
-      <div class="form-text" id="matchHint" style="display:none;">Passwords match</div>
-    </div>
-
-    <!-- Optional -->
-    <fieldset>
-      <legend>About you (optional)</legend>
-
-      <div class="mb-2">
-        <label class="form-label d-block mb-1">Is English your first language?</label>
-        <div class="form-check form-check-inline">
-          <input class="form-check-input" type="radio" name="is_english_native" value="yes">
-          <label class="form-check-label">Yes</label>
+        <div class="mb-2">
+          <label class="form-label">Username</label>
+          <div class="input-group">
+            <span class="input-group-text"><i class="bi bi-person"></i></span>
+            <input type="text" id="username" name="username" class="form-control" placeholder="yourname" required>
+          </div>
+          <div class="help mt-1">3–32 characters; letters, numbers, _, ., -</div>
         </div>
-        <div class="form-check form-check-inline">
-          <input class="form-check-input" type="radio" name="is_english_native" value="no">
-          <label class="form-check-label">No</label>
+
+        <div>
+          <label class="form-label">Email</label>
+          <div class="input-group">
+            <span class="input-group-text"><i class="bi bi-envelope"></i></span>
+            <input type="email" id="email" name="email" class="form-control" placeholder="you@example.com" required>
+          </div>
         </div>
       </div>
 
-      <div class="mb-2">
-        <label class="form-label">Age</label>
-        <input type="number" class="form-control" name="age" placeholder="e.g., 12" min="5" max="120">
+      <div>
+        <div class="section-heading mt-3">Password</div>
+        <hr class="section-divider">
+
+        <div class="mb-2">
+          <label class="form-label">Password</label>
+          <div class="input-group">
+            <span class="input-group-text"><i class="bi bi-shield-lock"></i></span>
+            <input id="pw" type="password" name="password" class="form-control"
+                   placeholder="At least 8 characters" minlength="8" required>
+          </div>
+        </div>
+
+        <div>
+          <label class="form-label">Confirm Password</label>
+          <div class="input-group">
+            <span class="input-group-text"><i class="bi bi-check2-square"></i></span>
+            <input id="pw2" type="password" name="confirm" class="form-control"
+                   placeholder="Type it again" minlength="8" required>
+          </div>
+          <div class="form-text" id="matchHint" style="display:none;"></div>
+        </div>
       </div>
 
-      <div class="mb-1">
-        <label class="form-label">Gender</label>
-        <select class="form-select" name="gender">
-          <option value="">Prefer not to say</option>
-          <option value="female">Female</option>
-          <option value="male">Male</option>
-          <option value="nonbinary">Non-binary</option>
-          <option value="prefer_not">Prefer not to answer</option>
-        </select>
+      <div>
+        <div class="section-heading mt-3">Language & profile</div>
+        <hr class="section-divider">
+
+        <div class="mb-2">
+          <label class="form-label">First language (L1)</label>
+          <select class="form-select" id="l1_language" name="l1_language" required>
+            <option value="" selected disabled>Select L1</option>
+            <option value="korean">Korean</option>
+            <option value="english">English</option>
+            <option value="chinese">Chinese</option>
+            <option value="japanese">Japanese</option>
+            <option value="spanish">Spanish</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+
+        <div class="mb-2">
+          <label class="form-label">Second language (L2)</label>
+          <select class="form-select" id="l2_language" name="l2_language" required>
+            <option value="" selected disabled>Select L2</option>
+            <option value="none">I don’t have an L2 yet</option>
+            <option value="korean">Korean</option>
+            <option value="english">English</option>
+            <option value="chinese">Chinese</option>
+            <option value="japanese">Japanese</option>
+            <option value="spanish">Spanish</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+
+        <div class="mb-2">
+          <label class="form-label">Age</label>
+          <input type="number" class="form-control" id="age" name="age"
+                 placeholder="e.g., 12" min="5" max="120"
+                 style="border-left: 1px solid #ffd7cc !important; border-radius: 12px !important;"
+                 required>
+        </div>
+
+        <div>
+          <label class="form-label">Gender</label>
+          <select class="form-select" id="gender" name="gender" required>
+            <option value="" selected disabled>Select one</option>
+            <option value="female">Female</option>
+            <option value="male">Male</option>
+            <option value="nonbinary">Non-binary</option>
+            <option value="prefer_not">Prefer not to answer</option>
+          </select>
+        </div>
+
+        <div class="help mt-2">
+          We use this information only to choose reading level and guidance.
+        </div>
       </div>
 
-      <div class="help mt-2">
-        This helps us set reading level and guidance. Optional.
-      </div>
-    </fieldset>
+      <div id="step1Warning" class="text-danger small mt-2" style="display:none;"></div>
 
-    <button class="btn-coral mt-2">Create My Account</button>
+      <button type="button" class="btn-soft mt-3" id="toLevelBtn">
+        Next: Level Test
+      </button>
+    </div>
+
+    <!-- STEP 2 -->
+    <div id="stepLevel" class="fade-panel">
+      <div class="level-section">
+        <div class="section-heading mb-1">Step 2 · Quick English Level Test</div>
+        <div class="help mb-2">
+          Answer 10 short questions (multiple choice, true/false, and fill-in-the-blank).
+          We use this only to set your starting reading level.
+        </div>
+        <div id="levelQuestions"></div>
+        <div id="levelWarning" class="level-result-text text-danger mt-1" style="display:none;"></div>
+      </div>
+
+      <input type="hidden" name="level_score" id="levelScore">
+      <input type="hidden" name="level_name" id="levelName">
+
+      <div class="d-flex gap-2 mt-3">
+        <button type="button" class="btn-soft" id="backBtn">
+          <i class="bi bi-arrow-left"></i> Back
+        </button>
+        <button class="btn-coral" id="createAccountBtn">
+          Create My LexiTale Account
+        </button>
+      </div>
+    </div>
 
     <div class="text-center mt-2">
       <small class="muted-link">
         Already have an account?
-        <a href="/login" class="fw-semibold muted-link">Sign in</a>
+        <a href="{{ url_for('login') }}" class="fw-semibold muted-link">Sign in</a>
       </small>
     </div>
-
   </form>
+</div>
 
+<!-- Success Modal -->
+<div class="modal fade" id="registerSuccessModal" tabindex="-1" aria-labelledby="registerSuccessLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 rounded-4" style="background: #f7faff; border: 1px solid #cce5ff; box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title fw-bolder text-center w-100" id="registerSuccessLabel" style="color: #2b7af0; font-family:'Baloo 2'; font-size:1.6rem;">
+          <i class="bi bi-check-circle-fill me-2" style="color: #2b7af0;"></i> Account Created!
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body text-center pt-1 pb-0">
+        <h6 class="fw-bold mb-3" style="color: #4a4a4a;">Welcome to LexiTale!</h6>
+
+        {% if registered_level_name is not none %}
+        <div class="my-3 p-3 rounded-3" style="background: #e9f0ff; border: 1px solid #cce5ff;">
+          <p class="mb-1" style="font-size: 1.1rem; color: #6a6a6a;">
+            <i class="bi bi-award me-1" style="color: #ff6b6b;"></i> Your Starting Level:
+            <strong style="color: #ff6b6b; font-size: 1.3rem;">{{ registered_level_name }}</strong>
+          </p>
+          {% if registered_level_score is not none %}
+          <p class="mb-0 small text-muted">
+            (Level Test Score: {{ registered_level_score }}/10)
+          </p>
+          {% endif %}
+        </div>
+        {% endif %}
+
+        <p class="small mb-4" style="color: #888;">
+          You can adjust your level later in your profile. Happy reading!
+        </p>
+      </div>
+      <div class="modal-footer border-0 pt-0">
+        <a href="{{ url_for('login') }}" class="btn btn-coral w-100">
+          <i class="bi bi-box-arrow-in-right me-1"></i> Go to Login
+        </a>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-
 <script>
+  // URL for AJAX step1 check
+  const checkStep1Url = "{{ url_for('register_check_step1') }}";
+
   // Password match hint
-  const pw  = document.getElementById('pw');
-  const pw2 = document.getElementById('pw2');
+  const pw   = document.getElementById('pw');
+  const pw2  = document.getElementById('pw2');
   const hint = document.getElementById('matchHint');
 
-  function check(){
+  function checkPwMatch(){
     if(!pw.value || !pw2.value){
       hint.style.display = 'none';
+      hint.classList.remove('text-success','text-danger');
+      hint.textContent = '';
       return;
     }
-    hint.style.display = (pw.value === pw2.value) ? '' : 'none';
+    hint.style.display = '';
+    if(pw.value === pw2.value){
+      hint.textContent = 'Passwords match';
+      hint.classList.add('text-success');
+      hint.classList.remove('text-danger');
+    }else{
+      hint.textContent = 'Passwords do not match';
+      hint.classList.add('text-danger');
+      hint.classList.remove('text-success');
+    }
+  }
+  pw.addEventListener('input', checkPwMatch);
+  pw2.addEventListener('input', checkPwMatch);
+
+  // Fade step switching
+  function showStep(stepId){
+    const panels = document.querySelectorAll('.fade-panel');
+    panels.forEach(p => p.classList.remove('active'));
+    const target = document.getElementById(stepId);
+    if(target){
+      void target.offsetWidth; // reflow
+      target.classList.add('active');
+    }
   }
 
-  pw.addEventListener('input', check);
-  pw2.addEventListener('input', check);
-</script>
+  // Level test questions
+  const levelQuestions = [
+    { id: 1, type: "mcq",
+      text: "What is the capital of France?",
+      options: ["Berlin", "Paris", "Rome", "Madrid"],
+      answer: "Paris"
+    },
+    { id: 2, type: "mcq",
+      text: "Choose the correct past form of 'go'.",
+      options: ["goed", "went", "goes", "gone"],
+      answer: "went"
+    },
+    { id: 3, type: "mcq",
+      text: "Which word is a noun?",
+      options: ["quickly", "beautiful", "happiness", "run"],
+      answer: "happiness"
+    },
+    { id: 4, type: "mcq",
+      text: "Select the sentence with correct grammar.",
+      options: [
+        "He don't like apples.",
+        "She goes to school every day.",
+        "They is playing.",
+        "I am goes home."
+      ],
+      answer: "She goes to school every day."
+    },
+    { id: 5, type: "tf",
+      text: "The word 'children' is the plural of 'child'.",
+      answer: "true"
+    },
+    { id: 6, type: "tf",
+      text: "In English, adjectives usually come after nouns (for example, 'car red').",
+      answer: "false"
+    },
+    { id: 7, type: "tf",
+      text: "The sentence 'She has been studying for two hours' is present perfect continuous.",
+      answer: "true"
+    },
+    { id: 8, type: "input",
+      text: "Fill in the blank: 'I ____ to the store yesterday.' (go)",
+      answer: "went"
+    },
+    { id: 9, type: "input",
+      text: "Fill in the blank: 'There ____ three books on the table.' (be)",
+      answer: "are"
+    },
+    { id: 10, type: "input",
+      text: "Fill in the blank: 'She is ____ than her brother.' (tall)",
+      answer: "taller"
+    }
+  ];
 
+  function renderLevelQuestions(){
+    const container = document.getElementById("levelQuestions");
+    container.innerHTML = "";
+    levelQuestions.forEach((q, index) => {
+      const block = document.createElement("div");
+      block.className = "question-block";
+      let html = `
+        <div class="question-title">
+          Q${index + 1}. ${q.text}
+        </div>
+        <div class="question-meta">
+          Type: ${
+            q.type === "mcq" ? "Multiple choice"
+              : q.type === "tf" ? "True / False"
+              : "Fill in the blank"
+          }
+        </div>
+      `;
+      if(q.type === "mcq"){
+        html += q.options.map(opt => `
+          <div class="form-check">
+            <input class="form-check-input"
+                   type="radio"
+                   name="lvl_q${q.id}"
+                   id="lvl_q${q.id}_${opt}"
+                   value="${opt}">
+            <label class="form-check-label" for="lvl_q${q.id}_${opt}">
+              ${opt}
+            </label>
+          </div>
+        `).join("");
+      } else if(q.type === "tf"){
+        html += `
+          <div class="form-check">
+            <input class="form-check-input"
+                   type="radio"
+                   name="lvl_q${q.id}"
+                   id="lvl_q${q.id}_true"
+                   value="true">
+            <label class="form-check-label" for="lvl_q${q.id}_true">True</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input"
+                   type="radio"
+                   name="lvl_q${q.id}"
+                   id="lvl_q${q.id}_false"
+                   value="false">
+            <label class="form-check-label" for="lvl_q${q.id}_false">False</label>
+          </div>
+        `;
+      } else {
+        html += `
+          <input type="text"
+                 class="form-control form-control-sm"
+                 name="lvl_q${q.id}"
+                 placeholder="Your answer">
+        `;
+      }
+      block.innerHTML = html;
+      container.appendChild(block);
+    });
+  }
+
+  function scoreToLevel(score){
+    if(score <= 3) return "Beginner";
+    if(score <= 7) return "Intermediate";
+    return "Advanced";
+  }
+
+  document.addEventListener("DOMContentLoaded", function(){
+    const form        = document.getElementById("registerForm");
+    const toLevelBtn  = document.getElementById("toLevelBtn");
+    const backBtn     = document.getElementById("backBtn");
+    const scoreInput  = document.getElementById("levelScore");
+    const nameInput   = document.getElementById("levelName");
+    const levelWarn   = document.getElementById("levelWarning");
+    const step1Warn   = document.getElementById("step1Warning");
+
+    const usernameEl  = document.getElementById("username");
+    const emailEl     = document.getElementById("email");
+    const l1El        = document.getElementById("l1_language");
+    const l2El        = document.getElementById("l2_language");
+    const ageEl       = document.getElementById("age");
+    const genderEl    = document.getElementById("gender");
+
+    renderLevelQuestions();
+
+    // Step 1 → Step 2 with server-side duplicate check
+    toLevelBtn.addEventListener("click", function () {
+      step1Warn.style.display = "none";
+      step1Warn.textContent = "";
+
+      const missing = [];
+      if (!usernameEl.value.trim()) missing.push("Username");
+      if (!emailEl.value.trim())    missing.push("Email");
+      if (!pw.value)                missing.push("Password");
+      if (!pw2.value)               missing.push("Confirm password");
+      if (!l1El.value)              missing.push("L1");
+      if (!l2El.value)              missing.push("L2");
+      if (!ageEl.value)             missing.push("Age");
+      if (!genderEl.value)          missing.push("Gender");
+
+      if (missing.length > 0) {
+        step1Warn.style.display = "block";
+        step1Warn.textContent = "Please fill in: " + missing.join(", ") + ".";
+        return;
+      }
+      if (pw.value !== pw2.value) {
+        step1Warn.style.display = "block";
+        step1Warn.textContent = "Passwords do not match.";
+        pw2.focus();
+        return;
+      }
+      if (pw.value.length < 8) {
+        step1Warn.style.display = "block";
+        step1Warn.textContent = "Password must be at least 8 characters.";
+        pw.focus();
+        return;
+      }
+
+      // Build payload for backend check (including duplicates)
+      const payload = {
+        username: usernameEl.value.trim(),
+        email:    emailEl.value.trim(),
+        password: pw.value,
+        confirm:  pw2.value,
+        l1_language: l1El.value,
+        l2_language: l2El.value,
+        age:     ageEl.value,
+        gender:  genderEl.value,
+      };
+
+      toLevelBtn.disabled = true;
+      toLevelBtn.textContent = "Checking...";
+
+      fetch(checkStep1Url, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(payload),
+      })
+      .then(async (res) => {
+        let data = {};
+        try {
+          data = await res.json();
+        } catch {
+          data = {};
+        }
+
+        if (!res.ok || !data.ok) {
+          const errors = data.errors || ["Could not validate your info. Please try again."];
+          step1Warn.style.display = "block";
+          step1Warn.innerHTML = errors.map(e => "• " + e).join("<br>");
+          return;
+        }
+
+        // All good → move to level test
+        showStep("stepLevel");
+      })
+      .catch(() => {
+        step1Warn.style.display = "block";
+        step1Warn.textContent = "Network error while checking your info. Please try again.";
+      })
+      .finally(() => {
+        toLevelBtn.disabled = false;
+        toLevelBtn.textContent = "Next: Level Test";
+      });
+    });
+
+    backBtn.addEventListener("click", function(){
+      showStep("stepAccount");
+    });
+
+    // Submit: compute level test score; block if missing answers
+    form.addEventListener("submit", function(e){
+      if(pw.value !== pw2.value){
+        e.preventDefault();
+        showStep("stepAccount");
+        hint.style.display = '';
+        hint.textContent = "Passwords do not match";
+        hint.classList.add("text-danger");
+        hint.classList.remove("text-success");
+        pw2.focus();
+        return;
+      }
+
+      let score = 0;
+      let unanswered = 0;
+
+      levelQuestions.forEach(q => {
+        const name = `lvl_q${q.id}`;
+        let value = "";
+        if(q.type === "input"){
+          const inp = form.elements[name];
+          value = inp ? inp.value.trim() : "";
+        } else {
+          const selected = form.querySelector(`input[name="${name}"]:checked`);
+          value = selected ? selected.value : "";
+        }
+        if(!value){
+          unanswered += 1;
+          return;
+        }
+        const correct = q.answer.toString().trim().toLowerCase();
+        if(value.toString().trim().toLowerCase() === correct){
+          score += 1;
+        }
+      });
+
+      if(unanswered > 0){
+        e.preventDefault();
+        showStep("stepLevel");
+        levelWarn.style.display = 'block';
+        levelWarn.textContent = `Please answer all 10 questions. (${unanswered} left)`;
+        scoreInput.value = "";
+        nameInput.value = "";
+        return;
+      }
+
+      const levelName = scoreToLevel(score);
+      scoreInput.value = String(score);
+      nameInput.value  = levelName;
+      levelWarn.style.display = 'none';
+      levelWarn.textContent = "";
+    });
+
+    // Show success modal if backend sets registered=True
+    const registered = {{ 'true' if registered else 'false' }};
+    if(registered){
+      const modalEl = document.getElementById('registerSuccessModal');
+      if(modalEl){
+        const modal = new bootstrap.Modal(modalEl);
+        modal.show();
+      }
+    }
+  });
+</script>
 </body>
 </html>
