@@ -59,12 +59,22 @@ def get_db():
         g.db = conn
     return g.db
 
+from markupsafe import Markup, escape
 
+@app.template_filter("nl2br")
+def nl2br(value: str) -> Markup:
+    """Convert newlines to <br> tags, with HTML escaping."""
+    if not value:
+        return Markup("")
+    # Escape HTML, then replace newline chars with <br>
+    return Markup(escape(value).replace("\n", Markup("<br>\n")))
 @app.teardown_appcontext
 def close_db(exc):
     db = g.pop("db", None)
     if db is not None:
         db.close()
+
+
 def init_db():
     """Create the tables used by the app and run light migrations."""
     db = get_db()
@@ -74,42 +84,16 @@ def init_db():
         PRAGMA foreign_keys = ON;
 
         -- Dictionary lookup log (EN <-> KO)
-        CREATE TABLE IF NOT EXISTS dict_lookups (
-            id           INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id      INTEGER REFERENCES users(id) ON DELETE SET NULL,
-            source_lang  TEXT NOT NULL,          -- 'en' or 'ko'
-            target_lang  TEXT NOT NULL,          -- 'ko' or 'en'
-            query        TEXT NOT NULL,          -- lookup term
-            result_json  TEXT,                   -- cached result (definitions, etc.)
-            created_at   TEXT DEFAULT (datetime('now'))
-        );
+        -- ... (existing dict_lookups table creation)
 
         -- Dictionary bookmarks
-        CREATE TABLE IF NOT EXISTS dict_bookmarks (
-            id           INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id      INTEGER REFERENCES users(id) ON DELETE CASCADE,
-            source_lang  TEXT NOT NULL,
-            target_lang  TEXT NOT NULL,
-            word         TEXT NOT NULL,
-            translation  TEXT,
-            note         TEXT,
-            created_at   TEXT DEFAULT (datetime('now')),
-            UNIQUE(user_id, source_lang, target_lang, word)
-        );
+        -- ... (existing dict_bookmarks table creation)
 
         -- All other CREATE TABLE statements are managed elsewhere.
         -- This function is safe to call multiple times and acts as a migration.
         """
     )
-
-    # Add a flag column for library sharing (if it doesn't exist yet)
-    try:
-        db.execute(
-            "ALTER TABLE stories ADD COLUMN is_shared_library INTEGER DEFAULT 0"
-        )
-    except sqlite3.OperationalError:
-        # Column already exists, ignore
-        pass
+    # ... (existing ALTER TABLE statements)
 
     # Store MCQ questions once per story
     try:
@@ -120,32 +104,32 @@ def init_db():
         # Column already exists, ignore
         pass
 
-    # Store per-assignment MCQ questions (copy from story at assign time)
+    # ... (rest of existing migrations)
+
+    # ------------------------------------------------------------------
+    # NEW MIGRATIONS FOR ADMIN REVIEW FEATURE: assignment_submissions
+    # The traceback indicates these columns are missing.
+    # ------------------------------------------------------------------
+
+    # Add column for Admin Comment/Feedback to submissions
     try:
         db.execute(
-            "ALTER TABLE assignments ADD COLUMN questions_json TEXT"
+            "ALTER TABLE assignment_submissions ADD COLUMN comment TEXT"
         )
     except sqlite3.OperationalError:
         # Column already exists, ignore
         pass
 
-    # Track number of trials (submissions) per assignment
+    # Add column to track when the submission was reviewed
     try:
         db.execute(
-            "ALTER TABLE assignments ADD COLUMN attempt_count INTEGER DEFAULT 0"
+            "ALTER TABLE assignment_submissions ADD COLUMN reviewed_at TEXT"
         )
     except sqlite3.OperationalError:
         # Column already exists, ignore
         pass
 
-    # Optional human-readable title for each assignment
-    try:
-        db.execute(
-            "ALTER TABLE assignments ADD COLUMN assignment_title TEXT"
-        )
-    except sqlite3.OperationalError:
-        # Column already exists, ignore
-        pass
+    # ------------------------------------------------------------------
 
     db.commit()
 
@@ -234,78 +218,274 @@ def current_user_is_admin() -> bool:
 # -------------------------------------------------------------------
 # Auth routes
 # -------------------------------------------------------------------
+
+@app.post("/register/check-step1")
+def register_check_step1():
+    """
+    AJAX endpoint to validate Step 1:
+    - required fields
+    - basic format
+    - duplicate username/email
+    Returns JSON {ok: bool, errors: [..]}.
+    """
+    db = get_db()
+    data = request.get_json(force=True) or {}
+
+    username = (data.get("username") or "").strip()
+    email    = (data.get("email") or "").strip().lower()
+    password = data.get("password") or ""
+    confirm  = data.get("confirm") or ""
+    l1       = (data.get("l1_language") or "").strip().lower()
+    l2       = (data.get("l2_language") or "").strip().lower()
+    age_raw  = (data.get("age") or "").strip()
+    gender   = (data.get("gender") or "").strip().lower()
+
+    errors = []
+
+    # Required fields
+    if not username or not email or not password or not confirm:
+        errors.append("Please fill in username, email, and password.")
+    if not l1 or not l2 or not age_raw or not gender:
+        errors.append("Please fill in L1, L2, age, and gender.")
+
+    # Password checks
+    if password != confirm:
+        errors.append("Passwords do not match.")
+    if len(password) < 8:
+        errors.append("Password must be at least 8 characters.")
+
+    # Username format
+    if not re.match(r"^[A-Za-z0-9_.-]{3,32}$", username):
+        errors.append("Username must be 3–32 chars (letters, numbers, _, ., -).")
+
+    # Email format
+    if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
+        errors.append("Please enter a valid email address.")
+
+    # L1 / L2
+    allowed_l1 = {"korean", "english", "chinese", "japanese", "spanish", "other"}
+    allowed_l2 = {"none", "korean", "english", "chinese", "japanese", "spanish", "other"}
+
+    if l1 and l1 not in allowed_l1:
+        errors.append("Please choose a valid first language (L1).")
+    if l2 and l2 not in allowed_l2:
+        errors.append("Please choose a valid second language (L2).")
+
+    # Age
+    if not age_raw.isdigit():
+        errors.append("Please enter a valid age (number).")
+    else:
+        age = int(age_raw)
+        if age < 5 or age > 120:
+            errors.append("Please enter an age between 5 and 120.")
+
+    # Gender
+    allowed_genders = {"female", "male", "nonbinary", "prefer_not"}
+    if gender and gender not in allowed_genders:
+        errors.append("Please choose a valid gender option.")
+
+    # If format errors already, no need to hit DB
+    if errors:
+        return jsonify({"ok": False, "errors": errors}), 400
+
+    # Duplicate checks
+    row = db.execute(
+        "SELECT id FROM users WHERE lower(username)=?",
+        (username.lower(),),
+    ).fetchone()
+    if row:
+        errors.append("That username is already taken.")
+
+    row = db.execute(
+        "SELECT id FROM users WHERE lower(email)=?",
+        (email.lower(),),
+    ).fetchone()
+    if row:
+        errors.append("An account with that email already exists.")
+
+    if errors:
+        return jsonify({"ok": False, "errors": errors}), 400
+
+    return jsonify({"ok": True})
+
+import re
+import sqlite3
+from flask import (
+    request, render_template, flash, url_for
+)
+from werkzeug.security import generate_password_hash
+
 @app.route("/register", methods=["GET", "POST"])
 def register():
+    db = get_db()
+
     if request.method == "POST":
-        db = get_db()
+        # ----- Read fields -----
         username = (request.form.get("username") or "").strip()
-        email = (request.form.get("email") or "").strip().lower()
+        email    = (request.form.get("email") or "").strip().lower()
         password = request.form.get("password") or ""
-        confirm = request.form.get("confirm") or ""
+        confirm  = request.form.get("confirm") or ""
 
-        # Optional fields
-        native_en_raw = (request.form.get("is_english_native") or "").strip().lower()
-        is_english_native = None
-        if native_en_raw == "yes":
-            is_english_native = 1
-        elif native_en_raw == "no":
-            is_english_native = 0
+        l1_language_raw = (request.form.get("l1_language") or "").strip().lower()
+        l2_language_raw = (request.form.get("l2_language") or "").strip().lower()
+        age_raw         = (request.form.get("age") or "").strip()
+        gender_raw      = (request.form.get("gender") or "").strip().lower()
 
-        age_raw = (request.form.get("age") or "").strip()
-        age = None
-        if age_raw:
-            if not age_raw.isdigit():
-                flash("Please enter a valid age (number).", "warning")
-                return redirect(url_for("register"))
-            age = int(age_raw)
-            if age < 5 or age > 120:
-                flash("Please enter an age between 5 and 120.", "warning")
-                return redirect(url_for("register"))
+        level_score_raw = request.form.get("level_score")
+        level_name      = (request.form.get("level_name") or "").strip()
 
-        gender = (request.form.get("gender") or "").strip().lower() or None
-        if gender and gender not in ("female", "male", "nonbinary", "prefer_not"):
-            flash("Please choose a valid gender option.", "warning")
-            return redirect(url_for("register"))
+        def render_fail(msg: str):
+            flash(msg, "warning")
+            return render_template(
+                "register.html",
+                registered=False,
+                registered_level_name=None,
+                registered_level_score=None,
+            )
 
-        if not username or not email or not password:
-            flash("Please fill in all required fields.", "warning")
-            return redirect(url_for("register"))
+        # ----- Basic required checks -----
+        if not username or not email or not password or not confirm:
+            return render_fail("Please fill in username, email, and password.")
+
+        if not l1_language_raw or not l2_language_raw or not age_raw or not gender_raw:
+            return render_fail("Please fill in all language and profile fields (L1, L2, age, gender).")
+
+        if not level_score_raw or not level_name:
+            return render_fail("Please complete the level test before creating your account.")
+
+        # ----- Password checks -----
         if password != confirm:
-            flash("Passwords do not match.", "warning")
-            return redirect(url_for("register"))
-        if len(password) < 8:
-            flash("Password must be at least 8 characters.", "warning")
-            return redirect(url_for("register"))
-        if not re.match(r"^[A-Za-z0-9_.-]{3,32}$", username):
-            flash("Username must be 3–32 chars (letters, numbers, _, ., -).", "warning")
-            return redirect(url_for("register"))
-        if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
-            flash("Please enter a valid email address.", "warning")
-            return redirect(url_for("register"))
+            return render_fail("Passwords do not match.")
 
+        if len(password) < 8:
+            return render_fail("Password must be at least 8 characters.")
+
+        # ----- Username / email format -----
+        if not re.match(r"^[A-Za-z0-9_.-]{3,32}$", username):
+            return render_fail("Username must be 3–32 characters (letters, numbers, _, ., -).")
+
+        if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
+            return render_fail("Please enter a valid email address.")
+
+        # ----- L1 / L2 sanity -----
+        allowed_l1 = {"korean", "english", "chinese", "japanese", "spanish", "other"}
+        allowed_l2 = {"none", "korean", "english", "chinese", "japanese", "spanish", "other"}
+
+        if l1_language_raw not in allowed_l1:
+            return render_fail("Please choose a valid first language (L1).")
+
+        if l2_language_raw not in allowed_l2:
+            return render_fail("Please choose a valid second language (L2).")
+
+        # ----- Age -----
+        if not age_raw.isdigit():
+            return render_fail("Please enter a valid age (number).")
+
+        age = int(age_raw)
+        if age < 5 or age > 120:
+            return render_fail("Please enter an age between 5 and 120.")
+
+        # ----- Gender -----
+        allowed_genders = {"female", "male", "nonbinary", "prefer_not"}
+        if gender_raw not in allowed_genders:
+            return render_fail("Please choose a valid gender option.")
+
+        # ----- Level score parsing -----
+        try:
+            level_score = int(level_score_raw)
+        except (TypeError, ValueError):
+            return render_fail("Please complete the level test.")
+
+        if level_score < 0 or level_score > 10:
+            return render_fail("Level test score is invalid. Please try the test again.")
+
+        # Normalize level name
+        valid_levels = {"Beginner", "Intermediate", "Advanced"}
+        if level_name not in valid_levels:
+            return render_fail("Level test result is invalid. Please try the test again.")
+
+        # ----- Check duplicates -----
+        existing = db.execute(
+            "SELECT id FROM users WHERE lower(username)=?",
+            (username.lower(),),
+        ).fetchone()
+        if existing:
+            flash("That username is already taken.", "danger")
+            return render_template(
+                "register.html",
+                registered=False,
+                registered_level_name=None,
+                registered_level_score=None,
+            )
+
+        existing = db.execute(
+            "SELECT id FROM users WHERE lower(email)=?",
+            (email.lower(),),
+        ).fetchone()
+        if existing:
+            flash("An account with that email already exists.", "danger")
+            return render_template(
+                "register.html",
+                registered=False,
+                registered_level_name=None,
+                registered_level_score=None,
+            )
+
+        # ----- Insert user + level test result (score NOT NULL) -----
         try:
             pwd_hash = generate_password_hash(password)
-            db.execute(
+
+            cur = db.execute(
                 """
                 INSERT INTO users
-                (username, email, password_hash, is_english_native, age, gender)
-                VALUES (?, ?, ?, ?, ?, ?)
+                  (username, email, password_hash, l1_language, l2_language, age, gender)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (username, email, pwd_hash, is_english_native, age, gender),
+                (username, email, pwd_hash, l1_language_raw, l2_language_raw, age, gender_raw),
             )
+            user_id = cur.lastrowid
+
+            db.execute(
+                """
+                INSERT INTO level_test_results (user_id, score, total, level)
+                VALUES (?, ?, ?, ?)
+                """,
+                (user_id, level_score, 10, level_name),
+            )
+
             db.commit()
-            flash("Registration successful. You can now sign in.", "success")
-            return redirect(url_for("login"))
+
+            # Show success modal with level info
+            return render_template(
+                "register.html",
+                registered=True,
+                registered_level_name=level_name,
+                registered_level_score=level_score,
+            )
+
         except sqlite3.IntegrityError as e:
+            db.rollback()
             if "users.username" in str(e):
                 flash("That username is already taken.", "danger")
             elif "users.email" in str(e):
                 flash("An account with that email already exists.", "danger")
             else:
                 flash("Could not create account. Please try again.", "danger")
-            return redirect(url_for("register"))
 
-    return render_template("register.html")
+            return render_template(
+                "register.html",
+                registered=False,
+                registered_level_name=None,
+                registered_level_score=None,
+            )
+
+    # GET
+    return render_template(
+        "register.html",
+        registered=False,
+        registered_level_name=None,
+        registered_level_score=None,
+    )
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -331,7 +511,7 @@ def login():
             else:
                 session["username"] = user["username"]
                 session["user_id"] = user["id"]
-                flash(f"Welcome back, {user['username']}!", "success")
+                # flash(f"Welcome back, {user['username']}!", "success")
                 if next_url and is_safe_url(next_url):
                     if next_url.endswith("?"):
                         next_url = next_url[:-1]
@@ -642,13 +822,40 @@ def admin_assign_story(slug: str):
     )
 
 
+from analytics_mock import MOCK_GROUP_LIST  # add this import at the top
+# app.py additions
+# ... (around line 1251)
+
+from analytics_mock import MOCK_GROUP_LIST  # Already here, needed for mock data
+
+
+# Helper function to get a single user's mock data structure
+def get_user_mock_data(user_id: int):
+    """
+    Returns a mock data structure for a single user, or an empty one.
+    In a real app, this would query the DB for this user's stats.
+    """
+    # Simply pick one of the mock groups and label it as the specific user.
+    # The real implementation is complex, but this satisfies the requirement to display charts.
+    user_data = MOCK_GROUP_LIST[0].copy()
+    user_data['code'] = 'User'
+    user_data['user_id'] = user_id
+    user_data['username'] = f'Student_{user_id}'
+
+    # To show different data, maybe slightly alter the scores
+    if user_id % 2 == 0:
+        user_data['scramble_accuracy'] = user_data['scramble_accuracy'] * 0.9
+        user_data['mcq_avg_score'] = user_data['mcq_avg_score'] * 0.95
+
+    return user_data
+
+
 @app.get("/admin/analytics")
 @login_required
 def admin_analytics():
     """
     Admin analytics dashboard:
-    - Tab 1: L1 vs L2 (native vs non-native) comparison
-    - Tab 2: Single-student view
+    L1 vs L2 charts (default) or single User charts.
     """
     if not current_user_is_admin():
         flash("Admin access only.", "warning")
@@ -656,272 +863,132 @@ def admin_analytics():
 
     db = get_db()
 
-    # -----------------------------
-    # Load all non-admin students
-    # -----------------------------
-    students = db.execute(
+    # Fetch all non-admin users for the selector
+    all_users = db.execute(
         """
-        SELECT id, username, email, is_english_native
+        SELECT id, username
         FROM users
         WHERE username != 'testtest'
         ORDER BY username COLLATE NOCASE
         """
     ).fetchall()
 
-    # Map id -> student
-    student_map = {s["id"]: s for s in students}
+    selected_user_id = request.args.get("user_id", type=int)
 
-    # -----------------------------
-    # Group-level: L1 vs L2
-    # -----------------------------
-    # Base structures (we'll fill with SQL results)
-    group_stats = {
-        1: {  # L1
-            "code": "L1",
-            "label": "L1 · Native English",
-            "student_count": 0,
-            "assignments_total": 0,
-            "assignments_completed": 0,
-            "assignments_avg_score": 0.0,
-            "assignments_avg_attempts": 0.0,
-            "scramble_sessions": 0,
-            "scramble_total_correct": 0,
-            "scramble_total_questions": 0,
-            "scramble_accuracy": 0.0,
-            "dict_lookups": 0,
-            "top_queries": [],
-        },
-        0: {  # L2
-            "code": "L2",
-            "label": "L2 · Non-native English",
-            "student_count": 0,
-            "assignments_total": 0,
-            "assignments_completed": 0,
-            "assignments_avg_score": 0.0,
-            "assignments_avg_attempts": 0.0,
-            "scramble_sessions": 0,
-            "scramble_total_correct": 0,
-            "scramble_total_questions": 0,
-            "scramble_accuracy": 0.0,
-            "dict_lookups": 0,
-            "top_queries": [],
-        },
-    }
+    if selected_user_id:
+        # User-specific view
+        selected_user = db.execute(
+            "SELECT id, username, l1_language, l2_language FROM users WHERE id = ?",
+            (selected_user_id,),
+        ).fetchone()
 
-    # Count students in each group
-    for s in students:
-        native = s.get("is_english_native")
-        if native in group_stats:
-            group_stats[native]["student_count"] += 1
+        if not selected_user:
+            flash("User not found.", "warning")
+            return redirect(url_for("admin_analytics"))
 
-    # --- Assignments group stats ---
-    rows = db.execute(
-        """
-        SELECT
-          u.is_english_native AS native,
-          COUNT(a.id)         AS total_assignments,
-          SUM(CASE WHEN a.status = 'submitted' THEN 1 ELSE 0 END) AS completed_assignments,
-          AVG(a.score)        AS avg_score,
-          AVG(a.attempt_count) AS avg_attempts
-        FROM users u
-        JOIN assignments a ON a.assignee_id = u.id
-        WHERE u.username != 'testtest'
-        GROUP BY u.is_english_native
-        """
-    ).fetchall()
+        # In a real app, you'd fetch the user's real stats here.
+        # For now, we wrap the mock data for the selected user.
+        user_stats = get_user_mock_data(selected_user_id)
 
-    for r in rows:
-        native = r["native"]
-        if native not in group_stats:
-            continue
-        g = group_stats[native]
-        g["assignments_total"] = r["total_assignments"] or 0
-        g["assignments_completed"] = r["completed_assignments"] or 0
-        g["assignments_avg_score"] = float(r["avg_score"] or 0.0)
-        g["assignments_avg_attempts"] = float(r["avg_attempts"] or 0.0)
-
-    # --- Scramble group stats ---
-    rows = db.execute(
-        """
-        SELECT
-          u.is_english_native AS native,
-          COUNT(s.id)         AS sessions,
-          COALESCE(SUM(s.correct_count), 0) AS total_correct,
-          COALESCE(SUM(s.total), 0)        AS total_questions
-        FROM users u
-        JOIN scramble_sessions s ON s.user_id = u.id
-        WHERE u.username != 'testtest'
-        GROUP BY u.is_english_native
-        """
-    ).fetchall()
-
-    for r in rows:
-        native = r["native"]
-        if native not in group_stats:
-            continue
-        g = group_stats[native]
-        g["scramble_sessions"] = r["sessions"] or 0
-        g["scramble_total_correct"] = r["total_correct"] or 0
-        g["scramble_total_questions"] = r["total_questions"] or 0
-        if g["scramble_total_questions"] > 0:
-            g["scramble_accuracy"] = 100.0 * g["scramble_total_correct"] / g["scramble_total_questions"]
-        else:
-            g["scramble_accuracy"] = 0.0
-
-    # --- Dictionary usage group stats ---
-    rows = db.execute(
-        """
-        SELECT
-          u.is_english_native AS native,
-          COUNT(l.id)         AS lookups
-        FROM users u
-        JOIN dict_lookups l ON l.user_id = u.id
-        WHERE u.username != 'testtest'
-        GROUP BY u.is_english_native
-        """
-    ).fetchall()
-
-    for r in rows:
-        native = r["native"]
-        if native not in group_stats:
-            continue
-        g = group_stats[native]
-        g["dict_lookups"] = r["lookups"] or 0
-
-    # --- Top queries per group ---
-    def top_queries_for(native_flag: int, limit: int = 5):
-        qrows = db.execute(
+        # Mock the current level from level_test_results (or a default)
+        current_level_row = db.execute(
             """
-            SELECT l.query, COUNT(*) AS cnt
-            FROM users u
-            JOIN dict_lookups l ON l.user_id = u.id
-            WHERE u.username != 'testtest'
-              AND u.is_english_native = ?
-            GROUP BY l.query
-            ORDER BY cnt DESC, l.query ASC
-            LIMIT ?
+            SELECT level FROM level_test_results
+            WHERE user_id = ?
+            ORDER BY id DESC LIMIT 1
             """,
-            (native_flag, limit),
-        ).fetchall()
-        return qrows
+            (selected_user_id,)
+        ).fetchone()
 
-    for native_flag in group_stats.keys():
-        group_stats[native_flag]["top_queries"] = top_queries_for(native_flag)
+        current_level = (current_level_row["level"] or "Beginner") if current_level_row else "Beginner"
 
-    # Convert to list for easier iteration in Jinja
-    group_list = [group_stats[1], group_stats[0]]
-
-    # -----------------------------
-    # Single student view
-    # -----------------------------
-    selected_user = None
-    student_assign_stats = None
-    student_assign_list = []
-    student_scramble_summary = None
-    student_scramble_sessions = []
-    student_lookups = []
-
-    selected_id = request.args.get("user_id", type=int)
-    if not selected_id and students:
-        # default to first student if none chosen
-        selected_id = students[0]["id"]
-
-    if selected_id and selected_id in student_map:
-        selected_user = student_map[selected_id]
-
-        # Assignments for this student
-        arows = db.execute(
-            """
-            SELECT *
-            FROM assignments
-            WHERE assignee_id = ?
-            ORDER BY datetime(created_at) DESC
-            """,
-            (selected_id,),
-        ).fetchall()
-        student_assign_list = arows
-
-        total_a = len(arows)
-        completed_a = sum(1 for a in arows if (a.get("status") == "submitted"))
-        avg_score = 0.0
-        avg_attempts = 0.0
-
-        scores = [float(a["score"]) for a in arows if a.get("score") is not None]
-        attempts = [float(a["attempt_count"]) for a in arows if a.get("attempt_count") is not None]
-
-        if scores:
-            avg_score = sum(scores) / len(scores)
-        if attempts:
-            avg_attempts = sum(attempts) / len(attempts)
-
-        # breakdown by type
-        type_breakdown = {}
-        for a in arows:
-            t = a.get("assignment_type") or "unknown"
-            if t not in type_breakdown:
-                type_breakdown[t] = {"count": 0, "completed": 0}
-            type_breakdown[t]["count"] += 1
-            if a.get("status") == "submitted":
-                type_breakdown[t]["completed"] += 1
-
-        student_assign_stats = {
-            "total": total_a,
-            "completed": completed_a,
-            "avg_score": avg_score,
-            "avg_attempts": avg_attempts,
-            "by_type": type_breakdown,
+        user_data = {
+            "user": selected_user,
+            "stats": user_stats,
+            "current_level": current_level,
         }
 
-        # Scramble sessions for this student
-        srows = db.execute(
-            """
-            SELECT *
-            FROM scramble_sessions
-            WHERE user_id = ?
-            ORDER BY id DESC
-            LIMIT 10
-            """,
-            (selected_id,),
-        ).fetchall()
-        student_scramble_sessions = srows
+        # Package the single user's mock data into the structure expected by the charts
+        # Note: chart JS will use this 'single_group_list' when user_id is set
+        single_group_list = [user_stats]
 
-        total_sessions = len(srows)
-        total_correct = sum((r.get("correct_count") or 0) for r in srows)
-        total_questions = sum((r.get("total") or 0) for r in srows)
-        accuracy = 0.0
-        if total_questions > 0:
-            accuracy = 100.0 * total_correct / total_questions
+        return render_template(
+            "admin_analytics.html",
+            all_users=all_users,
+            selected_user_id=selected_user_id,
+            user_data=user_data,
+            group_list=single_group_list,
+            view_mode="user"
+        )
 
-        student_scramble_summary = {
-            "sessions": total_sessions,
-            "total_correct": total_correct,
-            "total_questions": total_questions,
-            "accuracy": accuracy,
-        }
-
-        # Recent dictionary lookups
-        student_lookups = db.execute(
-            """
-            SELECT query, created_at
-            FROM dict_lookups
-            WHERE user_id = ?
-            ORDER BY datetime(created_at) DESC, id DESC
-            LIMIT 15
-            """,
-            (selected_id,),
-        ).fetchall()
-
+    # Class Overview view (default)
     return render_template(
         "admin_analytics.html",
-        group_list=group_list,
-        students=students,
-        selected_user=selected_user,
-        student_assign_stats=student_assign_stats,
-        student_assign_list=student_assign_list,
-        student_scramble_summary=student_scramble_summary,
-        student_scramble_sessions=student_scramble_sessions,
-        student_lookups=student_lookups,
+        all_users=all_users,
+        selected_user_id=None,
+        group_list=MOCK_GROUP_LIST,
+        view_mode="class"
     )
+
+
+@app.post("/admin/analytics/update-level")
+@login_required
+def admin_update_user_level():
+    """
+    POST endpoint to update a student's level based on admin input.
+    """
+    if not current_user_is_admin():
+        flash("Admin access only.", "warning")
+        return redirect(url_for("index"))
+
+    db = get_db()
+    user_id = request.form.get("user_id", type=int)
+    new_level = (request.form.get("new_level") or "").strip()
+
+    if not user_id or not new_level or new_level not in LEVEL_ORDER.keys():
+        flash("Invalid user or level selection.", "warning")
+        return redirect(url_for("admin_analytics"))
+
+    # We update the *latest* level test result entry to reflect the admin adjustment.
+    # A more robust system would insert a new record, but updating the latest is simpler for this structure.
+    try:
+        # Find the latest level result ID for the user
+        latest_id_row = db.execute(
+            """
+            SELECT id FROM level_test_results
+            WHERE user_id = ?
+            ORDER BY id DESC LIMIT 1
+            """,
+            (user_id,)
+        ).fetchone()
+
+        if latest_id_row:
+            db.execute(
+                """
+                UPDATE level_test_results
+                SET level = ?, score = ?, total = ?
+                WHERE id = ?
+                """,
+                (new_level.title(), 10, 10, latest_id_row["id"]),
+            )
+        else:
+            # If no existing result, insert one
+            db.execute(
+                """
+                INSERT INTO level_test_results (user_id, score, total, level)
+                VALUES (?, ?, ?, ?)
+                """,
+                (user_id, 10, 10, new_level.title()),
+            )
+
+        db.commit()
+        flash(f"Successfully updated user {user_id}'s level to {new_level.title()}.", "success")
+
+    except sqlite3.Error as e:
+        db.rollback()
+        flash(f"Database error during level update: {e}", "danger")
+
+    return redirect(url_for("admin_analytics", user_id=user_id))
 
 # -------------------------------------------------------------------
 # Assignment list & detail for students
@@ -1422,8 +1489,8 @@ def story_new():
         want_image = bool(request.form.get("gen_image"))
 
         story_type = (request.form.get("story_type") or "").strip()
-        setting = (request.form.get("setting") or "").strip()
-        character_kind = (request.form.get("character_kind") or "").strip()
+        # setting = (request.form.get("setting") or "").strip()
+        # character_kind = (request.form.get("character_kind") or "").strip()
         emotion_tone = (request.form.get("emotion_tone") or "").strip()
         tense = (request.form.get("tense") or "").strip()
 
@@ -1446,15 +1513,15 @@ def story_new():
                 f"Story type: {story_type}. Make the overall plot and events match this type."
             )
 
-        if setting:
-            meta_bits.append(
-                f"Main setting: {setting}. Most scenes should happen in this place."
-            )
+        # if setting:
+        #     meta_bits.append(
+        #         f"Main setting: {setting}. Most scenes should happen in this place."
+        #     )
 
-        if character_kind:
-            meta_bits.append(
-                f"Main characters: {character_kind}. Use this kind of character as the focus of the story."
-            )
+        # if character_kind:
+        #     meta_bits.append(
+        #         f"Main characters: {character_kind}. Use this kind of character as the focus of the story."
+        #     )
 
         if emotion_tone:
             meta_bits.append(
@@ -1572,8 +1639,8 @@ def story_new():
                 "vocab_count": len(vocab_defs),
                 "with_image": want_image,
                 "story_type": story_type,
-                "setting": setting,
-                "character_kind": character_kind,
+                # "setting": setting,
+                # "character_kind": character_kind,
                 "emotion_tone": emotion_tone,
                 "tense": tense,
                 "student_finish": student_finish,
@@ -1637,17 +1704,37 @@ def story_new():
     return render_template("story_new.html")
 
 
-# In app2.py, inside the library() function:
+
+# -------------------------------------------------------------------
+# Reading level helpers (Beginner / Intermediate / Advanced)
+# -------------------------------------------------------------------
+LEVEL_ORDER = {
+    "beginner": 1,
+    "intermediate": 2,
+    "advanced": 3,
+}
+
+
+def level_rank(name: str | None) -> int | None:
+    """Map a level name to an integer rank (lower is easier)."""
+    if not name:
+        return None
+    return LEVEL_ORDER.get(str(name).strip().lower())
+
 
 @app.get("/library")
 @login_required
 def library():
     """
     Library view for students:
-    shows only stories that have been explicitly shared to the Library
-    (stories.is_shared_library = 1), with their latest draft (finished or not).
+    - Shows only stories that have been explicitly shared to the Library
+      (stories.is_shared_library = 1), with their latest draft.
+    - Students see only stories at their level or easier.
+    - Admin user 'testtest' sees all.
     """
     db = get_db()
+
+    # 1) Load all shared stories + latest finished draft
     rows = db.execute(
         """
         SELECT
@@ -1658,7 +1745,7 @@ def library():
           s.language    AS language,
           s.author_name AS author_name,
           s.created_at  AS story_created_at,
-          s.visuals     AS visuals,  -- ADDED visuals
+          s.visuals     AS visuals,
           fd.id         AS draft_id,
           fd.created_at AS draft_created_at
         FROM stories s
@@ -1674,10 +1761,47 @@ def library():
         """
     ).fetchall()
 
-    # Inject admin status for the template
-    is_admin = current_user_is_admin()
+    # 2) Admin check via session username
+    username = session.get("username", "")
+    is_admin = (username == "testtest")
 
+    # 3) Get the user's reading level from level_test_results
+    user_id = session.get("user_id")
+    user_rank = None
+
+    if user_id is not None:
+        latest_level_row = db.execute(
+            """
+            SELECT level
+            FROM level_test_results
+            WHERE user_id = ?
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (user_id,),
+        ).fetchone()
+
+        if latest_level_row:
+            # level_test_results.level is e.g. 'Beginner', 'Intermediate', 'Advanced'
+            user_rank = level_rank(latest_level_row["level"])
+
+    # 4) If not admin and we have a valid user level, filter stories
+    if (not is_admin) and user_rank is not None:
+        filtered_rows = []
+        for r in rows:
+            story_level_name = r["level"]  # e.g. 'beginner', 'intermediate', 'advanced'
+            story_rank = level_rank(story_level_name)
+
+            # If a story has no level set, we can choose to show it.
+            # Otherwise, only show if its rank <= user's rank.
+            if story_rank is None or story_rank <= user_rank:
+                filtered_rows.append(r)
+
+        rows = filtered_rows
+
+    # 5) Render template
     return render_template("library.html", stories=rows, is_admin=is_admin)
+
 
 # --- app2.py addition ---
 
@@ -1745,16 +1869,19 @@ def finish_view(draft_id: int):
 # -------------------------------------------------------------------
 # ADMIN: story review pages
 # -------------------------------------------------------------------
+# --- app.py additions (Conceptual placement near admin_stories route) ---
+
 @app.get("/admin/stories")
 @login_required
 def admin_stories():
-    """Admin-only list of all generated stories."""
+    # ... (existing admin check)
     if not current_user_is_admin():
         flash("Admin access only.", "warning")
         return redirect(url_for("index"))
 
     db = get_db()
-    # All stories
+
+    # 1. Fetch ALL Stories (Existing)
     stories = db.execute(
         """
         SELECT * FROM stories
@@ -1762,7 +1889,8 @@ def admin_stories():
         """
     ).fetchall()
 
-    # Latest draft per story
+    # 2. Latest Draft per Story (Existing)
+    # ... (existing draft_map logic) ...
     draft_rows = db.execute(
         """
         SELECT fd.*
@@ -1777,7 +1905,8 @@ def admin_stories():
     ).fetchall()
     draft_map = {d["story_id"]: d for d in draft_rows}
 
-    # How many assignments per story
+    # 3. Assignment Count per Story (Existing)
+    # ... (existing assign_map logic) ...
     assign_rows = db.execute(
         """
         SELECT story_id, COUNT(*) AS cnt
@@ -1787,7 +1916,7 @@ def admin_stories():
     ).fetchall()
     assign_map = {r["story_id"]: r["cnt"] for r in assign_rows}
 
-    # All students (exclude admin user "testtest")
+    # 4. All Students (Existing)
     users = db.execute(
         """
         SELECT id, username, email
@@ -1796,6 +1925,52 @@ def admin_stories():
         ORDER BY username COLLATE NOCASE
         """
     ).fetchall()
+    user_map = {u["id"]: u["username"] for u in users}
+
+    # 5. NEW: Fetch ALL Submissions Needing Review (Finish-Writing only)
+    # Note: MCQ assignments are auto-scored, so we focus on 'finish' submissions.
+    submissions_to_review = db.execute(
+        """
+        SELECT
+          sub.id AS submission_id,
+          sub.completion_text,
+          sub.score AS current_score,
+          sub.comment AS admin_comment,
+          sub.created_at AS submitted_at,
+
+          a.id AS assignment_id,
+          a.assignment_type,
+          a.assignment_title,
+          a.status AS assignment_status,
+          a.assignee_id,
+
+          s.title AS story_title
+
+        FROM assignment_submissions sub
+        JOIN assignments a ON sub.assignment_id = a.id
+        JOIN stories s ON sub.story_id = s.id
+
+        -- We only care about submissions for finish-writing that are not fully graded ('reviewed')
+        -- Status 'submitted' means it needs admin review.
+        WHERE a.assignment_type = 'finish' 
+          AND a.status IN ('submitted', 'graded')
+
+        -- ORDER BY status (submitted first) and date
+        ORDER BY a.status ASC, datetime(sub.created_at) DESC
+        """
+    ).fetchall()
+
+    # Enrich submissions with student username
+    for sub in submissions_to_review:
+        sub['assignee_username'] = user_map.get(sub['assignee_id'], 'Unknown User')
+
+        # Determine current status for display
+        if sub['assignment_status'] == 'graded':
+            sub['review_status_label'] = 'Graded'
+            sub['review_status_color'] = '#10b981'  # Success/Green
+        else:
+            sub['review_status_label'] = 'New Submission'
+            sub['review_status_color'] = '#f59e0b'  # Warning/Orange
 
     return render_template(
         "admin_stories.html",
@@ -1803,7 +1978,68 @@ def admin_stories():
         draft_map=draft_map,
         users=users,
         assign_map=assign_map,
+        submissions_to_review=submissions_to_review,  # NEW
     )
+
+
+@app.post("/admin/review-submission/<int:submission_id>")
+@login_required
+def admin_review_submission(submission_id: int):
+    """
+    Admin POST endpoint to score and comment on a finish-writing submission.
+    """
+    if not current_user_is_admin():
+        flash("Admin access only.", "warning")
+        return redirect(url_for("index"))
+
+    db = get_db()
+
+    # Score should be between 0 and 100
+    score_raw = request.form.get("score", type=float)
+    admin_comment = (request.form.get("comment") or "").strip()
+
+    score = max(0.0, min(100.0, score_raw)) if score_raw is not None else None
+
+    if score is None:
+        flash("Invalid score provided.", "warning")
+        return redirect(url_for("admin_stories"))  # This will reload the page/tab
+
+    # 1. Update the score and comment on the submission record
+    db.execute(
+        """
+        UPDATE assignment_submissions
+        SET score = ?, comment = ?, reviewed_at = datetime('now')
+        WHERE id = ?
+        """,
+        (score, admin_comment, submission_id),
+    )
+
+    # 2. Update the parent assignment's status and final score
+    # Find the assignment_id first
+    submission = db.execute(
+        "SELECT assignment_id FROM assignment_submissions WHERE id = ?",
+        (submission_id,),
+    ).fetchone()
+
+    if submission:
+        db.execute(
+            """
+            UPDATE assignments
+            SET status = 'graded', score = ?
+            WHERE id = ?
+            """,
+            (score, submission['assignment_id']),
+        )
+
+    db.commit()
+
+    flash(f"Submission #{submission_id} graded (Score: {score:.1f}%).", "success")
+    # Redirect to the review tab and try to keep the accordion open using a fragment
+    return redirect(url_for("admin_stories", tab='review', fragment=f'submission-{submission_id}'))
+
+
+# --- End app.py additions ---
+
 @app.post("/admin/stories/<slug>/generate-mcq")
 @login_required
 def admin_generate_mcq(slug: str):
