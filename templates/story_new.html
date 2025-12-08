@@ -1,5 +1,5 @@
 {% extends "base2.html" %}
-{% block title %}AI Story Generator · EduWeaverPlay{% endblock %}
+{% block title %}AI Story Generator · LexiTale{% endblock %}
 
 {% block content %}
 
@@ -245,9 +245,9 @@
         <a href="{{ url_for('library') }}" class="btn btn-outline-secondary btn-lg">
           Go to Library
         </a>
-        <a id="goFinishBtn" href="{{ url_for('index') }}" class="btn btn-sky-solid btn-lg">
-          Finish the Story
-        </a>
+<!--        <a id="goFinishBtn" href="{{ url_for('index') }}" class="btn btn-sky-solid btn-lg">-->
+<!--          Finish the Story-->
+<!--        </a>-->
       </div>
     </div>
   </div>
@@ -574,10 +574,10 @@ body{
   const params = new URLSearchParams(window.location.search);
   if (params.get('generated') === '1') {
     const modalEl = document.getElementById('generatedModal');
-    const goBtn = document.getElementById('goFinishBtn');
+//    const goBtn = document.getElementById('goFinishBtn');
     const finishUrl = params.get('finish_url');
 
-    if (finishUrl) goBtn.href = finishUrl;
+//    if (finishUrl) goBtn.href = finishUrl;
 
     const showModal = () => {
       overlay.setAttribute('aria-hidden', 'true');

@@ -1,5 +1,5 @@
 {% extends "base2.html" %}
-{% block title %}Word Scramble · EduWeaverPlay{% endblock %}
+{% block title %}Word Scramble · LexiTale{% endblock %}
 
 {% block content %}
 
@@ -28,8 +28,20 @@
         {% if puzzles %}
         <div class="game-area-v7">
 
-          <div id="puzzleDisplay" class="puzzle-display-v7 mb-4">
+          <!-- LEVEL INDICATOR -->
+          <div class="level-indicator-v7 mb-2">
+            <span id="levelBadge" class="level-chip-v7">
+              Level 1 · Easy (4 letters)
+            </span>
+            <div class="level-steps-v7">
+              <span class="level-step-dot active" data-level="1"></span>
+              <span class="level-step-dot" data-level="2"></span>
+              <span class="level-step-dot" data-level="3"></span>
             </div>
+          </div>
+
+          <div id="puzzleDisplay" class="puzzle-display-v7 mb-4">
+          </div>
 
           <div class="input-feedback-area text-center">
             <form id="scrambleForm" class="d-flex justify-content-center gap-3">
@@ -43,13 +55,13 @@
             </form>
 
             <div id="feedbackContainer" class="feedback-container-v7">
-                </div>
+            </div>
 
             <button id="nextButton" class="btn btn-lg btn-success-v7 mt-4 px-5" style="display: none;">
-                Next Puzzle <i class="bi bi-arrow-right"></i>
+              Next Puzzle <i class="bi bi-arrow-right"></i>
             </button>
             <button id="restartButton" class="btn btn-outline-secondary btn-sm rounded-pill mt-4" style="display: none;">
-                Restart Game
+              Play Again from Level 1
             </button>
           </div>
         </div>
@@ -79,9 +91,59 @@
   const scoreTotalEl = document.getElementById('scoreTotal');
   const feedbackContainer = document.getElementById('feedbackContainer');
 
+  const levelBadge = document.getElementById('levelBadge');
+  const levelDots = document.querySelectorAll('.level-step-dot');
+
   let currentPuzzleIndex = 0;
   let correctCount = 0;
   let currentPuzzle = null;
+  let currentLevel = 1; // 1: easy, 2: medium, 3: hard
+
+  // --- Helpers: Level detection & UI ---
+
+  function getLevelFromWord(word) {
+    const len = (word || '').length;
+    if (len === 4) return 1;      // Easy
+    if (len === 5) return 2;      // Medium
+    return 3;                     // Hard
+  }
+
+  function updateLevelUI(level) {
+    if (levelBadge) {
+      let label = '';
+      if (level === 1) {
+        label = 'Level 1 · Easy (4 letters)';
+      } else if (level === 2) {
+        label = 'Level 2 · Medium (5 letters)';
+      } else {
+        label = 'Level 3 · Hard (6+ letters)';
+      }
+      levelBadge.textContent = label;
+    }
+    if (levelDots && levelDots.length) {
+      levelDots.forEach(dot => {
+        const lvl = Number(dot.dataset.level);
+        dot.classList.toggle('active', lvl === level);
+      });
+    }
+  }
+
+  function showLevelUp(level) {
+    let text = '';
+    if (level === 2) {
+      text = "Great job! You have unlocked Level 2 – 5-letter words.";
+    } else if (level === 3) {
+      text = "Amazing. You are now on Level 3 – challenge words (6+ letters).";
+    } else {
+      return;
+    }
+
+    feedbackContainer.innerHTML = '';
+    const msgElement = document.createElement('div');
+    msgElement.className = 'feedback-message levelup-message active';
+    msgElement.textContent = text;
+    feedbackContainer.appendChild(msgElement);
+  }
 
   // --- HTML Rendering Functions ---
 
@@ -101,9 +163,6 @@
   function renderPuzzle(puzzle) {
     if (!puzzle) return;
 
-    // Reset feedback
-    feedbackContainer.innerHTML = '';
-
     // Render the puzzle content
     puzzleDisplay.innerHTML = `
       <div class="scramble-number-circle mb-3">${currentPuzzleIndex + 1}</div>
@@ -111,16 +170,15 @@
       ${puzzle.definition ? `<div class="small text-muted mt-3 game-text-body">Hint: ${puzzle.definition}</div>` : ''}
     `;
 
-    // Ensure success styles are removed when loading a new puzzle
+    // Reset any success styles on letters
     puzzleDisplay.querySelectorAll('.scramble-letter-v7').forEach(el => {
-        el.classList.remove('correct');
-        el.style.backgroundColor = '';
-        el.style.color = '';
-        el.style.borderColor = '';
-        el.style.boxShadow = '';
-        el.style.transform = '';
+      el.classList.remove('correct');
+      el.style.backgroundColor = '';
+      el.style.color = '';
+      el.style.borderColor = '';
+      el.style.boxShadow = '';
+      el.style.transform = '';
     });
-
 
     scrambleInput.value = '';
     scrambleInput.disabled = false;
@@ -133,7 +191,22 @@
 
   function loadNextPuzzle() {
     if (currentPuzzleIndex < puzzles.length) {
-      currentPuzzle = puzzles[currentPuzzleIndex];
+      const upcoming = puzzles[currentPuzzleIndex];
+      const newLevel = getLevelFromWord(upcoming.word);
+
+      // If we are entering a new level (but not on the very first question),
+      // show a "congrats" / level-up message.
+      if (currentPuzzleIndex > 0 && newLevel > currentLevel) {
+        showLevelUp(newLevel);
+      } else {
+        // Normal case: clear previous feedback when going to next puzzle
+        feedbackContainer.innerHTML = '';
+      }
+
+      currentLevel = newLevel;
+      updateLevelUI(currentLevel);
+
+      currentPuzzle = upcoming;
       renderPuzzle(currentPuzzle);
     } else {
       showFinalScore();
@@ -141,13 +214,26 @@
   }
 
   function showFinalScore() {
+    feedbackContainer.innerHTML = '';
+
     puzzleDisplay.innerHTML = `
-        <h4 class="fw-bold game-title-v7">Game Complete! 🎉</h4>
-        <p class="score-number-v7">${correctCount} out of ${puzzles.length} correct.</p>
-        <p class="text-muted game-text-body">You did great!</p>
+      <h4 class="fw-bold game-title-v7 mb-2">Game Complete</h4>
+      <p class="score-number-v7 mb-1">${correctCount} out of ${puzzles.length} correct.</p>
+      <p class="text-muted game-text-body mb-0">
+        You have cleared all 3 levels. Select “Play Again from Level 1” to try a fresh mix of words.
+      </p>
     `;
+
+    if (levelBadge) {
+      levelBadge.textContent = 'All levels complete';
+    }
+    if (levelDots && levelDots.length) {
+      levelDots.forEach(dot => dot.classList.add('active'));
+    }
+
     checkButton.style.display = 'none';
     scrambleInput.style.display = 'none';
+    nextButton.style.display = 'none';   // hide Next on final screen
     restartButton.style.display = 'inline-block';
   }
 
@@ -159,27 +245,28 @@
     msgElement.className = 'feedback-message';
 
     if (isCorrect) {
-        // Use Bootstrap Check Icon
-        msgElement.innerHTML = `<span class="feedback-icon text-success-v7"><i class="bi bi-check-circle-fill"></i></span> ${message}`;
-        msgElement.style.color = 'var(--success-color)';
+      // Use Bootstrap Check Icon
+      msgElement.innerHTML = `<span class="feedback-icon text-success-v7"><i class="bi bi-check-circle-fill"></i></span> ${message}`;
+      msgElement.style.color = 'var(--success-color)';
 
-        // Success animation for letters (Ink text on success background)
-        puzzleDisplay.querySelectorAll('.scramble-letter-v7').forEach(el => {
-            el.classList.add('correct');
-            el.style.backgroundColor = 'var(--success-color)';
-            el.style.color = 'white'; /* White text on colored background */
-            el.style.borderColor = 'var(--success-dark-color)';
-            el.style.boxShadow = '0 5px 0 var(--success-dark-color-light)'; /* Subtle 3D success shadow */
-            el.style.transform = 'translateY(-2px)'; // Slight pop up on success
-        });
+      // Success animation for letters
+      puzzleDisplay.querySelectorAll('.scramble-letter-v7').forEach(el => {
+        el.classList.add('correct');
+        el.style.backgroundColor = 'var(--success-color)';
+        el.style.color = 'white';
+        el.style.borderColor = 'var(--success-dark-color)';
+        el.style.boxShadow = '0 5px 0 var(--success-dark-color-light)';
+        el.style.transform = 'translateY(-2px)';
+      });
 
     } else {
-        // Use Bootstrap X Icon
-        msgElement.innerHTML = `<span class="feedback-icon text-danger"><i class="bi bi-x-circle-fill"></i></span> ${message}`;
-        msgElement.style.color = 'var(--coral-main)';
-        // Animate the input field red and shake
-        scrambleForm.classList.add('shake');
-        setTimeout(() => scrambleForm.classList.remove('shake'), 500);
+      // Use Bootstrap X Icon
+      msgElement.innerHTML = `<span class="feedback-icon text-danger"><i class="bi bi-x-circle-fill"></i></span> ${message}`;
+      msgElement.style.color = 'var(--coral-main)';
+
+      // Animate the input field red and shake
+      scrambleForm.classList.add('shake');
+      setTimeout(() => scrambleForm.classList.remove('shake'), 500);
     }
 
     feedbackContainer.appendChild(msgElement);
@@ -187,16 +274,16 @@
     setTimeout(() => msgElement.classList.add('active'), 10);
   }
 
-  // --- Event Handler ---
+  // --- Event Handlers ---
 
   scrambleForm.addEventListener('submit', (e) => {
     e.preventDefault();
     const guess = scrambleInput.value.trim().toLowerCase();
-    const answer = currentPuzzle.word.toLowerCase();
+    const answer = (currentPuzzle.word || '').toLowerCase();
 
     if (!guess) return;
 
-    // Clear any previous feedback/shake
+    // Clear any previous feedback
     feedbackContainer.innerHTML = '';
 
     if (guess === answer) {
@@ -204,20 +291,16 @@
       correctCount++;
       scoreCorrectEl.textContent = correctCount;
 
-      showFeedback(true, "Awesome! You got it right!");
+      showFeedback(true, "Great work. You got it right.");
 
       scrambleInput.disabled = true;
       checkButton.disabled = true;
       nextButton.style.display = 'inline-block';
 
-      // Log success (Placeholder for API call)
-      // logPuzzleResult(currentPuzzle.word, true);
-
     } else {
       // Incorrect Answer
-      showFeedback(false, "Oops! Try that one more time.");
+      showFeedback(false, "Not quite. Try one more time.");
 
-      // Clear input quickly to encourage another guess
       scrambleInput.value = '';
       scrambleInput.focus();
     }
@@ -229,13 +312,20 @@
   });
 
   restartButton.addEventListener('click', () => {
+    // Simple reload – backend will choose a fresh random set of words
     window.location.reload();
   });
 
   // --- Initialization ---
+  if (puzzles.length > 0) {
+    // Initial level indicator for first puzzle
+    currentLevel = getLevelFromWord(puzzles[0].word);
+    updateLevelUI(currentLevel);
+  }
   loadNextPuzzle();
 })();
 </script>
+
 <style>
 :root {
     --coral-main: #ff6b6b;
@@ -280,6 +370,39 @@
     border-bottom: 2px solid rgba(255, 107, 107, 0.15) !important;
 }
 
+/* --- Level Indicator --- */
+.level-indicator-v7 {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.level-chip-v7 {
+    padding: 0.3rem 1rem;
+    border-radius: 999px;
+    background: #fff4f4;
+    color: var(--coral-main);
+    font-size: 0.9rem;
+    font-weight: 600;
+    border: 1px solid rgba(255, 107, 107, 0.5);
+    white-space: nowrap;
+}
+.level-steps-v7 {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+.level-step-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+    background: #ffe0e0;
+    opacity: 0.5;
+}
+.level-step-dot.active {
+    background: var(--coral-main);
+    opacity: 1;
+}
+
 /* --- Puzzle Display --- */
 .puzzle-display-v7 {
     min-height: 150px;
@@ -289,7 +412,6 @@
     border: 2px solid var(--coral-light);
     box-shadow: 0 4px 15px rgba(255, 107, 107, 0.12);
 
-    /* center everything inside */
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -323,7 +445,6 @@
     align-items: center;
     justify-content: center;
 
-    /* removed shadows */
     box-shadow: none;
     transform: translateY(0);
     transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
@@ -333,11 +454,9 @@
     transform: translateY(-2px);
     border-color: var(--coral-main);
     cursor: grab;
-
-    /* no shadow on hover */
-    box-shadow: none;
 }
 
+/* Question number */
 .scramble-number-circle {
     width: 40px;
     height: 40px;
@@ -410,6 +529,12 @@
     margin-right: 10px;
     vertical-align: middle;
 }
+.levelup-message {
+    font-size: 1.3rem;
+    color: var(--coral-main);
+}
+
+/* generic colors */
 .text-success-v7 { color: var(--success-color); }
 .text-danger { color: var(--coral-main) !important; }
 

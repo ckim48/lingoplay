@@ -55,6 +55,23 @@
       color:#999;
     }
 
+    /* ---------- NAV USER BADGE ---------- */
+    .nav-user-badge{
+      padding:4px 10px;
+      border-radius:999px;
+      background:#fff4f4;
+      color:#ff6b6b;
+      font-weight:600;
+      font-size:.9rem;
+      display:inline-flex;
+      align-items:center;
+      gap:.35rem;
+      border:1px solid rgba(255,107,107,.35);
+    }
+    .nav-user-badge i{
+      font-size:1rem;
+    }
+
     /* ---------- DICTIONARY FLOATING UI ---------- */
     .dict-fab{
       position:fixed;
@@ -273,13 +290,23 @@
         {% endif %}
 
         {% if current_user %}
-          <li class="nav-item ms-lg-3 mt-2 mt-lg-0">
-            <a class="btn btn-sky" href="{{ url_for('logout') }}">Logout</a>
-          </li>
+        <!-- USER BADGE (USERNAME + ID) -->
+        <li class="nav-item mx-lg-2 mt-2 mt-lg-0">
+          <span class="nav-link p-0">
+            <span class="nav-user-badge">
+              <i class="bi bi-person-circle"></i>
+              {{ current_user.username }}
+            </span>
+          </span>
+        </li>
+
+        <li class="nav-item ms-lg-1 mt-2 mt-lg-0">
+          <a class="btn btn-sky" href="{{ url_for('logout') }}">Logout</a>
+        </li>
         {% else %}
-          <li class="nav-item ms-lg-3 mt-2 mt-lg-0">
-            <a class="btn btn-sky" href="{{ url_for('login') }}">Login</a>
-          </li>
+        <li class="nav-item ms-lg-3 mt-2 mt-lg-0">
+          <a class="btn btn-sky" href="{{ url_for('login') }}">Login</a>
+        </li>
         {% endif %}
       </ul>
     </div>

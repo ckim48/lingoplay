@@ -92,41 +92,64 @@
                   <td class="d-none d-md-table-cell table-td-padding" onclick="window.location='{{ url_for('admin_story_detail', slug=s.slug) }}'" role="button">
                     <span class="small text-muted admin-text-body">{{ s.author_name }}</span>
                   </td>
-                  <td onclick="window.location='{{ url_for('admin_story_detail', slug=s.slug) }}'" role="button" class="table-td-padding">
-                    <span class="small text-muted admin-text-body">{{ s.created_at|dt("%Y-%m-%d %H:%M") }}</span>
-                  </td>
+<td onclick="window.location='{{ url_for('admin_story_detail', slug=s.slug) }}'" role="button" class="table-td-padding">
+  <span class="small text-muted admin-text-body">{{ s.created_at|dt("%Y-%m-%d") }}</span>
+</td>
+
 
                   <td class="text-end table-td-padding">
                     <div class="d-flex flex-column align-items-end gap-2 mb-2">
 
                       {# MCQ generate button: only if story is fully completed and MCQs not yet ready #}
-                      {% if can_mcq and not mcq_ready %}
-                      <form method="post"
-                            action="{{ url_for('admin_generate_mcq', slug=s.slug) }}"
-                            class="mcq-gen-form">
-                        <button type="submit"
-                                class="btn btn-sm rounded-pill btn-action-outline-v7 admin-text-button btn-mcq-gen">
-                          <i class="bi bi-question-circle me-1"></i>
-                          Generate MCQ
-                        </button>
-                      </form>
-                      {% endif %}
+    {% if not can_mcq %}
+      {# Draft exists but not fully completed → always show Assign (finish-writing) #}
+      <button
+        type="button"
+        class="btn btn-sm rounded-pill btn-action-outline-v7 admin-text-button"
+        data-bs-toggle="modal"
+        data-bs-target="#assignModal"
+        data-story-title="{{ s.title }}"
+        data-assign-url="{{ url_for('admin_assign_story', slug=s.slug) }}"
+        data-can-finish="{{ 1 if can_finish else 0 }}"
+        data-can-mcq="{{ 1 if can_mcq else 0 }}"
+        data-mcq-ready="{{ 1 if mcq_ready else 0 }}"
+        {% if not draft %}disabled{% endif %}
+      >
+        <i class="bi bi-person-check me-1"></i>
+        Assign
+      </button>
 
-                      <button
-                        type="button"
-                        class="btn btn-sm rounded-pill btn-action-outline-v7 admin-text-button"
-                        data-bs-toggle="modal"
-                        data-bs-target="#assignModal"
-                        data-story-title="{{ s.title }}"
-                        data-assign-url="{{ url_for('admin_assign_story', slug=s.slug) }}"
-                        data-can-finish="{{ 1 if can_finish else 0 }}"
-                        data-can-mcq="{{ 1 if can_mcq else 0 }}"
-                        data-mcq-ready="{{ 1 if mcq_ready else 0 }}"
-                        {% if not draft %}disabled{% endif %}
-                      >
-                        <i class="bi bi-person-check me-1"></i>
-                        Assign
-                      </button>
+    {% elif can_mcq and not mcq_ready %}
+      {# Fully completed story but MCQs not generated yet → show only Generate MCQ #}
+      <form method="post"
+            action="{{ url_for('admin_generate_mcq', slug=s.slug) }}"
+            class="mcq-gen-form">
+        <button type="submit"
+                class="btn btn-sm rounded-pill btn-action-outline-v7 admin-text-button btn-mcq-gen">
+          <i class="bi bi-question-circle me-1"></i>
+          Generate MCQ
+        </button>
+      </form>
+
+    {% else %}
+      {# can_mcq and mcq_ready → MCQs ready → show Assign only #}
+      <button
+        type="button"
+        class="btn btn-sm rounded-pill btn-action-outline-v7 admin-text-button"
+        data-bs-toggle="modal"
+        data-bs-target="#assignModal"
+        data-story-title="{{ s.title }}"
+        data-assign-url="{{ url_for('admin_assign_story', slug=s.slug) }}"
+        data-can-finish="{{ 1 if can_finish else 0 }}"
+        data-can-mcq="{{ 1 if can_mcq else 0 }}"
+        data-mcq-ready="{{ 1 if mcq_ready else 0 }}"
+        {% if not draft %}disabled{% endif %}
+      >
+        <i class="bi bi-person-check me-1"></i>
+        Assign
+      </button>
+    {% endif %}
+
 
                       {% if s.is_shared_library %}
                       <button
@@ -203,9 +226,9 @@
 
                     <div class="d-flex gap-2 align-items-center">
                         {% if sub.current_score is not none %}
-                            <span class="badge bg-success-v7 admin-text-body">Score: {{ sub.current_score|int }}%</span>
+                            <span class="badge bg-success-v7 admin-text-body" style="color: black">Score: {{ sub.current_score|int }}%</span>
                         {% endif %}
-                        <span class="status-pill admin-text-body" style="background: {{ sub.review_status_color }}; color: #fff;">
+                        <span class="status-pill admin-text-body" style="background: {{ sub.review_status_color }}; color: black;">
                             {{ sub.review_status_label }}
                         </span>
                     </div>
@@ -229,12 +252,17 @@
                         <p class="mb-0" style="white-space: pre-wrap;">{{ sub.completion_text }}</p>
                       </div>
 
-                      {% if sub.admin_comment %}
-                        <div class="alert alert-success-v7 mt-3 p-3 small admin-text-body">
-                            <p class="fw-bold mb-0">Previous Feedback:</p>
-                            <p class="mb-0" style="white-space: pre-wrap;">{{ sub.admin_comment }}</p>
-                        </div>
-                      {% endif %}
+{% if sub.admin_comment %}
+  <div class="alert alert-success-v7 mt-3 p-3 small admin-text-body">
+      <p class="fw-bold mb-0">Feedback:</p>
+      <p class="mb-0" style="white-space: pre-wrap;">{{ sub.admin_comment }}</p>
+  </div>
+{% else %}
+  <div class="alert bg-light-soft-blue-v7 mt-3 p-3 small admin-text-body">
+      <p class="fw-bold mb-0">Feedback:</p>
+      <p class="mb-0">This submission has not been reviewed yet.</p>
+  </div>
+{% endif %}
 
                     </div>
 
@@ -558,19 +586,22 @@
   }
 
   // MCQ generation loading overlay
-  const mcqLoadingOverlay = document.getElementById('mcqLoadingOverlay');
-  const mcqButtons = document.querySelectorAll('.btn-mcq-gen');
+// MCQ generation loading overlay
+const mcqLoadingOverlay = document.getElementById('mcqLoadingOverlay');
+const mcqForms = document.querySelectorAll('.mcq-gen-form');
 
-  mcqButtons.forEach(btn => {
-    btn.addEventListener('click', function () {
-      // Prevent double-submission and show overlay
-      btn.disabled = true;
-      if (mcqLoadingOverlay) {
-        mcqLoadingOverlay.classList.remove('d-none');
-      }
-      // Let the form submit normally; overlay will disappear on page reload
-    });
+mcqForms.forEach(form => {
+  form.addEventListener('submit', function () {
+    const btn = form.querySelector('.btn-mcq-gen');
+    if (btn) {
+      btn.disabled = true;  // OK here, after submit is already happening
+    }
+    if (mcqLoadingOverlay) {
+      mcqLoadingOverlay.classList.remove('d-none');
+    }
+    // Don't call preventDefault, let the form submit normally
   });
+});
 
   // Script to handle tab persistence on page load (NEW)
   const activeTab = '{{ active_tab }}';

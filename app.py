@@ -36,10 +36,34 @@ DB_PATH = os.path.join(app.instance_path, "lingoplay.db")
 # Fallback / game constants
 # -------------------------------------------------------------------
 PREPARED_SCRAMBLE_WORDS = [
-    "apple", "banana", "school", "teacher", "pencil",
-    "friend", "family", "happy", "forest", "cookie",
-    "dragon", "magic", "ocean", "bubble", "rocket",
-    "puzzle", "reading", "smile", "garden", "rainbow"
+    # ---- EASY (4 letters) ----
+    "moon", "star", "book", "tree", "bird",
+    "frog", "lion", "bear", "snow", "wind",
+    "rain", "milk", "play", "jump", "swim",
+    "blue", "fire", "leaf", "home", "song",
+
+    # ---- MEDIUM (5 letters) ----
+    "apple", "happy", "smile", "magic", "piano",
+    "water", "tiger", "river", "ocean", "dream",
+    "cloud", "light", "story", "bread", "green",
+    "dance", "sweet", "world", "heart", "sound",
+
+    # ---- HARD (6+ letters) ----
+    "banana", "family", "forest", "cookie", "dragon",
+    "school", "pencil", "friend", "rocket", "garden",
+    "rainbow", "castle", "planet", "purple", "silver",
+    "butter", "animal", "market", "window", "orange",
+    "reading", "puzzle", "bubble", "winter", "summer",
+    "island", "jungle", "wonder", "travel", "flower",
+    "bridge", "adventure", "sunshine", "mountain", "treasure",
+    "chicken", "station", "picture", "laughter", "morning",
+    "evening", "holiday", "science", "teacher", "library",
+
+    # ---- EXTRA HARD (longer & fun) ----
+    "elephant", "kangaroo", "chocolate", "beautiful", "starlight",
+    "painting", "storybook", "discovery", "friendship", "imagination",
+    "happiness", "backpack", "spaceship", "playground", "fireworks",
+    "waterfall", "adventure", "butterfly", "mountains", "snowflake"
 ]
 
 # -------------------------------------------------------------------
@@ -210,7 +234,7 @@ def login_required(view_func):
 
 
 def current_user_is_admin() -> bool:
-    # Admin is the special username "testtest"
+    # Admin is the special username "adminlexi"
     if session.get("username") == "testtest":
         return True
     return False
@@ -571,66 +595,131 @@ def log_input(action: str, payload: dict):
 # -------------------------------------------------------------------
 # MCQ generator
 # -------------------------------------------------------------------
-def generate_mcq_questions(story_text: str, num_questions: int = 5) -> list[dict]:
+def generate_mcq_questions(base_text: str, num_questions: int = 5):
     """
-    Use the LLM to generate simple reading comprehension MCQs for the story.
-    Returns a list like:
-    [
+    Generate simple 4-option MCQ questions from the base_text.
+    Returns a list of dicts:
+      [{"question": "...", "options": ["A","B","C","D"], "correct_index": 0}, ...]
+    """
+    if client is None:
+        print("OpenAI client not configured; skipping MCQ generation.")
+        return []
+
+    instructions = """
+You are a helpful assistant that creates multiple-choice reading comprehension questions
+for elementary and middle school students. Given a short story, generate
+OBJECTIVE and clear questions that test understanding of the text.
+
+Rules:
+- Output ONLY JSON with this structure:
+  {
+    "questions": [
       {
-        "question": "...",
+        "question": "string",
         "options": ["A", "B", "C", "D"],
-        "answer_index": 1
+        "correct_index": 0
       },
       ...
     ]
-    """
-    if client is None:
+  }
+- Exactly 4 options per question.
+- correct_index is 0, 1, 2, or 3 and matches the correct option.
+- No explanations, no commentary, no markdown – ONLY JSON.
+"""
+
+    # Build user content including the story
+    user_prompt = f"""
+Story:
+\"\"\"{base_text}\"\"\"
+
+Please generate {num_questions} multiple-choice questions that are appropriate for
+the student's level. Follow the JSON schema exactly.
+"""
+
+    try:
+        resp = client.responses.create(
+            model=DEFAULT_MODEL,
+            max_output_tokens=800,
+            temperature=0.4,
+            instructions=instructions,
+            input=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": user_prompt.strip(),
+                        }
+                    ],
+                }
+            ],
+        )
+    except Exception as e:
+        print("Error calling OpenAI for MCQ generation:", e)
         return []
 
-    system = (
-        "You are an English reading comprehension question writer for young learners. "
-        "You make short, clear multiple-choice questions (4 options) about the given story. "
-        "Questions should be answerable directly from the story, not from prior knowledge."
-    )
-    user = (
-        "Story:\n"
-        f"{story_text[:2500]}\n\n"
-        f"Create {num_questions} reading comprehension questions for this story.\n"
-        "Each question must have exactly 4 options.\n"
-        "Return ONLY valid JSON representing a list, where each item has:\n"
-        "{ \"question\": str, \"options\": [str, str, str, str], \"answer_index\": int }\n"
-        "Do not include explanations, comments, or any extra text outside of the JSON."
-    )
+    # Safely get the text content
+    raw = getattr(resp, "output_text", "") or ""
+    raw = raw.strip()
+    if not raw:
+        print("MCQ generation: empty output_text")
+        return []
 
-    resp = client.responses.create(
-        model=DEFAULT_MODEL,
-        input=[
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
-        temperature=0.5,
-        max_output_tokens=800,
-    )
-    raw = getattr(resp, "output_text", "") or "[]"
+    # 1) First, try direct JSON parse
+    data = None
     try:
         data = json.loads(raw)
-        if isinstance(data, list):
-            cleaned = []
-            for item in data:
-                q = {
-                    "question": str(item.get("question", "")).strip(),
-                    "options": list(item.get("options") or [])[:4],
-                    "answer_index": int(item.get("answer_index", 0)),
-                }
-                if q["question"] and len(q["options"]) == 4:
-                    if not (0 <= q["answer_index"] < 4):
-                        q["answer_index"] = 0
-                    cleaned.append(q)
-            return cleaned
-    except Exception as e:
-        log_input("mcq_parse_error", {"error": str(e), "raw": raw})
+    except json.JSONDecodeError:
+        # 2) Fallback: extract first {...} block
+        match = re.search(r"\{.*\}", raw, re.DOTALL)
+        if not match:
+            print("MCQ generation: no JSON object found in output:", raw[:500])
+            return []
+        try:
+            data = json.loads(match.group(0))
+        except json.JSONDecodeError as e:
+            print("MCQ generation: JSON parse failed after extraction:", e, match.group(0)[:500])
+            return []
 
-    return []
+    questions = data.get("questions") or []
+    cleaned = []
+
+    for q in questions:
+        if not isinstance(q, dict):
+            continue
+
+        question_text = (q.get("question") or "").strip()
+        options = q.get("options") or []
+        correct_index = q.get("correct_index")
+
+        # Normalize options
+        options = [str(o).strip() for o in options if str(o).strip()]
+        if len(options) != 4:
+            # Skip malformed entries so we don't break the UI
+            continue
+
+        # Normalize correct_index
+        if isinstance(correct_index, str):
+            if correct_index.isdigit():
+                correct_index = int(correct_index)
+            else:
+                # if they gave something like "A", map to index
+                letter_map = {"A": 0, "B": 1, "C": 2, "D": 3}
+                correct_index = letter_map.get(correct_index.upper(), 0)
+
+        if not isinstance(correct_index, int) or not (0 <= correct_index < len(options)):
+            correct_index = 0  # safe default
+
+        if question_text:
+            cleaned.append(
+                {
+                    "question": question_text,
+                    "options": options,
+                    "correct_index": correct_index,
+                }
+            )
+
+    return cleaned
 
 # -------------------------------------------------------------------
 # ADMIN: assignment creation page (per story)
@@ -670,12 +759,12 @@ def admin_assign_story(slug: str):
         (story["id"],),
     ).fetchone()
 
-    # All students (exclude admin "testtest"), same as admin_stories()
+    # All students (exclude admin "adminlexi"), same as admin_stories()
     users = db.execute(
         """
         SELECT id, username, email
         FROM users
-        WHERE username != 'testtest'
+        WHERE username != 'adminlexi'
         ORDER BY username COLLATE NOCASE
         """
     ).fetchall()
@@ -868,7 +957,7 @@ def admin_analytics():
         """
         SELECT id, username
         FROM users
-        WHERE username != 'testtest'
+        WHERE username != 'adminlexi'
         ORDER BY username COLLATE NOCASE
         """
     ).fetchall()
@@ -1371,17 +1460,24 @@ def llm_story_from_prompt(
     )
 
     user = (
-        f"Author/Learner: {author or 'guest'}\n"
-        f"Target words/phonics: {prompt}\n"
-        f"Level: {level}\n"
-        f"{level_note}\n"
-        f"{lang_note}\n"
-        f"{pronoun_hint}\n"
-        f"{extra_scaffold}"
-        "The content of the story book should be strongly related to the given target words and the story title.\n"
-        "Length: 180–260 words.\n"
-        "Keep sentences short and decodable; use gentle repetition; warm tone; hopeful ending.\n"
-        "Personalization notes:\n- " + "\n- ".join(pref_notes)
+            f"Author/Learner: {author or 'guest'}\n"
+            f"Target words/phonics: {prompt}\n"
+            f"Level: {level}\n"
+            f"{level_note}\n"
+            f"{lang_note}\n"
+            f"{pronoun_hint}\n"
+            f"{extra_scaffold}"
+            "The content of the story book should be strongly related to the given target words and the story title.\n"
+            "Length: 180–260 words.\n"
+
+            # --- ENHANCED FIXES FOR STORY FLOW AND DETAIL ---
+            "**FORMAT**: Group the story into 4 to 6 cohesive paragraphs, separated by a double newline.\n"
+            "**FLOW**: Ensure sentences within each paragraph flow logically, linking ideas and actions naturally.\n"
+            "**STYLE**: Use simple conjunctions (like 'and', 'but', 'so') to slightly vary sentence structure and connect related short sentences, avoiding the choppy repetition of starting phrases (e.g., repeating the subject pronoun).\n"
+            "**TONE**: Maintain a clear, simple, warm narrative voice with gentle repetition and a hopeful ending.\n"
+            # --- END ENHANCED FIXES ---
+
+            "Personalization notes:\n- " + "\n- ".join(pref_notes)
     )
 
     resp = client.responses.create(
@@ -1395,7 +1491,6 @@ def llm_story_from_prompt(
     )
     text = getattr(resp, "output_text", "") or ""
     return text.strip() or naive_story_from_prompt(prompt, language)
-
 # -------------------------------------------------------------------
 # Simple vocab helpers
 # -------------------------------------------------------------------
@@ -1480,12 +1575,13 @@ def story_new():
 
         english_level = (request.form.get("english_level") or "beginner").strip().lower()
 
-        base_author = (
-            g.current_user["username"]
-            if (g.current_user and g.current_user.get("username"))
-            else None
-        ) or (request.form.get("author_name") or "guest")
+        # base_author = (
+        #     g.current_user["username"]
+        #     if (g.current_user and g.current_user.get("username"))
+        #     else None
+        # ) or (request.form.get("author_name") or "guest")
 
+        base_author = (request.form.get("author_name") or "").strip()
         want_image = bool(request.form.get("gen_image"))
 
         story_type = (request.form.get("story_type") or "").strip()
@@ -1580,7 +1676,7 @@ def story_new():
                 flash("Story created, but image generation had an issue.", "warning")
 
         story_author = base_author
-        if not student_finish:
+        if story_author is None or story_author =="":
             story_author = "EduWeaver AI"
 
         slug_base = slugify(title) or "story"
@@ -1730,7 +1826,7 @@ def library():
     - Shows only stories that have been explicitly shared to the Library
       (stories.is_shared_library = 1), with their latest draft.
     - Students see only stories at their level or easier.
-    - Admin user 'testtest' sees all.
+    - Admin user 'adminlexi' sees all.
     """
     db = get_db()
 
@@ -1763,7 +1859,7 @@ def library():
 
     # 2) Admin check via session username
     username = session.get("username", "")
-    is_admin = (username == "testtest")
+    is_admin = (username == "adminlexi")
 
     # 3) Get the user's reading level from level_test_results
     user_id = session.get("user_id")
@@ -1921,7 +2017,7 @@ def admin_stories():
         """
         SELECT id, username, email
         FROM users
-        WHERE username != 'testtest'
+        WHERE username != 'adminlexi'
         ORDER BY username COLLATE NOCASE
         """
     ).fetchall()
@@ -2044,6 +2140,7 @@ def admin_review_submission(submission_id: int):
 @login_required
 def admin_generate_mcq(slug: str):
     """Generate and save MCQ questions for a completed story (admin only)."""
+    print("ABC")
     if not current_user_is_admin():
         flash("Admin access only.", "warning")
         return redirect(url_for("index"))
@@ -2098,14 +2195,14 @@ def admin_generate_mcq(slug: str):
 @app.post("/admin/stories/<slug>/share")
 @login_required
 def admin_share_story(slug):
-    # simple admin gate you already use
-    if session["username"] != "testtest":
-        flash("Admin only area.", "warning")
+    # Correct admin gate (works for testtest etc.)
+    if not current_user_is_admin():
+        flash("Admin access only.", "warning")
         return redirect(url_for("index"))
 
     db = get_db()
 
-    # get story including visuals
+    # 1. Load story (including visuals column)
     story = db.execute(
         """
         SELECT id, title, language, level, prompt, visuals
@@ -2121,11 +2218,9 @@ def admin_share_story(slug):
 
     visuals_data_url = story["visuals"]
 
-    # if no cover image yet, generate one first
+    # 2. If no cover yet, generate one and save into stories.visuals
     if not visuals_data_url:
         try:
-            import base64  # local import is fine
-
             title = story["title"] or "Untitled story"
             lang = (story["language"] or "").upper() or "EN"
             level = story["level"] or "beginner"
@@ -2164,7 +2259,6 @@ def admin_share_story(slug):
             db.commit()
 
         except Exception as e:
-            # optional: log for debugging
             print("Error generating cover image for library share:", e)
             flash(
                 "Could not generate a cover image for this story. "
@@ -2173,7 +2267,7 @@ def admin_share_story(slug):
             )
             return redirect(url_for("admin_stories"))
 
-    # at this point we are sure visuals exists, so we can safely share
+    # 3. Mark story as shared to Library
     db.execute(
         "UPDATE stories SET is_shared_library = 1 WHERE id = ?",
         (story["id"],),
@@ -2182,6 +2276,8 @@ def admin_share_story(slug):
 
     flash("Story shared to Library.", "success")
     return redirect(url_for("admin_stories"))
+
+
 
 
 @app.post("/admin/stories/<slug>/unshare")
@@ -2243,8 +2339,8 @@ def admin_story_detail(slug: str):
 # WORD SCRAMBLE GAME
 # -------------------------------------------------------------------
 def get_words_for_student_scramble(user_id: int,
-                                   min_words: int = 6,
-                                   max_words: int = 12) -> list[dict]:
+                                   min_words: int = 18,
+                                   max_words: int = 36) -> list[dict]:
     """
     Get a list of words for the word scramble game for this student.
 
@@ -2302,27 +2398,101 @@ def scramble_word(word: str) -> str:
         scrambled = "".join(chars)
         attempts += 1
     return scrambled
-
-
 @app.get("/word-scramble")
 @login_required
 def word_scramble():
     user_id = g.current_user["id"]
-    words = get_words_for_student_scramble(user_id)
+
+    # get a decent pool to choose from
+    # enough to build 18 puzzles
+    words = get_words_for_student_scramble(user_id, min_words=18, max_words=60)
+
+    # categorize by length from student's vocab + fallback pool
+    easy_words = []   # 4 letters
+    medium_words = [] # 5 letters
+    hard_words = []   # 6+ letters
+
+    for item in words:
+        w = item["word"].strip().lower()
+        L = len(w)
+        if L == 4:
+            easy_words.append(w)
+        elif L == 5:
+            medium_words.append(w)
+        elif L >= 6:
+            hard_words.append(w)
+
+    # --------- FALLBACK: ensure each bucket has at least 6 words ---------
+    # Build fallback pools by length from PREPARED_SCRAMBLE_WORDS
+    fallback_easy = [w.lower() for w in PREPARED_SCRAMBLE_WORDS if len(w) == 4]
+    fallback_medium = [w.lower() for w in PREPARED_SCRAMBLE_WORDS if len(w) == 5]
+    fallback_hard = [w.lower() for w in PREPARED_SCRAMBLE_WORDS if len(w) >= 6]
+
+    def fill_bucket(bucket, fallback, needed):
+        """Top up 'bucket' from 'fallback' until it has 'needed' items."""
+        seen = set(bucket)
+        for w in fallback:
+            if len(bucket) >= needed:
+                break
+            if w not in seen:
+                bucket.append(w)
+                seen.add(w)
+
+    # first, try to satisfy each bucket from its own length pool
+    fill_bucket(easy_words, fallback_easy, 6)
+    fill_bucket(medium_words, fallback_medium, 6)
+    fill_bucket(hard_words, fallback_hard, 6)
+
+    # shuffle now that we have enough in each bucket
+    random.shuffle(easy_words)
+    random.shuffle(medium_words)
+    random.shuffle(hard_words)
+
+    # select exactly 6 from each bucket
+    easy_selected = easy_words[:6]
+    medium_selected = medium_words[:6]
+    hard_selected = hard_words[:6]
+
+    # safety: if some bucket is STILL short (e.g. fallback lists edited)
+    # we can borrow from others so we never crash; but normally this won't trigger.
+    def top_up(target_list, needed, sources):
+        while len(target_list) < needed:
+            pulled = False
+            for src in sources:
+                if src:
+                    target_list.append(src.pop())
+                    pulled = True
+                    break
+            if not pulled:
+                break
+
+    top_up(easy_selected, 6, [medium_words, hard_words])
+    top_up(medium_selected, 6, [easy_words, hard_words])
+    top_up(hard_selected, 6, [medium_words, easy_words])
+
+    # build puzzles in fixed order: 6 easy → 6 medium → 6 hard
+    ordered_words = (
+        [("easy", w) for w in easy_selected] +
+        [("medium", w) for w in medium_selected] +
+        [("hard", w) for w in hard_selected]
+    )
 
     puzzles = []
-    for idx, item in enumerate(words):
-        w = item["word"]
+    for idx, (difficulty, w) in enumerate(ordered_words):
         scrambled = scramble_word(w)
         puzzles.append(
             {
                 "id": idx,
                 "word": w,
                 "scrambled": scrambled,
+                "difficulty": difficulty,  # optional, not required by your JS
             }
         )
 
     return render_template("word_scramble.html", puzzles=puzzles)
+
+
+
 @app.post("/api/scramble_log")
 def scramble_log():
     db = get_db()

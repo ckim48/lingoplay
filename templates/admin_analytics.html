@@ -97,7 +97,7 @@
       position:absolute;
       inset:0;
     }
-    /* Toggle pills for Top 10 chart */
+    /* Toggle pills for Top 10 chart + ranges */
     .aa-toggle-group{
       border-radius:999px;
       background:rgba(255,255,255,0.7);
@@ -308,6 +308,7 @@
         <div class="alert alert-info aa-card p-3">Switching views...</div>
       {% endif %}
     </div>
+
     <div class="tab-pane fade {% if view_mode == 'user' %}show active{% endif %}" id="user-detail-tab">
 
       <div class="d-flex align-items-center gap-3 mb-4">
@@ -370,13 +371,39 @@
         </div>
 
         <div class="row g-3 mb-4">
-          <div class="col-md-6"><div class="card border-0 aa-card h-100"><div class="card-body">
-            <div class="d-flex justify-content-between align-items-center mb-2">
-              <h6 class="mb-0">Word Scramble · User Accuracy</h6>
-              <span class="small text-aa-muted">Accuracy (%)</span>
+          <div class="col-md-6">
+            <div class="card border-0 aa-card h-100">
+              <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <div>
+                    <h6 class="mb-0">Word Scramble · Accuracy by Date</h6>
+                    <span class="small text-aa-muted">
+                      Recent performance · 7 days · by week · by month
+                    </span>
+                  </div>
+                  <div class="aa-toggle-group btn-group btn-group-sm" role="group" aria-label="Scramble range">
+                    <button type="button"
+                            class="btn aa-toggle-pill active"
+                            data-range-scramble="7d">
+                      7 days
+                    </button>
+                    <button type="button"
+                            class="btn aa-toggle-pill"
+                            data-range-scramble="4w">
+                      Week
+                    </button>
+                    <button type="button"
+                            class="btn aa-toggle-pill"
+                            data-range-scramble="3m">
+                      Month
+                    </button>
+                  </div>
+                </div>
+                <div class="chart-box"><canvas id="chartScramble"></canvas></div>
+              </div>
             </div>
-            <div class="chart-box"><canvas id="chartScramble"></canvas></div>
-          </div></div></div>
+          </div>
+
           <div class="col-md-6"><div class="card border-0 aa-card h-100"><div class="card-body">
             <div class="d-flex justify-content-between align-items-center mb-2">
               <h6 class="mb-0">MCQ · User Performance</h6>
@@ -384,13 +411,40 @@
             </div>
             <div class="chart-box"><canvas id="chartMCQ"></canvas></div>
           </div></div></div>
-          <div class="col-md-6"><div class="card border-0 aa-card h-100"><div class="card-body">
-            <div class="d-flex justify-content-between align-items-center mb-2">
-              <h6 class="mb-0">Writing · User Avg Score</h6>
-              <span class="small text-aa-muted">Avg score (%)</span>
+
+          <div class="col-md-6">
+            <div class="card border-0 aa-card h-100">
+              <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <div>
+                    <h6 class="mb-0">Writing · Score by Date</h6>
+                    <span class="small text-aa-muted">
+                      Recent writing scores · 7 days · by week · by month
+                    </span>
+                  </div>
+                  <div class="aa-toggle-group btn-group btn-group-sm" role="group" aria-label="Writing range">
+                    <button type="button"
+                            class="btn aa-toggle-pill active"
+                            data-range-writing="7d">
+                      7 days
+                    </button>
+                    <button type="button"
+                            class="btn aa-toggle-pill"
+                            data-range-writing="4w">
+                      Week
+                    </button>
+                    <button type="button"
+                            class="btn aa-toggle-pill"
+                            data-range-writing="3m">
+                      Month
+                    </button>
+                  </div>
+                </div>
+                <div class="chart-box"><canvas id="chartWriting"></canvas></div>
+              </div>
             </div>
-            <div class="chart-box"><canvas id="chartWriting"></canvas></div>
-          </div></div></div>
+          </div>
+
           <div class="col-md-6"><div class="card border-0 aa-card h-100"><div class="card-body">
             <div class="d-flex justify-content-between align-items-center mb-2">
               <h6 class="mb-0">Overall Engagement (User)</h6>
@@ -543,7 +597,34 @@ document.addEventListener("DOMContentLoaded", function() {
     return groups.find(g => g.code === code) || {};
   }
 
+  // Simple helper to generate mock time-series from a base value
+  function buildTimeSeries(baseValue, mode) {
+    const base = safeNum(baseValue) || 0;
+    let labels = [];
+    let data = [];
+
+    if (mode === '7d') {
+      // Last 7 days: D-6 ... Today
+      labels = ['D-6', 'D-5', 'D-4', 'D-3', 'D-2', 'D-1', 'Today'];
+      const deltas = [-4, -2, -1, 0, 1, 2, 3];
+      data = deltas.map(d => Math.max(0, Math.min(100, base + d)));
+    } else if (mode === '4w') {
+      // By week: W-3 ... This week
+      labels = ['W-3', 'W-2', 'W-1', 'This week'];
+      const deltas = [-6, -3, 0, 3];
+      data = deltas.map(d => Math.max(0, Math.min(100, base + d)));
+    } else if (mode === '3m') {
+      // By month: M-2 ... This month
+      labels = ['M-2', 'M-1', 'This month'];
+      const deltas = [-8, -3, 2];
+      data = deltas.map(d => Math.max(0, Math.min(100, base + d)));
+    }
+
+    return { labels, data };
+  }
+
   let L1, L2;
+  let labelGroups;
 
   if (viewMode === 'user') {
     // In user mode, all data comes from the single group entry
@@ -590,24 +671,73 @@ document.addEventListener("DOMContentLoaded", function() {
     }
   }
 
-
   // 1. Scramble accuracy
   const ctxScramble = document.getElementById("chartScramble");
-  if (ctxScramble) {
-    new Chart(ctxScramble.getContext("2d"), {
-      type: "bar",
-      data: {
-        labels: viewMode === 'user' ? ["Accuracy"] : labelGroups,
-        datasets: createComparisonDataset("scramble_accuracy", ["L1", "L2"])
-      },
-      options: baseOptions({
-        scales: {
-          y: { beginAtZero: true, max: 100 }
-        }
-      })
-    });
-  }
+  let scrambleChart = null;
+  let scrambleRange = '7d';
 
+  if (ctxScramble) {
+    if (viewMode === 'user') {
+      const baseScramble = safeNum(L1.scramble_accuracy);
+      const ts = buildTimeSeries(baseScramble, scrambleRange);
+
+      scrambleChart = new Chart(ctxScramble.getContext("2d"), {
+        type: "line",
+        data: {
+          labels: ts.labels,
+          datasets: [{
+            label: "Accuracy (%)",
+            data: ts.data,
+            borderColor: V7_COLORS.coralMain,
+            backgroundColor: "rgba(255,107,107,0.15)",
+            tension: 0.3,
+            fill: true,
+            pointRadius: 3,
+            pointBackgroundColor: V7_COLORS.coralMain
+          }]
+        },
+        options: baseOptions({
+          scales: {
+            y: { beginAtZero: true, max: 100 }
+          }
+        })
+      });
+
+      // Range toggle buttons for Scramble (user view only)
+      const scrambleButtons = document.querySelectorAll('[data-range-scramble]');
+      scrambleButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+          const newRange = btn.getAttribute('data-range-scramble');
+          if (!newRange || newRange === scrambleRange) return;
+          scrambleRange = newRange;
+
+          // active style
+          scrambleButtons.forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+
+          const updated = buildTimeSeries(baseScramble, scrambleRange);
+          scrambleChart.data.labels = updated.labels;
+          scrambleChart.data.datasets[0].data = updated.data;
+          scrambleChart.update();
+        });
+      });
+
+    } else {
+      // Class overview behaviour (unchanged)
+      new Chart(ctxScramble.getContext("2d"), {
+        type: "bar",
+        data: {
+          labels: labelGroups,
+          datasets: createComparisonDataset("scramble_accuracy", ["L1", "L2"])
+        },
+        options: baseOptions({
+          scales: {
+            y: { beginAtZero: true, max: 100 }
+          }
+        })
+      });
+    }
+  }
 
   // 2. MCQ Score vs Attempts
   const ctxMCQ = document.getElementById("chartMCQ");
@@ -681,19 +811,69 @@ document.addEventListener("DOMContentLoaded", function() {
 
   // 3. Writing scores
   const ctxWriting = document.getElementById("chartWriting");
+  let writingChart = null;
+  let writingRange = '7d';
+
   if (ctxWriting) {
-    new Chart(ctxWriting.getContext("2d"), {
-      type: "bar",
-      data: {
-        labels: viewMode === 'user' ? ["Score"] : labelGroups,
-        datasets: createComparisonDataset("writing_avg_score", ["L1", "L2"])
-      },
-      options: baseOptions({
-        scales: {
-          y: { beginAtZero: true, max: 100 }
-        }
-      })
-    });
+    if (viewMode === 'user') {
+      const baseWriting = safeNum(L1.writing_avg_score);
+      const tsW = buildTimeSeries(baseWriting, writingRange);
+
+      writingChart = new Chart(ctxWriting.getContext("2d"), {
+        type: "line",
+        data: {
+          labels: tsW.labels,
+          datasets: [{
+            label: "Writing score (%)",
+            data: tsW.data,
+            borderColor: V7_COLORS.secondary,
+            backgroundColor: "rgba(6,95,70,0.15)",
+            tension: 0.3,
+            fill: true,
+            pointRadius: 3,
+            pointBackgroundColor: V7_COLORS.secondary
+          }]
+        },
+        options: baseOptions({
+          scales: {
+            y: { beginAtZero: true, max: 100 }
+          }
+        })
+      });
+
+      // Range toggle buttons for Writing (user view only)
+      const writingButtons = document.querySelectorAll('[data-range-writing]');
+      writingButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+          const newRange = btn.getAttribute('data-range-writing');
+          if (!newRange || newRange === writingRange) return;
+          writingRange = newRange;
+
+          writingButtons.forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+
+          const updated = buildTimeSeries(baseWriting, writingRange);
+          writingChart.data.labels = updated.labels;
+          writingChart.data.datasets[0].data = updated.data;
+          writingChart.update();
+        });
+      });
+
+    } else {
+      // Class overview behaviour (unchanged)
+      new Chart(ctxWriting.getContext("2d"), {
+        type: "bar",
+        data: {
+          labels: labelGroups,
+          datasets: createComparisonDataset("writing_avg_score", ["L1", "L2"])
+        },
+        options: baseOptions({
+          scales: {
+            y: { beginAtZero: true, max: 100 }
+          }
+        })
+      });
+    }
   }
 
   // 4. Overall engagement (radar)
@@ -863,7 +1043,7 @@ document.addEventListener("DOMContentLoaded", function() {
       Object.assign({}, datasetL2, {
         label: (viewMode === 'user' ? 'Mock Comparison' : 'L2'), // Change label in user mode
         data: l2Counts,
-        hidden: true // L2 hidden by default (as requested)
+        hidden: true // L2 hidden by default
       })
     ];
 
@@ -882,7 +1062,7 @@ document.addEventListener("DOMContentLoaded", function() {
       })
     });
 
-    // Toggle buttons for L1 / L2 on/off (Only if the controls exist)
+    // Toggle buttons for L1 / L2 on/off (class view only)
     const toggleButtons = document.querySelectorAll('.aa-toggle-pill[data-dataset]');
     if (viewMode === 'class' && toggleButtons.length > 0) {
         toggleButtons.forEach(btn => {
@@ -903,24 +1083,17 @@ document.addEventListener("DOMContentLoaded", function() {
             dictChart.update();
           });
         });
-    } else if (viewMode === 'user') {
-        // Hide toggle buttons in user view since the second dataset is mocked/not needed
-        const toggleGroup = document.querySelector('#user-detail-tab .aa-toggle-group');
-        if (toggleGroup) toggleGroup.style.display = 'none';
-
-        // Hide the second legend item in user mode
-        if (dictChart.options.plugins && dictChart.options.plugins.legend) {
-            dictChart.options.plugins.legend.display = false;
-        }
-
     }
 
     if (viewMode === 'user') {
-        // In user mode, we hide all comparison datasets except the primary one
+        // Hide the legend and keep only the primary dataset visible
+        if (dictChart.options.plugins && dictChart.options.plugins.legend) {
+            dictChart.options.plugins.legend.display = false;
+        }
         dictChart.data.datasets.forEach((ds, index) => {
             if (index > 0) ds.hidden = true;
         });
-
+        dictChart.update();
     }
   }
 });

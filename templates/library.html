@@ -1,5 +1,5 @@
 {% extends "base2.html" %}
-{% block title %}Library · EduWeaverPlay{% endblock %}
+{% block title %}Library · LexiTale{% endblock %}
 
 {% block content %}
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Baloo+2:wght@700;800&display=swap" rel="stylesheet">
@@ -172,7 +172,6 @@ body {
     -webkit-box-orient: vertical;
     overflow: hidden;
     text-overflow: ellipsis;
-    min-height: 2.8em;
 }
 
 /* --- HEADER STYLES --- */
@@ -279,14 +278,17 @@ body {
     color: var(--color-tag-level-text); /* Darker Text */
 }
 
-/* Story Title (Box, Large and Bold) */
+/* Story Title (Fixed Height for 2 lines) */
 .text-v6-title {
     font-family: 'Baloo 2', cursive;
-    font-size: 2rem; /* Much larger title to match image */
-    line-height: 1;
+    font-size: 2rem;
+    line-height: 1.1;
     color: var(--color-play-heading);
     font-weight: 800;
-    min-height: auto; /* Allow height to flex for two lines */
+
+    /* === FIX: Fixed Height for exactly 2 lines (2rem * 1.1 * 2 = 4.4rem) === */
+    height: 4.4rem;
+    /* ====================================================================== */
 }
 
 /* Author Text (Muted) */
@@ -369,6 +371,10 @@ body {
         stories.forEach(storyWrap => {
             const title = storyWrap.querySelector('.text-v6-title').textContent.toLowerCase();
             const author = storyWrap.querySelector('.text-v6-muted span').textContent.toLowerCase();
+
+            // Check if the current element has the 'truncate-2-lines' class applied
+            // Since the title is inside the card-body, we use a more robust check
+            const titleElement = storyWrap.querySelector('.text-v6-title.truncate-2-lines');
 
             if (title.includes(query) || author.includes(query)) {
                 storyWrap.parentElement.style.display = 'block';
