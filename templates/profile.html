@@ -1,0 +1,646 @@
+{% extends "base2.html" %}
+{% block title %}My Page · LexiTale{% endblock %}
+
+{% block content %}
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Baloo+2:wght@700;800&display=swap" rel="stylesheet">
+
+<div class="container mt-5 mb-5">
+  <div class="row justify-content-center">
+    <div class="col-lg-11">
+      <div class="d-flex flex-wrap justify-content-between align-items-center mb-5 pb-4 profile-header-bg">
+        <div class="d-flex align-items-center gap-3">
+          <div class="profile-icon-circle">
+            <i class="bi bi-person-badge-fill"></i>
+          </div>
+          <div>
+            <h1 class="fw-bolder mb-1 profile-title-lg">My Learning Hub</h1>
+            <p class="mb-0 text-muted profile-text">
+              <i class="bi bi-rocket-takeoff me-1"></i> Explore your progress, celebrated stories, and fun assignments!
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="row g-4">
+        <!-- LEFT: PROFILE SUMMARY -->
+        <div class="col-lg-4">
+          <div class="card profile-card-rounded shadow-lg-soft mb-3">
+            <div class="card-body p-4 p-md-5">
+              <div class="text-center mb-4">
+                <div class="profile-avatar mx-auto mb-3">
+                  <span>
+                    {{ (profile_user.username or current_user.username)[0]|upper if profile_user or current_user else "U" }}
+                  </span>
+                </div>
+                <h4 class="mb-0 profile-title-sm">
+                  {{ profile_user.username or current_user.username }}
+                </h4>
+                <p class="mb-1 small text-muted profile-text">
+                  {{ profile_user.email or current_user.email }}
+                </p>
+                <span class="badge profile-role-badge">
+                  {{ current_user.role|capitalize if current_user.role else "Student" }}
+                </span>
+              </div>
+
+              <div class="d-flex flex-column gap-3 mb-4">
+                <div class="profile-stat-pill">
+                  <span class="stat-label profile-text">Books Read:</span>
+                  <span class="stat-value profile-title-sm">
+                    {{ (stats.books_read or 0)|int }}
+                  </span>
+                </div>
+
+                <div class="profile-stat-pill">
+                  <span class="stat-label profile-text">Your Level:</span>
+                  <span class="stat-value profile-title-sm">
+                    {% if my_level is not none %}
+                      {{ my_level }}
+                    {% else %}
+                      -
+                    {% endif %}
+                  </span>
+                </div>
+
+                <div class="profile-stat-pill">
+                  <span class="stat-label profile-text">Average Score:</span>
+                  <span class="stat-value profile-title-sm">
+                    {% if stats.avg_score is not none %}
+                      {{ stats.avg_score|round(1) }}%
+                    {% else %}
+                      -
+                    {% endif %}
+                  </span>
+                </div>
+              </div>
+
+              <div class="d-grid mb-4">
+                <button type="button"
+                        class="btn btn-action-primary-v7 rounded-pill profile-text py-2"
+                        data-bs-toggle="modal"
+                        data-bs-target="#profileEditModal">
+                  <i class="bi bi-pencil-square me-1"></i> Edit My Profile
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT: TABS + TABLES -->
+        <div class="col-lg-8">
+          <div class="card profile-card-rounded shadow-lg-soft mb-3">
+            <div class="card-body p-4 p-md-5">
+              <div class="mb-4">
+                <h4 class="mb-1 profile-title-sm">Your Progress Tracker</h4>
+                <p class="mb-0 small text-muted profile-text">
+                  View your reading list, worksheet results, and teacher's encouraging words.
+                </p>
+              </div>
+
+              <!-- KPI STRIP -->
+              <div class="row g-2 mb-4">
+                <div class="col-4">
+                  <div class="kpi-block bg-soft-yellow-v7">
+                    <span class="kpi-label profile-text">Books Read</span>
+                    <span class="kpi-value profile-title-sm">{{ (stats.books_read or 0)|int }}</span>
+                  </div>
+                </div>
+                <div class="col-4">
+                  <div class="kpi-block bg-light-soft-blue-v7">
+                    <span class="kpi-label profile-text">Worksheets Done</span>
+                    <span class="kpi-value profile-title-sm">{{ (stats.worksheets_completed or 0)|int }}</span>
+                  </div>
+                </div>
+                <div class="col-4">
+                  <div class="kpi-block bg-success-v7-light">
+                    <span class="kpi-label profile-text">Avg. Score</span>
+                    <span class="kpi-value profile-title-sm">
+                      {% if stats.avg_score is not none %}
+                        {{ stats.avg_score|round(1) }}%
+                      {% else %}
+                        -
+                      {% endif %}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- NAV TABS -->
+              <ul class="nav nav-pills nav-pills-coral mb-4 profile-nav" id="profileTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                  <button class="nav-link active profile-text me-3"
+                          id="books-tab"
+                          data-bs-toggle="pill"
+                          data-bs-target="#books-pane"
+                          type="button"
+                          role="tab"
+                          aria-controls="books-pane"
+                          aria-selected="true">
+                    <i class="bi bi-book-half me-1"></i> Books
+                  </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                  <button class="nav-link profile-text me-3"
+                          id="worksheets-tab"
+                          data-bs-toggle="pill"
+                          data-bs-target="#worksheets-pane"
+                          type="button"
+                          role="tab"
+                          aria-controls="worksheets-pane"
+                          aria-selected="false">
+                    <i class="bi bi-clipboard-check me-1"></i> Worksheets
+                  </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                  <button class="nav-link profile-text"
+                          id="feedback-tab"
+                          data-bs-toggle="pill"
+                          data-bs-target="#feedback-pane"
+                          type="button"
+                          role="tab"
+                          aria-controls="feedback-pane"
+                          aria-selected="false">
+                    <i class="bi bi-chat-quote me-1"></i> Feedback
+                  </button>
+                </li>
+              </ul>
+
+              <!-- TAB CONTENT -->
+              <div class="tab-content" id="profileTabsContent">
+                <!-- BOOKS TAB: book title / level / date read -->
+                <div class="tab-pane fade show active" id="books-pane" role="tabpanel" aria-labelledby="books-tab">
+                  {% if submissions %}
+                    <div class="table-responsive profile-table-wrap">
+                      <table class="table align-middle mb-0 profile-table">
+                        <thead>
+                          <tr class="small profile-text">
+                            <th scope="col">Book Title</th>
+                            <th scope="col" class="d-none d-md-table-cell">Level</th>
+                            <th scope="col" class="text-end">Date Read</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {% for sub in submissions %}
+                          <tr>
+                            <!-- Book title -->
+                            <td>
+                              <div class="profile-text fw-bold text-coral-dark">
+                                {{ sub.story_title }}
+                              </div>
+                            </td>
+
+                            <!-- Book level -->
+                            <td class="d-none d-md-table-cell">
+                              <span class="small profile-text text-muted">
+                                {% if sub.story_level %}
+                                  {{ sub.story_level|capitalize }}
+                                {% else %}
+                                  -
+                                {% endif %}
+                              </span>
+                            </td>
+
+                            <!-- Date read -->
+                            <td class="text-end">
+                              <span class="small text-muted profile-text">
+                                {{ sub.submitted_at|dt("%Y-%m-%d") if sub.submitted_at else "" }}
+                              </span>
+                            </td>
+                          </tr>
+                          {% endfor %}
+                        </tbody>
+                      </table>
+                    </div>
+                  {% else %}
+                    <div class="p-4 text-center bg-light-soft-blue-v7 rounded-4 profile-empty-state profile-text">
+                      <i class="bi bi-book-half fs-3 text-coral-dark mb-2"></i>
+                      <p class="mb-0 fw-bold">No stories completed yet!</p>
+                      <p class="mb-0 small text-muted">Start reading to see your adventures here.</p>
+                    </div>
+                  {% endif %}
+                </div>
+
+                <!-- WORKSHEETS TAB: worksheet title / score / submitted on -->
+                <div class="tab-pane fade" id="worksheets-pane" role="tabpanel" aria-labelledby="worksheets-tab">
+                  {% if submissions %}
+                    <div class="table-responsive profile-table-wrap">
+                      <table class="table align-middle mb-0 profile-table">
+                        <thead>
+                          <tr class="small profile-text">
+                            <th scope="col">Worksheet Title</th>
+                            <th scope="col" style="width: 90px;">Score</th>
+                            <th scope="col" class="text-end">Submitted On</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {% for sub in submissions %}
+                          <tr>
+                            <!-- Worksheet title -->
+                            <td>
+                              <span class="profile-text fw-bold">
+                                {{ sub.assignment_title }}
+                              </span>
+                            </td>
+
+                            <!-- Score -->
+                            <td>
+                              {% if sub.current_score is not none %}
+                                <span class="badge score-badge-success profile-text">
+                                  {{ sub.current_score|int }}%
+                                </span>
+                              {% else %}
+                                <span class="badge score-badge-light profile-text">-</span>
+                              {% endif %}
+                            </td>
+
+                            <!-- Date -->
+                            <td class="text-end">
+                              <span class="small text-muted profile-text">
+                                {{ sub.submitted_at|dt("%Y-%m-%d") if sub.submitted_at else "" }}
+                              </span>
+                            </td>
+                          </tr>
+                          {% endfor %}
+                        </tbody>
+                      </table>
+                    </div>
+                  {% else %}
+                    <div class="p-4 text-center bg-light-soft-blue-v7 rounded-4 profile-empty-state profile-text">
+                      <i class="bi bi-clipboard-check fs-3 text-coral-dark mb-2"></i>
+                      <p class="mb-0 fw-bold">No worksheets done yet!</p>
+                      <p class="mb-0 small text-muted">Complete a story to unlock your first worksheet.</p>
+                    </div>
+                  {% endif %}
+                </div>
+
+                <!-- FEEDBACK TAB: only worksheet title + feedback -->
+                <div class="tab-pane fade" id="feedback-pane" role="tabpanel" aria-labelledby="feedback-tab">
+                  {% if submissions %}
+                    <div class="profile-feedback-list">
+                      {% set has_feedback = false %}
+                      {% for sub in submissions %}
+                        {% if sub.admin_comment %}
+                          {% set has_feedback = true %}
+                          <div class="profile-feedback-card">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                              <div>
+                                <!-- Only worksheet title -->
+                                <div class="fw-bold text-coral-dark profile-text">
+                                  <i class="bi bi-journal-text me-1"></i> {{ sub.assignment_title }}
+                                </div>
+                              </div>
+                              <div class="text-end">
+                                {% if sub.current_score is not none %}
+                                  <div class="badge score-badge-success profile-text mb-1">
+                                    {{ sub.current_score|int }}%
+                                  </div>
+                                {% endif %}
+                                <div class="small text-muted profile-text">
+                                  {{ sub.submitted_at|dt("%Y-%m-%d") if sub.submitted_at else "" }}
+                                </div>
+                              </div>
+                            </div>
+                            <div class="mt-2 p-3 rounded-3 bg-light-soft-blue-v7 small profile-text feedback-comment-box" style="white-space: pre-wrap;">
+                              <i class="bi bi-chat-left-quote me-1 text-coral-dark"></i>
+                              {{ sub.admin_comment }}
+                            </div>
+                          </div>
+                        {% endif %}
+                      {% endfor %}
+
+                      {% if not has_feedback %}
+                        <div class="p-4 text-center bg-light-soft-blue-v7 rounded-4 profile-empty-state profile-text">
+                          <i class="bi bi-chat-quote fs-3 text-coral-dark mb-2"></i>
+                          <p class="mb-0 fw-bold">No feedback from your teacher yet!</p>
+                          <p class="mb-0 small text-muted">Keep checking back for encouraging comments.</p>
+                        </div>
+                      {% endif %}
+                    </div>
+                  {% else %}
+                    <div class="p-4 text-center bg-light-soft-blue-v7 rounded-4 profile-empty-state profile-text">
+                      <i class="bi bi-chat-quote fs-3 text-coral-dark mb-2"></i>
+                      <p class="mb-0 fw-bold">No feedback from your teacher yet!</p>
+                    </div>
+                  {% endif %}
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+        <!-- END RIGHT COLUMN -->
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- PROFILE EDIT MODAL -->
+<div class="modal fade" id="profileEditModal" tabindex="-1" aria-labelledby="profileEditModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content rounded-4 shadow-lg">
+      <form method="POST" action="{{ url_for('profile') }}">
+        <div class="modal-header border-0 pb-0">
+          <h5 class="modal-title profile-title-sm" id="profileEditModalLabel">Edit Profile Information</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body pt-0 px-4 pb-4">
+          <div class="mb-3">
+            <label class="form-label small text-muted profile-text mb-1">Name / Nickname</label>
+            <input type="text"
+                   class="form-control rounded-3 profile-input"
+                   name="username"
+                   value="{{ profile_user.username or current_user.username }}">
+          </div>
+          <div class="mb-3">
+            <label class="form-label small text-muted profile-text mb-1">E-mail</label>
+            <input type="email"
+                   class="form-control rounded-3 profile-input"
+                   name="email"
+                   value="{{ profile_user.email or current_user.email }}">
+          </div>
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label small text-muted profile-text mb-1">Age</label>
+              <input type="number"
+                     class="form-control rounded-3 profile-input"
+                     name="age"
+                     min="3"
+                     max="120"
+                     value="{{ profile_user.age if profile_user and profile_user.age is not none else '' }}">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small text-muted profile-text mb-1">Gender</label>
+              {% set gval = profile_user.gender if profile_user else current_user.gender %}
+              <select class="form-select rounded-3 profile-input" name="gender">
+                <option value="" {% if not gval %}selected{% endif %}>Prefer not to say</option>
+                <option value="male" {% if gval == 'male' %}selected{% endif %}>Male</option>
+                <option value="female" {% if gval == 'female' %}selected{% endif %}>Female</option>
+                <option value="other" {% if gval == 'other' %}selected{% endif %}>Other</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small text-muted profile-text mb-1">Native English?</label>
+              {% set native = profile_user.is_english_native if profile_user is not none and 'is_english_native' in profile_user.keys() else learner_profile.is_english_native %}
+              <select class="form-select rounded-3 profile-input" name="is_english_native">
+                <option value="" {% if native is none %}selected{% endif %}>Prefer not to say</option>
+                <option value="1" {% if native == 1 or native == True or native == '1' %}selected{% endif %}>Yes</option>
+                <option value="0" {% if native == 0 or native == False or native == '0' %}selected{% endif %}>No</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer border-0 pt-0">
+          <button type="button"
+                  class="btn btn-outline-secondary rounded-pill profile-text"
+                  data-bs-dismiss="modal">
+            Cancel
+          </button>
+          <button type="submit"
+                  class="btn btn-action-primary-v7 rounded-pill profile-text">
+            <i class="bi bi-save me-1"></i> Save Changes
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<style>
+:root {
+  --coral-main: #ff6b6b;
+  --coral-dark: #cc5555;
+  --light-soft-blue-v7: #ffece5; /* Used for subtle background/accents */
+  --soft-yellow-v7: #fff7e5; /* New accent color for variety */
+  --success-v7-light: #d1fae5; /* Very light green for success */
+  --success-v7-dark: #065f46; /* Dark green text for contrast */
+  --neutral-soft: #f9fafb; /* Light neutral background for better alignment */
+  --shadow-color: rgba(255, 107, 107, 0.2);
+}
+
+/* Base Typography & Structure */
+.profile-title-lg {
+  font-family: 'Baloo 2', cursive;
+  font-size: 2.5rem;
+  color: var(--coral-dark);
+}
+.profile-title-sm {
+  font-family: 'Baloo 2', cursive;
+  font-size: 1.5rem;
+  color: var(--coral-dark);
+}
+.profile-text {
+  font-family: 'Fredoka', 'Nunito', sans-serif;
+}
+
+/* Card and Container Styling - More Rounded */
+.container {
+  max-width: 1200px;
+}
+.profile-card-rounded {
+  border: none;
+  border-radius: 2rem;
+}
+.shadow-lg-soft {
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+}
+.profile-header-bg {
+  border-bottom: 2px solid var(--light-soft-blue-v7);
+}
+
+/* Header icon - More playful circle */
+.profile-icon-circle {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--coral-main), var(--coral-dark));
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  box-shadow: 0 0.6rem 1.4rem var(--shadow-color);
+}
+
+/* Avatar */
+.profile-avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: var(--soft-yellow-v7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Baloo 2', cursive;
+  font-size: 2.2rem;
+  color: var(--coral-dark);
+  border: 4px solid var(--coral-main);
+  box-shadow: 0 0 0 6px var(--light-soft-blue-v7);
+}
+.profile-role-badge {
+  background-color: var(--light-soft-blue-v7);
+  color: var(--coral-dark);
+  font-size: 0.8rem;
+  padding: 0.3rem 0.8rem;
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+/* Stat Pills (LEFT) */
+.profile-stat-pill {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.8rem 1.25rem;
+  border-radius: 1.5rem;
+  background: var(--neutral-soft);
+  border: 1px solid rgba(255, 107, 107, 0.15);
+}
+.stat-label {
+  font-size: 0.9rem;
+  color: #6b7280;
+}
+.stat-value {
+  font-size: 1.4rem;
+  font-weight: 800;
+}
+
+/* KPI Blocks (RIGHT) */
+.kpi-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 0.8rem 0.5rem;
+  border-radius: 1.5rem;
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  height: 100%;
+}
+.kpi-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: #9ca3af;
+  font-weight: 600;
+  margin-bottom: 0.2rem;
+}
+.kpi-value {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #111827;
+}
+
+/* Table Styling */
+.profile-table-wrap {
+  border-radius: 1.5rem;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  overflow: hidden;
+}
+.profile-table thead tr {
+  background: var(--light-soft-blue-v7);
+}
+.profile-table thead th {
+  border-bottom: none;
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  color: var(--coral-dark);
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+}
+.profile-table tbody td {
+  border-top-color: rgba(0,0,0,0.08);
+  font-size: 0.95rem;
+  padding: 1rem 0.75rem;
+}
+
+/* Buttons */
+.btn-action-primary-v7 {
+  background-color: var(--coral-main);
+  border-color: var(--coral-main);
+  color: #fff;
+  font-weight: 700;
+  padding: 0.6rem 1.5rem;
+  box-shadow: 0 4px 10px var(--shadow-color);
+  transition: all 0.2s;
+}
+.btn-action-primary-v7:hover {
+  background-color: var(--coral-dark);
+  border-color: var(--coral-dark);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px var(--shadow-color);
+}
+
+/* Badges */
+.score-badge-success {
+  background-color: var(--success-v7-light) !important;
+  color: var(--success-v7-dark) !important;
+  font-weight: 700;
+  padding: 0.35em 0.75em;
+  border-radius: 999px;
+  min-width: 50px;
+  display: inline-block;
+  text-align: center;
+}
+.score-badge-light {
+  font-weight: 600;
+  padding: 0.35em 0.75em;
+  border-radius: 999px;
+  min-width: 50px;
+  display: inline-block;
+  text-align: center;
+}
+
+/* Tabs - Coral Focus */
+.nav-pills-coral .nav-link {
+  border-radius: 999px;
+  padding: 0.5rem 1rem;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background-color: var(--neutral-soft);
+  color: #4b5563;
+  font-weight: 600;
+  font-size: 0.95rem;
+  transition: all 0.2s;
+}
+.nav-pills-coral .nav-link:hover {
+  background-color: var(--light-soft-blue-v7);
+  border-color: var(--coral-main);
+  color: var(--coral-dark);
+}
+.nav-pills-coral .nav-link.active {
+  background-color: var(--coral-main);
+  border-color: var(--coral-main);
+  color: #ffffff;
+  box-shadow: 0 4px 8px var(--shadow-color);
+}
+
+/* Feedback Card */
+.profile-feedback-card {
+  border: 1px solid var(--light-soft-blue-v7);
+  border-radius: 1.5rem;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  background: #ffffff;
+  transition: all 0.2s;
+  border-left: 6px solid var(--coral-main);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+}
+.feedback-comment-box {
+  border: 1px solid rgba(255, 107, 107, 0.2);
+}
+
+/* Empty State */
+.profile-empty-state {
+  border: 2px dashed rgba(255, 107, 107, 0.3);
+}
+
+/* Modal Inputs */
+.profile-input {
+  border-color: #ddd;
+}
+.profile-input:focus {
+  border-color: var(--coral-main);
+  box-shadow: 0 0 0 0.25rem var(--light-soft-blue-v7);
+}
+</style>
+{% endblock %}

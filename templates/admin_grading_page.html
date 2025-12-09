@@ -1,0 +1,359 @@
+{% extends "base2.html" %}
+{% block title %}Grade: {{ submission.assignee_username }} · LexiTale{% endblock %}
+
+{% block content %}
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Baloo+2:wght@700;800&display=swap" rel="stylesheet">
+
+{# Global helper for option letters #}
+{% set letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ" %}
+
+<div class="container-fluid-custom mt-4 mb-5">
+  <div class="row justify-content-center">
+    <div class="col-12">
+      <div class="card border-0 finish-card-v8">
+        <div class="card-body p-4 p-md-5">
+
+          {# --- HEADER --- #}
+          <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
+            <div class="d-flex align-items-center gap-3">
+              <div class="admin-pill-icon-v7" style="background: var(--coral-dark); box-shadow: 0 0.5rem 1rem rgba(204, 85, 85, 0.4);">
+                <i class="bi bi-award-fill"></i>
+              </div>
+              <div>
+                <h1 class="mb-1 finish-main-title">Review & Grade Submission</h1>
+                <p class="mb-0 finish-sub-text">
+                  Assignment: <strong class="text-deep-blue">{{ submission.assignment_title }}</strong> · Student: <strong>{{ submission.assignee_username }}</strong>
+                </p>
+              </div>
+            </div>
+            <div>
+              <a href="{{ url_for('admin_stories', tab='submitted', fragment='submission-' ~ submission.submission_id) }}" class="btn btn-sm btn-outline-secondary finish-text-button rounded-pill shadow-sm">
+                <i class="bi bi-arrow-left me-1"></i> Back to Submissions
+              </a>
+            </div>
+          </div>
+          {# --- END HEADER --- #}
+
+          <form id="gradingForm" method="POST" action="{{ url_for('admin_review_submission', submission_id=submission.submission_id) }}">
+              <div class="row">
+
+                  {# LEFT PANEL: ASSIGNMENT CONTEXT #}
+                  <div class="col-md-6 border-end-soft pe-md-5">
+                      <h3 class="finish-section-title mb-3" style="color: var(--deep-blue) !important;">The Assignment Context</h3>
+                      <p class="small finish-text-body mb-4">Story: <strong>{{ submission.story_title }}</strong> &bull; Type: {{ assignment_details.type_label }}</p>
+
+                      {% if assignment_details.prompt_story %}
+                          <h5 class="mt-3 finish-section-title">Story Context (The Story So Far):</h5>
+                          <div class="border rounded-4 p-4 bg-story-preview finish-text-body mb-4 story-preview-box story-content-rendered">
+                              {{ assignment_details.prompt_story|nl2br }}
+                          </div>
+                      {% endif %}
+
+                      {# Display Reading Questions for Reference #}
+                      {% if assignment_details.sections and assignment_details.type_label != 'Writing & Story Creation' %}
+                          <h5 class="mt-4 finish-section-title">Reading Questions (for Reference)</h5>
+                          {% for section in assignment_details.sections %}
+                              <h6 class="mt-3 finish-section-label fw-bold">{{ section.label }}</h6>
+                              {% if section.questions and section.questions|length > 0 %}
+                                  <ul class="small list-unstyled ps-3 finish-guiding-list">
+                                  {% for q in section.questions %}
+                                      {% set model_answer = "" %}
+                                      {% if q.correct_index is defined %}
+                                          {% set correct_option = (q.options or [])[q.correct_index] %}
+                                          {% set option_letter = letters[q.correct_index|int] %}
+                                          {% set model_answer = "[Correct: " ~ option_letter ~ ". " ~ correct_option ~ "]" if correct_option else "" %}
+                                      {% elif q.model_answer %}
+                                          {% set model_answer = "[Model Answer: " ~ q.model_answer ~ "]" %}
+                                      {% endif %}
+                                      <li>
+                                          <i class="bi bi-check-circle-fill me-1" style="color: var(--success-color);"></i>
+                                          {{ q.question or q.sentence or section.label ~ " item" }}
+                                          <span class="text-success small">{{ model_answer }}</span>
+                                      </li>
+                                  {% endfor %}
+                                  </ul>
+                              {% endif %}
+                          {% endfor %}
+                      {% endif %}
+
+                  </div>
+
+                  {# RIGHT PANEL: STUDENT RESPONSE & GRADING FORM #}
+                  <div class="col-md-6 ps-md-5">
+                      <h3 class="finish-section-title mb-3" style="color: var(--deep-blue) !important;">Student Submission</h3>
+                      <p class="small finish-text-body mb-4">Submitted: {{ submission.submitted_at|dt("%Y-%m-%d %H:%M") }}</p>
+
+                      {% if submission.assignment_type == 'writing' %}
+                          <h5 class="finish-section-title">Student's Written Text</h5>
+                          <div class="border p-3 bg-story-preview small rounded-3 student-text-display" style="min-height: 240px;">
+                              {{ (submission.completion_text | clean_whitespace_and_nl or '— Student has not yet written a story ending —') | nl2br }}
+                          </div>
+                      {% elif submission.assignment_type == 'reading' %}
+                          <h5 class="finish-section-title">Student's Answers</h5>
+
+                          {% if submission.student_answers and assignment_details.mcq_questions %}
+                              {# Display MCQ Answers #}
+                              {% set max_mcq_index = [assignment_details.mcq_questions|length, submission.student_answers.mcq_answers|length]|min %}
+
+                              <p class="small fw-bold mt-2 mb-1 finish-text-body">MCQ Answers:</p>
+
+                              {% for q_index in range(max_mcq_index) %}
+                                  {% set ans_index = submission.student_answers.mcq_answers[q_index] %}
+                                  {% set q_data = assignment_details.mcq_questions[q_index] %}
+                                  {% set correct_index = q_data.correct_index|int if q_data.correct_index is defined else -1 %}
+
+                                  {% set student_choice = letters[ans_index|int] ~ ". " ~ q_data.options[ans_index]
+                                     if (q_data.options and q_data.options[ans_index] is defined)
+                                     else '— No answer —' %}
+
+                                  {% set is_correct = (ans_index|int == correct_index) %}
+                                  {% set color_class = 'text-success-color' if is_correct else ('text-danger' if ans_index is not none else 'text-muted') %}
+
+                                  <p class="mb-1 small {{ color_class }}">
+                                      <i class="bi bi-{{ 'check' if is_correct else 'x' }}-circle-fill me-1"></i>
+                                      Q{{ q_index + 1 }}:
+                                      {{ student_choice }}
+                                      {% if not is_correct and correct_index != -1 and q_data.options[correct_index] is defined %}
+                                        <span class="text-muted small ms-2">(Correct: {{ letters[correct_index|int] }})</span>
+                                      {% endif %}
+                                  </p>
+                              {% endfor %}
+
+                              {% if submission.student_answers.mcq_answers|length > max_mcq_index %}
+                                  <p class="small text-danger mt-2">
+                                    Warning: Student submitted {{ submission.student_answers.mcq_answers|length - max_mcq_index }} extra answers not matched to questions.
+                                  </p>
+                              {% endif %}
+
+                              {# Display FIB Answers #}
+                              {% if submission.student_answers.fill_in_blank_responses %}
+                                  <p class="small fw-bold mt-3 mb-1 finish-text-body">Fill-in-the-Blank Responses:</p>
+                                  {% for ans in submission.student_answers.fill_in_blank_responses %}
+                                      <p class="mb-1 small finish-text-body">
+                                        <i class="bi bi-journal-text me-1"></i>
+                                        FIB{{ loop.index }}: <strong>{{ ans or '— Empty —'}}</strong>
+                                      </p>
+                                  {% endfor %}
+                              {% endif %}
+
+                              {# Display SA Answers #}
+                              {% if submission.student_answers.short_answer_responses %}
+                                  <p class="small fw-bold mt-3 mb-1 finish-text-body">Short Answer Responses (Requires Manual Grading):</p>
+                                  {% for ans in submission.student_answers.short_answer_responses %}
+                                      <p class="mb-1 small finish-text-body">
+                                        <i class="bi bi-pencil-square me-1"></i> SA{{ loop.index }}:
+                                      </p>
+                                      <blockquote class="small border-start border-3 ps-2 text-muted finish-text-body">
+                                        {{ ans or '— Empty —' }}
+                                      </blockquote>
+                                  {% endfor %}
+                              {% endif %}
+                          {% else %}
+                             <p class="small text-muted finish-text-body">No stored answers found.</p>
+                          {% endif %}
+                      {% endif %}
+
+                      <hr class="my-4 border-top-soft">
+
+                      <h3 class="finish-section-title mb-3" style="color: var(--deep-blue) !important;">Grading and Feedback</h3>
+
+                      <div class="mb-3">
+                        <label for="modalScoreInput" class="form-label finish-section-title small text-uppercase text-muted mb-1">
+                          Score (0-100%)
+                        </label>
+                        <input type="number"
+                               step="1"
+                               min="0"
+                               max="100"
+                               class="form-control rounded-3 finish-textarea"
+                               id="modalScoreInput"
+                               name="score"
+                               value="{{ submission.current_score|int if submission.current_score is not none else 0 }}"
+                               required>
+                        <div class="form-text small finish-text-body">
+                          Adjust the score here based on short answers or overall quality.
+                        </div>
+                      </div>
+
+                      <div class="mb-3">
+                        <label for="modalCommentTextarea" class="form-label finish-section-title small text-uppercase text-muted mb-1">
+                          Comments / Feedback
+                        </label>
+                        <textarea class="form-control rounded-3 finish-textarea"
+                                  id="modalCommentTextarea"
+                                  name="comment"
+                                  rows="6"
+                                  placeholder="Great vocabulary use! Be careful with past tense verbs.">
+{{ submission.admin_comment or '' }}</textarea>
+                      </div>
+
+                  </div>
+              </div>
+
+              <div class="d-flex justify-content-end gap-2 mt-4 pt-3 border-top-soft">
+                  <a href="{{ url_for('admin_stories', tab='submitted', fragment='submission-' ~ submission.submission_id) }}"
+                     class="btn btn-lg btn-outline-secondary finish-text-button rounded-pill">
+                      <i class="bi bi-x-lg me-1"></i> Cancel / Back
+                  </a>
+                  <button type="submit"
+                          class="btn btn-lg btn-action-primary finish-text-button rounded-pill shadow-lg">
+                    <i class="bi bi-save me-1"></i> Save Grade & Comment
+                  </button>
+              </div>
+          </form>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+:root {
+    --coral-main: #ff6b6b;
+    --coral-light: #ffd7cc;
+    --coral-dark: #cc5555;
+    --ink: #111827;
+    --muted: #6b7280;
+    --paper: #ffffff;
+    --success-color: #10b981;
+    --info-color: #3b82f6;
+    --deep-blue: #0A3D62;
+    --shadow-soft: 0 10px 30px rgba(255, 107, 107, 0.1), 0 4px 8px rgba(0, 0, 0, 0.05);
+}
+
+/* Custom width container for the 1.5x wider effect */
+.container-fluid-custom {
+    max-width: 99%;
+    margin-inline: auto;
+}
+
+/* --- Font Application --- */
+.finish-main-title {
+    font-family: 'Baloo 2', cursive;
+    font-weight: 800;
+    color: var(--coral-main);
+    font-size: 2.2rem;
+    line-height: 1.1;
+}
+.finish-section-title {
+    font-family: 'Baloo 2', cursive;
+    font-weight: 700 !important;
+    color: var(--ink);
+    font-size: 1.4rem;
+}
+.finish-section-label {
+    font-family: 'Baloo 2', cursive;
+    font-size: 1.1rem;
+    color: var(--deep-blue);
+}
+.finish-sub-text,
+.finish-text-body,
+.finish-text-button {
+    font-family: 'Fredoka', 'Nunito', sans-serif;
+}
+.finish-sub-text {
+    font-size: 1.15rem;
+    color: var(--muted) !important;
+    font-weight: 500;
+}
+.finish-text-body {
+    font-weight: 500;
+    color: var(--muted) !important;
+}
+.finish-text-button {
+    font-weight: 600 !important;
+}
+.text-deep-blue {
+    color: var(--deep-blue) !important;
+}
+.text-success-color {
+    color: var(--success-color) !important;
+}
+
+/* --- Card & Layout --- */
+.finish-card-v8 {
+    border-radius: 1.75rem;
+    background: #fffcf8;
+    box-shadow: 0 1rem 3rem rgba(255, 107, 107, 0.15);
+    border: 3px solid var(--coral-light) !important;
+}
+.border-top-soft {
+    border-top: 1px solid rgba(255, 107, 107, 0.2) !important;
+}
+.border-end-soft {
+    border-right: 1px dashed rgba(255, 107, 107, 0.4) !important;
+}
+
+/* Student text display */
+.student-text-display {
+    white-space: normal !important;
+}
+
+/* Story preview box */
+.bg-story-preview {
+    background: #fefefe !important;
+    border: 2px solid var(--coral-light) !important;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+.story-preview-box {
+    font-size: 1.1rem;
+    line-height: 1.6;
+    color: #475569;
+}
+
+/* Header icon */
+.admin-pill-icon-v7 {
+  width: 52px;
+  height: 52px;
+  border-radius: 1.25rem;
+  background: linear-gradient(135deg, var(--coral-main), var(--coral-dark));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.75rem;
+  color: #fff;
+  box-shadow: 0 0.5rem 1rem rgba(255, 107, 107, 0.4);
+}
+
+/* Inputs */
+.finish-textarea {
+    min-height: 100px;
+    padding: 1rem;
+    font-size: 1.15rem;
+    font-family: 'Fredoka', 'Nunito', sans-serif;
+    border: 2px solid var(--coral-light);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+    transition: border-color 0.2s;
+}
+.finish-textarea:focus {
+    border-color: var(--coral-main);
+    box-shadow: 0 0 0 .2rem rgba(255,107,107,.25);
+}
+
+/* Buttons */
+.btn-lg {
+    padding: 0.75rem 1.5rem;
+}
+.rounded-pill {
+    border-radius: 999px !important;
+}
+.btn-action-primary {
+    background-color: var(--coral-main);
+    border-color: var(--coral-main);
+    color: white;
+    box-shadow: 0 6px 14px rgba(255, 107, 107, 0.35);
+    transition: all 0.2s ease;
+}
+.btn-action-primary:hover:not(:disabled) {
+    background-color: #e86060;
+    border-color: #e86060;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 16px rgba(255, 107, 107, 0.5);
+}
+.btn-outline-secondary {
+    font-weight: 500;
+}
+</style>
+
+{% endblock %}

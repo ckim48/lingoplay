@@ -257,58 +257,81 @@
     </button>
 
     <div class="collapse navbar-collapse" id="navbarMain">
-      <ul class="navbar-nav ms-auto align-items-lg-center gap-lg-2">
-        {% if current_user and current_user.username == "testtest" %}
-        <li class="nav-item">
-          <a class="nav-link" href="{{ url_for('story_new') }}">Create Story</a>
-        </li>
-        {% endif %}
+    <ul class="navbar-nav ms-auto align-items-lg-center gap-lg-2">
+  {# ADMIN DROPDOWN (only for testtest) #}
 
-        <li class="nav-item">
-          <a class="nav-link" href="{{ url_for('library') }}">Library</a>
-        </li>
+  <li class="nav-item">
+    <a class="nav-link" href="{{ url_for('library') }}">Library</a>
+  </li>
 
-        {% if current_user and current_user.username != "testtest"%}
-        <li class="nav-item">
-          <a class="nav-link" href="{{ url_for('assignments_list') }}">Assignments</a>
-        </li>
-        {% endif %}
+  {% if current_user and current_user.username != "testtest" %}
+  <li class="nav-item">
+    <a class="nav-link" href="{{ url_for('assignments_list') }}">Assignments</a>
+  </li>
+  {% endif %}
 
-        {% if current_user %}
-        <li class="nav-item">
-          <a class="nav-link" href="{{ url_for('word_scramble') }}">Word Scramble</a>
-        </li>
-        {% endif %}
+  {% if current_user %}
+  <li class="nav-item">
+    <a class="nav-link" href="{{ url_for('word_scramble') }}">Word Scramble</a>
+  </li>
+  {% endif %}
+{% if current_user and current_user.username == "testtest" %}
+  <li class="nav-item dropdown">
+    <a class="nav-link dropdown-toggle" href="#" id="adminDropdown"
+       role="button" data-bs-toggle="dropdown" aria-expanded="false">
+      Admin
+    </a>
+    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="adminDropdown">
+      <li>
+        <a class="dropdown-item" href="{{ url_for('story_new') }}">
+          Create Story
+        </a>
+      </li>
+            <li>
+        <a class="dropdown-item" href="{{ url_for('admin_students') }}">
+          Student Management
+        </a>
+      </li>
+      <li>
+        <a class="dropdown-item" href="{{ url_for('admin_stories') }}">
+          Class Management
+        </a>
+      </li>
+      <li>
+        <a class="dropdown-item" href="{{ url_for('admin_analytics') }}">
+          Analytics
+        </a>
+      </li>
+    </ul>
+  </li>
+      {% else %}
+  <li class="nav-item">
+    <a class="nav-link" href="{{ url_for('profile') }}">Profile</a>
+  </li>
+  {% endif %}
 
-        {% if current_user and current_user.username == "testtest" %}
-        <li class="nav-item">
-          <a class="nav-link" href="{{ url_for('admin_stories') }}">Dashboard</a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link" href="{{ url_for('admin_analytics') }}">Analytics</a>
-        </li>
-        {% endif %}
 
-        {% if current_user %}
-        <!-- USER BADGE (USERNAME + ID) -->
-        <li class="nav-item mx-lg-2 mt-2 mt-lg-0">
-          <span class="nav-link p-0">
-            <span class="nav-user-badge">
-              <i class="bi bi-person-circle"></i>
-              {{ current_user.username }}
-            </span>
-          </span>
-        </li>
+  {% if current_user %}
+  <!-- USER BADGE (USERNAME + ID) -->
+  <li class="nav-item mx-lg-2 mt-2 mt-lg-0">
+    <span class="nav-link p-0">
+      <span class="nav-user-badge">
+        <i class="bi bi-person-circle"></i>
+        {{ current_user.username }}
+      </span>
+    </span>
+  </li>
 
-        <li class="nav-item ms-lg-1 mt-2 mt-lg-0">
-          <a class="btn btn-sky" href="{{ url_for('logout') }}">Logout</a>
-        </li>
-        {% else %}
-        <li class="nav-item ms-lg-3 mt-2 mt-lg-0">
-          <a class="btn btn-sky" href="{{ url_for('login') }}">Login</a>
-        </li>
-        {% endif %}
-      </ul>
+  <li class="nav-item ms-lg-1 mt-2 mt-lg-0">
+    <a class="btn btn-sky" href="{{ url_for('logout') }}">Logout</a>
+  </li>
+  {% else %}
+  <li class="nav-item ms-lg-3 mt-2 mt-lg-0">
+    <a class="btn btn-sky" href="{{ url_for('login') }}">Login</a>
+  </li>
+  {% endif %}
+</ul>
+
     </div>
 
   </div>

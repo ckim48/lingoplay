@@ -15,7 +15,7 @@
       <form method="post" id="storyForm">
         <input type="hidden" name="language" value="en">
 
-        <!-- Wizard indicator -->
+        <!-- Wizard indicator (3 steps) -->
         <div class="wizard-indicator d-flex align-items-center justify-content-between mb-3 mb-md-4">
           <div class="wizard-item text-center">
             <div class="wizard-dot active"><span>1</span></div>
@@ -37,7 +37,7 @@
           </div>
         </div>
 
-        <!-- STEP 1: ONE INPUT PER ROW -->
+        <!-- STEP 1: Basics -->
         <div class="wizard-step" data-step="1">
           <div class="step-card p-3 p-md-4 mb-2">
             <!-- Title -->
@@ -69,7 +69,7 @@
           </div>
         </div>
 
-        <!-- STEP 2: ONE SELECT PER ROW -->
+        <!-- STEP 2: Story Setup (level + type) -->
         <div class="wizard-step d-none" data-step="2">
           <div class="step-card p-3 p-md-4 mb-2">
             <!-- English Level -->
@@ -85,7 +85,7 @@
             </div>
 
             <!-- Story Type -->
-            <div class="mb-3">
+            <div class="mb-0">
               <label class="form-label step-label">
                 Story Type
               </label>
@@ -98,36 +98,12 @@
                 <option value="school-life">School life</option>
               </select>
             </div>
+          </div>
+        </div>
 
-            <!-- Setting -->
-<!--            <div class="mb-3">-->
-<!--              <label class="form-label step-label">-->
-<!--                Setting (story background)-->
-<!--              </label>-->
-<!--              <select name="setting" class="form-select form-select-lg lp-input">-->
-<!--                <option value="forest" selected>Forest</option>-->
-<!--                <option value="school">School</option>-->
-<!--                <option value="seaside">Seaside / beach</option>-->
-<!--                <option value="city-park">City park</option>-->
-<!--                <option value="home">Home</option>-->
-<!--                <option value="space">Space</option>-->
-<!--              </select>-->
-<!--            </div>-->
-
-            <!-- Main Characters -->
-<!--            <div class="mb-3">-->
-<!--              <label class="form-label step-label">-->
-<!--                Main Characters-->
-<!--              </label>-->
-<!--              <select name="character_kind" class="form-select form-select-lg lp-input">-->
-<!--                <option value="children" selected>Children / students</option>-->
-<!--                <option value="animals">Animal friends</option>-->
-<!--                <option value="family">Family</option>-->
-<!--                <option value="imaginary-friends">Imaginary friends</option>-->
-<!--                <option value="mixed">Mixed (people + animals / imaginary)</option>-->
-<!--              </select>-->
-<!--            </div>-->
-
+        <!-- STEP 3: Options (Emotion Tone + Tense) -->
+        <div class="wizard-step d-none" data-step="3">
+          <div class="step-card p-3 p-md-4 mb-2">
             <!-- Emotion Tone -->
             <div class="mb-3">
               <label class="form-label step-label">
@@ -152,51 +128,6 @@
                 <option value="past-simple">Past simple (e.g., He walked)</option>
                 <option value="present-progressive">Present progressive (e.g., He is walking)</option>
               </select>
-            </div>
-          </div>
-        </div>
-
-        <!-- STEP 3: ONE TOGGLE PER ROW -->
-        <div class="wizard-step d-none" data-step="3">
-          <div class="step-card p-3 p-md-4 mb-2">
-            <div class="row g-3">
-
-              <div class="col-12">
-                <div class="toggle-row d-flex align-items-center justify-content-between px-3 py-2">
-                  <div class="d-flex align-items-center gap-3">
-                    <div class="toggle-icon-wrap">
-                      <i class="bi bi-pencil-square"></i>
-                    </div>
-                    <div>
-                      <div class="toggle-title">Student ending</div>
-                      <div class="toggle-sub story-text-body">Students write the ending</div>
-                    </div>
-                  </div>
-
-                  <div class="form-check form-switch lp-switch mb-0">
-                    <input class="form-check-input" type="checkbox" id="studentFinish" name="student_finish" value="1" checked>
-                  </div>
-                </div>
-              </div>
-
-              <div class="col-12">
-                <div class="toggle-row d-flex align-items-center justify-content-between px-3 py-2">
-                  <div class="d-flex align-items-center gap-3">
-                    <div class="toggle-icon-wrap toggle-icon-cover">
-                      <i class="bi bi-image"></i>
-                    </div>
-                    <div>
-                      <div class="toggle-title">Cover image</div>
-                      <div class="toggle-sub story-text-body">Create a kid-friendly cover</div>
-                    </div>
-                  </div>
-
-                  <div class="form-check form-switch lp-switch mb-0">
-                    <input class="form-check-input" type="checkbox" id="genImage" name="gen_image" value="1">
-                  </div>
-                </div>
-              </div>
-
             </div>
           </div>
         </div>
@@ -230,7 +161,7 @@
   </div>
 </div>
 
-<!-- Modal -->
+<!-- Modal (currently unused since we redirect to Library directly, but kept if you want later flow changes) -->
 <div class="modal fade" id="generatedModal" tabindex="-1" aria-labelledby="generatedModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content rounded-4">
@@ -245,9 +176,6 @@
         <a href="{{ url_for('library') }}" class="btn btn-outline-secondary btn-lg">
           Go to Library
         </a>
-<!--        <a id="goFinishBtn" href="{{ url_for('index') }}" class="btn btn-sky-solid btn-lg">-->
-<!--          Finish the Story-->
-<!--        </a>-->
       </div>
     </div>
   </div>
@@ -382,54 +310,6 @@ body{
 }
 .lp-input .form-control{
   border-radius:0 1.25rem 1.25rem 0;
-}
-
-/* Toggles */
-.toggle-row{
-  border-radius:18px;
-  background:#fff;
-  border:2px solid rgba(254,215,170,.9);
-  padding: 0.75rem 1rem;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-}
-.toggle-icon-wrap{
-  width:40px;height:40px;
-  border-radius:999px;
-  background:#fee2e2;
-  display:flex;align-items:center;justify-content:center;
-  color:#fb7185;
-  font-size: 1.2rem;
-}
-.toggle-icon-cover{
-  background:#ccfbf1;
-  color:#0f766e;
-}
-.toggle-title{
-  font-size:1.1rem;font-weight:600;
-  line-height: 1.1;
-}
-.toggle-sub{
-  font-size:.85rem;
-  color:#6b7280;
-}
-
-/* Switch */
-.lp-switch .form-check-input{
-  width:3.5rem;height:1.8rem;
-  background:#e5e7eb;
-  border-color:#e5e7eb;
-  border-radius:999px;
-  position:relative;
-}
-.lp-switch .form-check-input::before{
-  inset:4px auto 4px 4px;
-  width:1.4rem;
-}
-.lp-switch .form-check-input:checked{
-  background:linear-gradient(90deg,#22c55e,#14b8a6);
-}
-.lp-switch .form-check-input:checked::before{
-  inset:4px 4px 4px auto;
 }
 
 /* Buttons */
@@ -570,15 +450,11 @@ body{
 
   update();
 
-  // After redirect, show modal if ?generated=1
+  // Old flow used ?generated=1 to show a modal; now we redirect directly to Library,
+  // so this part will almost never trigger but is left for future UX changes.
   const params = new URLSearchParams(window.location.search);
   if (params.get('generated') === '1') {
     const modalEl = document.getElementById('generatedModal');
-//    const goBtn = document.getElementById('goFinishBtn');
-    const finishUrl = params.get('finish_url');
-
-//    if (finishUrl) goBtn.href = finishUrl;
-
     const showModal = () => {
       overlay.setAttribute('aria-hidden', 'true');
       if (window.bootstrap?.Modal) {

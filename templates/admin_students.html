@@ -1,0 +1,905 @@
+{% extends "base2.html" %}
+{% block title %}Students · LexiTale{% endblock %}
+
+{% block content %}
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Baloo+2:wght@700;800&display=swap" rel="stylesheet">
+
+<div class="container mt-4">
+  <!-- Header styled like Library page -->
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-5 pb-3 border-bottom border-v6-soft">
+    <div class="d-flex align-items-center gap-4">
+      <i class="bi bi-people-fill display-4 library-header-icon"></i>
+      <div>
+        <h3 class="fw-bolder mb-1 v6-section-title">Student Progress Studio</h3>
+        <p class="text-muted v6-section-p mb-0 library-text-body">
+          Select a student to see homework, overdue tasks, and reading progress in one place.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div class="admin-stories-wrap-v2">
+    <div class="p-3 p-md-4">
+
+      <!-- Top summary metrics -->
+      <div class="row g-3 mb-4">
+        <div class="col-md-3 col-6">
+          <div class="card border-0 aa-card h-100">
+            <div class="card-body py-3 px-3">
+              <div class="aa-metric-label mb-1">Total students</div>
+              <div class="d-flex align-items-baseline gap-1">
+                <span class="fs-3 fw-bold text-coral-dark">{{ total_students or (students|length) }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3 col-6">
+          <div class="card border-0 aa-card h-100">
+            <div class="card-body py-3 px-3">
+              <div class="aa-metric-label mb-1">Active this week</div>
+              <div class="d-flex align-items-baseline gap-1">
+                <span class="fs-3 fw-bold text-coral-dark">{{ active_this_week or 0 }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3 col-6">
+          <div class="card border-0 aa-card h-100">
+            <div class="card-body py-3 px-3">
+              <div class="aa-metric-label mb-1">Avg completion rate</div>
+              <div class="d-flex align-items-baseline gap-1">
+                <span class="fs-3 fw-bold text-coral-dark">
+                  {{ avg_completion_rate|round(1) if avg_completion_rate is defined else 0 }}%
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3 col-6">
+          <div class="card border-0 aa-card h-100">
+            <div class="card-body py-3 px-3">
+              <div class="aa-metric-label mb-1">Avg score</div>
+              <div class="d-flex align-items-baseline gap-1">
+                <span class="fs-3 fw-bold text-coral-dark">
+                  {{ avg_score_all|round(1) if avg_score_all is defined else 0 }}%
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {% if students %}
+      <!-- MAIN LAYOUT: LEFT = list, RIGHT = detail -->
+      <div class="row g-3">
+        <!-- LEFT: student list -->
+        <div class="col-lg-4">
+          <div class="card border-0 shadow-sm rounded-4 student-list-card">
+            <div class="card-header bg-transparent border-0 pt-3 pb-2 px-3 d-flex justify-content-between align-items-center">
+              <div class="small text-muted fw-semibold admin-text-body text-uppercase">
+                Students
+              </div>
+              <span class="badge rounded-pill bg-light text-muted admin-text-body">
+                {{ students|length }} total
+              </span>
+            </div>
+
+            <!-- INLINE FILTERS for list panel -->
+            <div class="px-3 pb-2">
+              <div class="d-flex flex-wrap gap-2">
+                <div class="flex-grow-1">
+                  <input
+                    type="text"
+                    id="studentListSearch"
+                    class="form-control form-control-sm rounded-pill admin-text-body"
+                    placeholder="Filter by name or email">
+                </div>
+                <div style="min-width: 150px;">
+                  <select
+                    id="studentListFilterStatus"
+                    class="form-select form-select-sm rounded-pill admin-text-body">
+                    <option value="all" selected>All</option>
+                    <option value="needs">Needs attention</option>
+                    <option value="ok">On track</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div class="card-body pt-0 px-0 pb-3">
+              <div class="list-group list-group-flush student-list-scroll" id="studentList">
+                {% for s in students %}
+                  {% set total = s.total_assignments or 0 %}
+                  {% set completed = s.completed_assignments or 0 %}
+                  {% set overdue = s.overdue_assignments or 0 %}
+                  {% set avg_score = s.avg_score or 0 %}
+                  {% set completion_rate = (completed / total * 100) if total > 0 else 0 %}
+                  {% set needs_attention = overdue > 0 %}
+                  <button
+                    type="button"
+                    class="list-group-item list-group-item-action border-0 student-list-item {% if loop.first %}active{% endif %}"
+                    data-student-id="{{ s.id }}"
+                    data-name="{{ s.username }}"
+                    data-email="{{ s.email }}"
+                    data-l1="{{ s.l1_language or 'L1' }}"
+                    data-l2="{{ s.l2_language or 'L2' }}"
+                    data-level="{{ s.current_level or 'Unknown' }}"
+                    data-total="{{ total }}"
+                    data-completed="{{ completed }}"
+                    data-overdue="{{ overdue }}"
+                    data-avg-score="{{ avg_score }}"
+                    data-completion-rate="{{ completion_rate }}"
+                    data-last-seen="{% if s.last_seen_at %}{{ s.last_seen_at|dt('%Y-%m-%d %H:%M') }}{% else %}{% endif %}"
+                    data-analytics-url="{{ url_for('admin_analytics', user_id=s.id) }}"
+                    data-completion-history='{{ (s.completion_history or [])|tojson|safe }}'
+                    data-score-history='{{ (s.score_history or [])|tojson|safe }}'
+                  >
+                    <div class="d-flex flex-column align-items-start">
+                      <div class="d-flex w-100 justify-content-between align-items-center mb-1">
+                        <span class="fw-semibold text-coral-dark admin-text-body">
+                          {{ s.username }}
+                        </span>
+                        {% if needs_attention %}
+                          <span class="badge bg-danger-subtle text-danger border-0 student-pill-small">
+                            <i class="bi bi-exclamation-triangle-fill me-1"></i>Needs attention
+                          </span>
+                        {% else %}
+                          <span class="badge bg-success-subtle text-success border-0 student-pill-small">
+                            <i class="bi bi-check-circle-fill me-1"></i>On track
+                          </span>
+                        {% endif %}
+                      </div>
+                      <div class="small text-muted admin-text-body">
+                        {{ s.email }}
+                      </div>
+                      <div class="d-flex align-items-center gap-2 mt-2">
+                        <span class="badge bg-light text-muted border student-tag-badge admin-text-tag">
+                          {{ s.l1_language|title if s.l1_language else 'L1' }} / {{ s.l2_language|title if s.l2_language else 'L2' }}
+                        </span>
+                        <span class="badge bg-soft-level admin-text-tag">
+                          Level: {{ s.current_level|title if s.current_level else 'Unknown' }}
+                        </span>
+                      </div>
+                      <div class="w-100 mt-2 student-mini-bar-wrap">
+                        <div class="student-mini-progress">
+                          <div class="student-mini-fill" style="width: {{ completion_rate|round(0) }}%;"></div>
+                        </div>
+                        <span class="small text-muted admin-text-body ms-1">
+                          {{ completion_rate|round(0) }}% · {{ completed }}/{{ total }} done
+                        </span>
+                      </div>
+                    </div>
+                  </button>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT: detail panel -->
+        <div class="col-lg-8">
+          <div class="card border-0 shadow-sm rounded-4" id="studentDetailCard">
+            <div class="card-body p-3 p-md-4">
+              <!-- Filled by JS -->
+              <div id="studentDetailEmpty" class="text-center text-muted small admin-text-body py-5">
+                Select a student on the left to see detailed progress.
+              </div>
+
+              <div id="studentDetailContent" style="display:none;">
+                <!-- Top: identity + quick actions -->
+                <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+                  <div>
+                    <div class="d-flex align-items-center gap-2 mb-1">
+                      <h3 class="mb-0 fw-bold admin-title-v7" id="detailName"></h3>
+                      <span class="badge bg-soft-level admin-text-tag" id="detailLevelBadge"></span>
+                    </div>
+                    <div class="small text-muted admin-text-body" id="detailEmail"></div>
+                    <div class="mt-1">
+                      <span class="badge bg-light text-muted border admin-text-tag" id="detailLangBadge"></span>
+                    </div>
+                    <div class="mt-1 small text-muted admin-text-body" id="detailLastSeenWrapper" style="display:none;">
+                      Last active:
+                      <span id="detailLastSeen"></span>
+                    </div>
+                  </div>
+                  <div class="d-flex flex-wrap gap-2">
+                    <a id="detailAnalyticsLink"
+                       href="#"
+                       class="btn btn-sm btn-analytics-main rounded-pill admin-text-button d-flex align-items-center gap-1">
+                      <i class="bi bi-bar-chart-fill"></i>
+                      <span>Progress History</span>
+                    </a>
+                  </div>
+                </div>
+
+                <!-- KPIs -->
+                <div class="row g-3 mb-3">
+                  <div class="col-md-4 col-6">
+                    <div class="detail-metric-card">
+                      <div class="detail-metric-label">Completion</div>
+                      <div class="detail-metric-value" id="detailCompletionPercent">0%</div>
+                      <div class="detail-metric-sub" id="detailCompletionCounts">0 / 0 done</div>
+                    </div>
+                  </div>
+                  <div class="col-md-4 col-6">
+                    <div class="detail-metric-card">
+                      <div class="detail-metric-label">Average score</div>
+                      <div class="detail-metric-value" id="detailAvgScore">—</div>
+                      <div class="detail-metric-sub">Across completed work</div>
+                    </div>
+                  </div>
+                  <div class="col-md-4 col-12">
+                    <div class="detail-metric-card">
+                      <div class="detail-metric-label">Overdue</div>
+                      <div class="detail-metric-value text-danger" id="detailOverdueCount">0</div>
+                      <div class="detail-metric-sub" id="detailOverdueLabel">No overdue assignments</div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Visual progress "chart" -->
+                <div class="mb-3">
+                  <div class="d-flex justify-content-between align-items-center mb-1">
+                    <div class="small text-muted text-uppercase fw-semibold admin-text-body">
+                      Assignment completion
+                    </div>
+                    <div class="small text-muted admin-text-body" id="detailCompletionSummary"></div>
+                  </div>
+                  <div class="student-progress-bar">
+                    <div class="student-progress-fill" id="detailProgressFill"></div>
+                  </div>
+                </div>
+
+                <!-- Assignments collapse toggle -->
+                <div class="d-flex justify-content-between align-items-center mt-3 mb-2">
+                  <h6 class="mb-0 small text-muted text-uppercase admin-text-body">
+                    Assignments
+                  </h6>
+                  <button
+                    class="btn btn-sm btn-light assignments-toggle rounded-pill d-inline-flex align-items-center gap-1"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#assignmentsCollapse"
+                    aria-expanded="true"
+                    aria-controls="assignmentsCollapse">
+                    <i class="bi bi-list-check"></i>
+                    <span>Show / hide</span>
+                    <i class="bi bi-chevron-down small"></i>
+                  </button>
+                </div>
+
+                <!-- Assignment buckets (simple counts) -->
+                <div class="collapse show" id="assignmentsCollapse">
+                  <div class="row g-3 mt-1">
+                    <div class="col-md-6">
+                      <div class="fw-semibold small text-muted text-uppercase admin-text-body mb-2">
+                        Still to do
+                      </div>
+                      <div class="detail-list-box small admin-text-body" id="detailTodoBox">
+                        <div class="d-flex justify-content-between">
+                          <span>Assigned (not overdue)</span>
+                          <span id="detailAssignedCount">0</span>
+                        </div>
+                        <div class="d-flex justify-content-between mt-1">
+                          <span>Past due</span>
+                          <span id="detailPastDueCount">0</span>
+                        </div>
+                        <div class="text-muted mt-2 small" id="detailTodoEmpty" style="display:none;">
+                          No pending assignments.
+                        </div>
+                      </div>
+                    </div>
+                    <div class="col-md-6">
+                      <div class="fw-semibold small text-muted text-uppercase admin-text-body mb-2">
+                        Submitted
+                      </div>
+                      <div class="detail-list-box small admin-text-body" id="detailSubmittedBox">
+                        <div class="d-flex justify-content-between">
+                          <span>Completed</span>
+                          <span id="detailCompletedCount">0</span>
+                        </div>
+                        <div class="text-muted mt-2 small" id="detailSubmittedEmpty" style="display:none;">
+                          No submitted assignments yet.
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+              </div> <!-- /studentDetailContent -->
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {% else %}
+        <div class="py-4 text-center text-muted small admin-text-body">
+          No students found yet. Ask students to sign up or import a class list.
+        </div>
+      {% endif %}
+
+    </div>
+  </div>
+</div>
+
+<!-- Analytics Modal -->
+<div class="modal fade" id="analyticsModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content analytics-modal">
+      <div class="modal-header border-0 pb-0">
+        <div>
+          <h5 class="modal-title fw-bold">Progress analytics</h5>
+          <div class="small text-muted" id="analyticsModalStudentName"></div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body pt-3">
+        <div class="row g-3">
+          <!-- Completion timeline -->
+          <div class="col-md-6">
+            <div class="timeline-card">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <div class="small text-muted text-uppercase fw-semibold">
+                  Completion over time
+                </div>
+                <div class="small text-muted" id="completionTimelineLabel"></div>
+              </div>
+              <div class="timeline-chart-box">
+                <svg id="completionTimelineSvg" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>
+                <div class="timeline-empty-message" id="completionTimelineEmpty" style="display:none;">
+                  No completion history yet for this student.
+                </div>
+              </div>
+              <div class="timeline-x-labels" id="completionTimelineTicks"></div>
+            </div>
+          </div>
+
+          <!-- Score timeline -->
+          <div class="col-md-6">
+            <div class="timeline-card">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <div class="small text-muted text-uppercase fw-semibold">
+                  Score over time
+                </div>
+                <div class="small text-muted" id="scoreTimelineLabel"></div>
+              </div>
+              <div class="timeline-chart-box">
+                <svg id="scoreTimelineSvg" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>
+                <div class="timeline-empty-message" id="scoreTimelineEmpty" style="display:none;">
+                  No score history yet for this student.
+                </div>
+              </div>
+              <div class="timeline-x-labels" id="scoreTimelineTicks"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+/* Reuse Library-style header look */
+:root {
+  --color-play-coral: #ff6b6b;
+  --color-play-heading: #111827;
+  --color-play-muted: #6b7280;
+  --color-play-soft-border: #f8e8d5;
+
+  --coral-main: #ff6b6b;
+  --coral-light: #ffd7cc;
+  --coral-dark: #cc5555;
+  --success-v7: #10b981;
+  --danger-v7: #ef4444;
+  --warning-v7: #f59e0b;
+  --light-soft-blue-v7: #ffece5;
+  --soft-yellow-v7: #fff7e5;
+}
+
+.border-v6-soft { border-color: var(--color-play-soft-border) !important; }
+.library-header-icon { color: var(--color-play-coral) !important; }
+.v6-section-title {
+  font-family: 'Baloo 2', cursive;
+  font-size: 2.2rem;
+  color: var(--color-play-heading);
+  line-height: 1.1;
+  font-weight: 800;
+}
+.v6-section-p {
+  font-size: 1rem;
+  color: var(--color-play-muted) !important;
+  font-family: 'Fredoka', 'Nunito', sans-serif;
+}
+.library-text-body { font-family: 'Fredoka', 'Nunito', sans-serif; }
+
+/* LIST PANEL */
+.student-list-card{
+  background:#fffcf8;
+}
+.student-list-scroll{
+  max-height:520px;
+  overflow-y:auto;
+}
+.student-list-item{
+  padding:0.9rem 1rem;
+  border-radius:0;
+  border-bottom:1px solid rgba(15,23,42,.05);
+}
+.student-list-item.active{
+  background:linear-gradient(90deg,#fff0ea,#ffe5e5);
+  border-left:3px solid var(--coral-main);
+  color:#111827;
+}
+.student-list-item.active .text-coral-dark{
+  color:#b91c1c !important;
+}
+.student-list-item.active .small.text-muted{
+  color:#4b5563 !important;
+}
+.student-list-item:not(.active):hover{
+  background:#fff9f4;
+}
+.student-pill-small{
+  font-size:0.7rem;
+}
+.student-tag-badge{
+  font-size:0.75rem;
+  border-radius:999px;
+}
+.bg-soft-level{
+  background:#eef2ff;
+  color:#3730a3;
+  border-radius:999px;
+  font-size:0.75rem;
+}
+
+/* Mini bar in list */
+.student-mini-bar-wrap{
+  font-size:0.75rem;
+}
+.student-mini-progress{
+  width:100%;
+  height:6px;
+  border-radius:999px;
+  background:#f3f4f6;
+  overflow:hidden;
+}
+.student-mini-fill{
+  height:100%;
+  border-radius:999px;
+  background:linear-gradient(90deg,var(--coral-light),var(--coral-main));
+}
+
+/* Detail metrics */
+.detail-metric-card{
+  border-radius:14px;
+  background:#fffcf8;
+  border:1px solid #fde2d9;
+  padding:0.65rem 0.8rem;
+}
+.detail-metric-label{
+  font-size:0.7rem;
+  text-transform:uppercase;
+  letter-spacing:.08em;
+  color:#6b7280;
+  margin-bottom:0.15rem;
+}
+.detail-metric-value{
+  font-size:1.25rem;
+  font-weight:700;
+  color:#111827;
+}
+.detail-metric-sub{
+  font-size:0.78rem;
+  color:#6b7280;
+}
+
+/* Completion bar (big chart-like) */
+.student-progress-bar{
+  width:100%;
+  height:12px;
+  border-radius:999px;
+  background:#f3f4f6;
+  overflow:hidden;
+}
+.student-progress-fill{
+  height:100%;
+  border-radius:999px;
+  background:linear-gradient(90deg,var(--coral-light),var(--coral-main));
+  width:0;
+  transition:width .25s ease;
+}
+
+/* Detail lists */
+.detail-list-box{
+  min-height:80px;
+  border-radius:12px;
+  border:1px dashed rgba(148,163,184,.6);
+  background:#ffffff;
+  padding:0.6rem 0.75rem;
+}
+
+/* Top metric cards */
+.aa-card{
+  border-radius:20px;
+  background:#fffcf8;
+  border:2px solid #fcece4;
+  box-shadow:0 5px 20px rgba(255,107,107,0.1);
+}
+.aa-metric-label{
+  font-size:0.75rem;
+  text-transform:uppercase;
+  letter-spacing:.08em;
+  color:#6b7280;
+}
+
+/* Big analytics button */
+.btn-analytics-main{
+  background:linear-gradient(135deg,var(--coral-main),#ff9f7b);
+  color:#ffffff !important;
+  border:none;
+  padding:0.45rem 1.2rem;
+  box-shadow:0 8px 18px rgba(255,107,107,0.35);
+  font-weight:600;
+}
+.btn-analytics-main:hover{
+  background:linear-gradient(135deg,#ff4f4f,#ff8a63);
+  box-shadow:0 10px 22px rgba(255,107,107,0.45);
+}
+
+/* Assignments toggle */
+.assignments-toggle{
+  font-size:0.78rem;
+  border-radius:999px;
+  border:1px solid #e5e7eb;
+  background:#f9fafb;
+}
+.assignments-toggle .bi-chevron-down{
+  transition:transform .2s ease;
+}
+.assignments-toggle[aria-expanded="true"] .bi-chevron-down{
+  transform:rotate(180deg);
+}
+
+/* Analytics modal */
+.analytics-modal{
+  border-radius:24px;
+  border:2px solid #fde2d9;
+  box-shadow:0 18px 40px rgba(15,23,42,0.18);
+}
+
+/* Timeline cards */
+.timeline-card{
+  border-radius:16px;
+  background:#fffcf8;
+  border:1px solid #fcece4;
+  padding:0.75rem 0.85rem 0.8rem;
+}
+
+.timeline-chart-box{
+  border-radius:14px;
+  border:1px solid #e5e7eb;
+  background:#f9fafb;
+  padding:0.6rem 0.75rem 0.5rem;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  align-items:center;
+  min-height:120px;
+}
+
+.timeline-chart-box svg{
+  width:100%;
+  height:80px;
+}
+
+.timeline-x-labels{
+  display:flex;
+  justify-content:space-between;
+  margin-top:2px;
+  color:#9ca3af;
+}
+.timeline-x-labels span{
+  flex:1;
+  text-align:center;
+  font-size:0.7rem;
+}
+
+/* Bigger, centered empty message */
+.timeline-empty-message{
+  font-size:0.9rem;
+  font-weight:500;
+  color:#4b5563;
+  text-align:center;
+  padding:0.5rem 0.25rem;
+}
+
+/* Line + dots */
+.timeline-line{
+  fill:none;
+  stroke-width:2;
+}
+.timeline-line-completion{
+  stroke:#fb7185;
+}
+.timeline-line-score{
+  stroke:#6366f1;
+}
+.timeline-dot{
+  fill:#ffffff;
+  stroke:#111827;
+  stroke-width:0.4;
+}
+</style>
+
+{% if students %}
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  const listItems = document.querySelectorAll('.student-list-item');
+  if (!listItems.length) return;
+
+  const detailEmpty = document.getElementById('studentDetailEmpty');
+  const detailContent = document.getElementById('studentDetailContent');
+
+  const elName = document.getElementById('detailName');
+  const elEmail = document.getElementById('detailEmail');
+  const elLang = document.getElementById('detailLangBadge');
+  const elLevel = document.getElementById('detailLevelBadge');
+  const elLastSeen = document.getElementById('detailLastSeen');
+  const elLastSeenWrap = document.getElementById('detailLastSeenWrapper');
+
+  const elCompletionPercent = document.getElementById('detailCompletionPercent');
+  const elCompletionCounts = document.getElementById('detailCompletionCounts');
+  const elAvgScore = document.getElementById('detailAvgScore');
+  const elOverdue = document.getElementById('detailOverdueCount');
+  const elOverdueLabel = document.getElementById('detailOverdueLabel');
+  const elCompletionSummary = document.getElementById('detailCompletionSummary');
+  const elProgressFill = document.getElementById('detailProgressFill');
+  const elAnalyticsLink = document.getElementById('detailAnalyticsLink');
+
+  const elAssignedCount = document.getElementById('detailAssignedCount');
+  const elPastDueCount = document.getElementById('detailPastDueCount');
+  const elCompletedCount = document.getElementById('detailCompletedCount');
+  const elTodoEmpty = document.getElementById('detailTodoEmpty');
+  const elSubmittedEmpty = document.getElementById('detailSubmittedEmpty');
+
+  // Modal elements
+  const analyticsModalEl = document.getElementById('analyticsModal');
+  const analyticsStudentName = document.getElementById('analyticsModalStudentName');
+
+  const completionSvg = document.getElementById('completionTimelineSvg');
+  const completionTicks = document.getElementById('completionTimelineTicks');
+  const completionEmpty = document.getElementById('completionTimelineEmpty');
+  const completionLabel = document.getElementById('completionTimelineLabel');
+
+  const scoreSvg = document.getElementById('scoreTimelineSvg');
+  const scoreTicks = document.getElementById('scoreTimelineTicks');
+  const scoreEmpty = document.getElementById('scoreTimelineEmpty');
+  const scoreLabel = document.getElementById('scoreTimelineLabel');
+
+  let currentCompletionHistory = [];
+  let currentScoreHistory = [];
+
+  // List-local search & filter
+  const searchInput = document.getElementById('studentListSearch');
+  const filterSelect = document.getElementById('studentListFilterStatus');
+
+  function applyListFilters(){
+    const term = (searchInput.value || '').trim().toLowerCase();
+    const status = filterSelect.value || 'all';
+
+    listItems.forEach(item => {
+      const name = (item.dataset.name || '').toLowerCase();
+      const email = (item.dataset.email || '').toLowerCase();
+      const overdue = parseInt(item.dataset.overdue || '0', 10);
+
+      const matchesText =
+        !term ||
+        name.includes(term) ||
+        email.includes(term);
+
+      let matchesStatus = true;
+      if (status === 'needs'){
+        matchesStatus = overdue > 0;
+      } else if (status === 'ok'){
+        matchesStatus = overdue === 0;
+      }
+
+      if (matchesText && matchesStatus){
+        item.style.display = '';
+      } else {
+        item.style.display = 'none';
+      }
+    });
+  }
+
+  if (searchInput){
+    searchInput.addEventListener('input', applyListFilters);
+  }
+  if (filterSelect){
+    filterSelect.addEventListener('change', applyListFilters);
+  }
+
+  function renderLineChart(history, svgEl, ticksEl, emptyEl, labelEl, lineClass){
+    while (svgEl.firstChild) svgEl.removeChild(svgEl.firstChild);
+    ticksEl.innerHTML = '';
+
+    if (!history || !history.length){
+      emptyEl.style.display = 'block';
+      svgEl.style.display = 'none';
+      ticksEl.style.display = 'none';
+      if (labelEl) labelEl.textContent = '';
+      return;
+    }
+
+    emptyEl.style.display = 'none';
+    svgEl.style.display = 'block';
+    ticksEl.style.display = 'flex';
+
+    const values = history.map(d => {
+      if (typeof d.value === 'number') return d.value;
+      const parsed = parseFloat(d.value);
+      return isNaN(parsed) ? 0 : parsed;
+    });
+    const labels = history.map(d => d.label || '');
+
+    const maxVal = Math.max.apply(null, values);
+    const minVal = Math.min.apply(null, values);
+    const span = (maxVal - minVal) || 1;
+
+    const points = values.map((v, idx) => {
+      const x = history.length === 1 ? 0 : (idx / (history.length - 1)) * 100;
+      const norm = (v - minVal) / span;
+      const y = 100 - norm * 100;
+      return { x, y };
+    });
+
+    const ns = 'http://www.w3.org/2000/svg';
+    const path = document.createElementNS(ns, 'path');
+    const d = points.map((p, idx) => `${idx === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+    path.setAttribute('d', d);
+    path.setAttribute('class', 'timeline-line ' + lineClass);
+    svgEl.appendChild(path);
+
+    points.forEach((p) => {
+      const circle = document.createElementNS(ns, 'circle');
+      circle.setAttribute('cx', p.x);
+      circle.setAttribute('cy', p.y);
+      circle.setAttribute('r', 1.8);
+      circle.setAttribute('class', 'timeline-dot');
+      svgEl.appendChild(circle);
+    });
+
+    labels.forEach(label => {
+      const spanEl = document.createElement('span');
+      spanEl.textContent = label;
+      ticksEl.appendChild(spanEl);
+    });
+
+    if (labelEl){
+      const lastVal = values[values.length - 1];
+      const lastLabel = labels[labels.length - 1] || '';
+      const valText = (typeof lastVal === 'number' && lastVal.toFixed)
+        ? lastVal.toFixed(1)
+        : lastVal;
+      labelEl.textContent = lastLabel ? `${lastLabel}: ${valText}` : `${valText}`;
+    }
+  }
+
+  function selectStudent(btn){
+    listItems.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+
+    const total = parseInt(btn.dataset.total || '0', 10);
+    const completed = parseInt(btn.dataset.completed || '0', 10);
+    const overdue = parseInt(btn.dataset.overdue || '0', 10);
+    const avgScore = parseFloat(btn.dataset.avgScore || '0');
+    const completionRate = total > 0 ? (completed / total * 100) : 0;
+
+    const remaining = Math.max(total - completed, 0);
+    const assignedNotOverdue = Math.max(remaining - overdue, 0);
+
+    // Show detail panel
+    detailEmpty.style.display = 'none';
+    detailContent.style.display = '';
+
+    elName.textContent = btn.dataset.name || '';
+    elEmail.textContent = btn.dataset.email || '';
+    elLang.textContent = (btn.dataset.l1 || 'L1') + ' / ' + (btn.dataset.l2 || 'L2');
+    elLevel.textContent = 'Level: ' + (btn.dataset.level || 'Unknown');
+
+    const lastSeen = btn.dataset.lastSeen || '';
+    if (lastSeen){
+      elLastSeenWrap.style.display = '';
+      elLastSeen.textContent = lastSeen;
+    } else {
+      elLastSeenWrap.style.display = 'none';
+    }
+
+    elCompletionPercent.textContent = completionRate.toFixed(1) + '%';
+    elCompletionCounts.textContent = `${completed} / ${total} done`;
+    elCompletionSummary.textContent = `${completed} done · ${overdue} overdue · ${remaining} remaining`;
+
+    elAvgScore.textContent = total > 0 ? avgScore.toFixed(1) + '%' : '—';
+
+    elOverdue.textContent = overdue.toString();
+    elOverdueLabel.textContent = overdue > 0
+      ? 'Has overdue assignments'
+      : 'No overdue assignments';
+
+    elProgressFill.style.width = completionRate.toFixed(0) + '%';
+
+    // Simple assignment breakdown
+    elAssignedCount.textContent = assignedNotOverdue.toString();
+    elPastDueCount.textContent = overdue.toString();
+    elCompletedCount.textContent = completed.toString();
+
+    // Empty messages
+    if (remaining === 0){
+      elTodoEmpty.style.display = 'block';
+    } else {
+      elTodoEmpty.style.display = 'none';
+    }
+
+    if (completed === 0){
+      elSubmittedEmpty.style.display = 'block';
+    } else {
+      elSubmittedEmpty.style.display = 'none';
+    }
+
+    // Parse histories for modal
+    try {
+      currentCompletionHistory = JSON.parse(btn.dataset.completionHistory || '[]');
+    } catch (e) {
+      currentCompletionHistory = [];
+    }
+    try {
+      currentScoreHistory = JSON.parse(btn.dataset.scoreHistory || '[]');
+    } catch (e) {
+      currentScoreHistory = [];
+    }
+  }
+
+  listItems.forEach(btn => {
+    btn.addEventListener('click', () => selectStudent(btn));
+  });
+
+  // Analytics modal open
+  if (elAnalyticsLink && analyticsModalEl){
+    elAnalyticsLink.addEventListener('click', function(e){
+      e.preventDefault();
+      if (typeof bootstrap === 'undefined') return;
+
+      analyticsStudentName.textContent = elName.textContent || 'Student analytics';
+
+      renderLineChart(
+        currentCompletionHistory,
+        completionSvg,
+        completionTicks,
+        completionEmpty,
+        completionLabel,
+        'timeline-line-completion'
+      );
+      renderLineChart(
+        currentScoreHistory,
+        scoreSvg,
+        scoreTicks,
+        scoreEmpty,
+        scoreLabel,
+        'timeline-line-score'
+      );
+
+      const modal = new bootstrap.Modal(analyticsModalEl);
+      modal.show();
+    });
+  }
+
+  // Auto-select first *visible* student
+  const firstVisible = Array.from(listItems).find(li => li.style.display !== 'none');
+  if (firstVisible){
+    selectStudent(firstVisible);
+  }
+});
+</script>
+{% endif %}
+{% endblock %}

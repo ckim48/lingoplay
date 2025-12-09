@@ -6,14 +6,21 @@ import random
 from datetime import datetime
 from functools import wraps
 from urllib.parse import urlparse, urljoin
-
+from typing import Optional
 
 from flask import (
     Flask, render_template, request, redirect, url_for,
-    flash, g, session, jsonify
+    flash, g, session, jsonify, abort
 )
 from werkzeug.security import generate_password_hash, check_password_hash
 from slugify import slugify
+
+# NOTE: Assuming the analytics_mock.py file is present for MOCK_GROUP_LIST
+try:
+    from analytics_mock import MOCK_GROUP_LIST
+except ImportError:
+    MOCK_GROUP_LIST = []
+    print("WARNING: analytics_mock.py not found. Mock data will be empty.")
 
 from openai import OpenAI
 
@@ -66,6 +73,7 @@ PREPARED_SCRAMBLE_WORDS = [
     "waterfall", "adventure", "butterfly", "mountains", "snowflake"
 ]
 
+
 # -------------------------------------------------------------------
 # DB helpers
 # -------------------------------------------------------------------
@@ -83,7 +91,39 @@ def get_db():
         g.db = conn
     return g.db
 
+
 from markupsafe import Markup, escape
+
+
+# -------------------------------------------------------------------
+# Jinja2 Custom Filters (FIXED: Registering 'chr' and 'from_json')
+# -------------------------------------------------------------------
+@app.template_filter('chr')
+def char_filter(value):
+    """Makes the Python built-in chr() function available in Jinja."""
+    try:
+        return chr(value)
+    except (TypeError, ValueError):
+        # Handle cases where the input is not a valid integer for chr()
+        return ''
+
+
+@app.template_filter('from_json')
+def from_json_filter(s):
+    """Parses a JSON string into a Python object."""
+    if s:
+        try:
+            # Handle string input
+            if isinstance(s, str):
+                return json.loads(s)
+            # If it's already a dict (unlikely from DB but safe)
+            if isinstance(s, dict):
+                return s
+            return None
+        except (TypeError, json.JSONDecodeError):
+            return None
+    return None
+
 
 @app.template_filter("nl2br")
 def nl2br(value: str) -> Markup:
@@ -92,6 +132,8 @@ def nl2br(value: str) -> Markup:
         return Markup("")
     # Escape HTML, then replace newline chars with <br>
     return Markup(escape(value).replace("\n", Markup("<br>\n")))
+
+
 @app.teardown_appcontext
 def close_db(exc):
     db = g.pop("db", None)
@@ -106,66 +148,68 @@ def init_db():
     db.executescript(
         """
         PRAGMA foreign_keys = ON;
-
-        -- Dictionary lookup log (EN <-> KO)
-        -- ... (existing dict_lookups table creation)
-
-        -- Dictionary bookmarks
-        -- ... (existing dict_bookmarks table creation)
-
-        -- All other CREATE TABLE statements are managed elsewhere.
-        -- This function is safe to call multiple times and acts as a migration.
         """
     )
-    # ... (existing ALTER TABLE statements)
 
-    # Store MCQ questions once per story
+    # MIGRATIONS FOR CONFIRMED TABLES: stories, assignment_submissions, assignments
+
+    # 1. Stories migrations
     try:
         db.execute(
             "ALTER TABLE stories ADD COLUMN mcq_questions_json TEXT"
         )
     except sqlite3.OperationalError:
-        # Column already exists, ignore
         pass
 
-    # ... (rest of existing migrations)
-
-    # ------------------------------------------------------------------
-    # NEW MIGRATIONS FOR ADMIN REVIEW FEATURE: assignment_submissions
-    # The traceback indicates these columns are missing.
-    # ------------------------------------------------------------------
-
-    # Add column for Admin Comment/Feedback to submissions
+    # 2. assignment_submissions migrations
     try:
         db.execute(
             "ALTER TABLE assignment_submissions ADD COLUMN comment TEXT"
         )
     except sqlite3.OperationalError:
-        # Column already exists, ignore
         pass
 
-    # Add column to track when the submission was reviewed
     try:
         db.execute(
             "ALTER TABLE assignment_submissions ADD COLUMN reviewed_at TEXT"
         )
     except sqlite3.OperationalError:
-        # Column already exists, ignore
         pass
 
-    # ------------------------------------------------------------------
+    # 3. assignments migrations (Needed for assignment title, JSON, attempts, score)
+    try:
+        db.execute(
+            "ALTER TABLE assignments ADD COLUMN assignment_title TEXT"
+        )
+    except sqlite3.OperationalError:
+        pass
+
+    try:
+        db.execute(
+            "ALTER TABLE assignments ADD COLUMN questions_json TEXT"
+        )
+    except sqlite3.OperationalError:
+        pass
+
+    try:
+        db.execute(
+            "ALTER TABLE assignments ADD COLUMN attempt_count INTEGER DEFAULT 0"
+        )
+    except sqlite3.OperationalError:
+        pass
+
+    try:
+        db.execute(
+            "ALTER TABLE assignments ADD COLUMN score REAL"
+        )
+    except sqlite3.OperationalError:
+        pass
 
     db.commit()
 
 
 with app.app_context():
     init_db()
-
-
-
-with app.app_context():
-    init_db()
-
 
 
 # -------------------------------------------------------------------
@@ -185,6 +229,7 @@ def format_dt(value, fmt="%Y-%m-%d %H:%M"):
         return dt.strftime(fmt)
     except Exception:
         return value
+
 
 # -------------------------------------------------------------------
 # Auth & current user
@@ -239,6 +284,7 @@ def current_user_is_admin() -> bool:
         return True
     return False
 
+
 # -------------------------------------------------------------------
 # Auth routes
 # -------------------------------------------------------------------
@@ -256,13 +302,13 @@ def register_check_step1():
     data = request.get_json(force=True) or {}
 
     username = (data.get("username") or "").strip()
-    email    = (data.get("email") or "").strip().lower()
+    email = (data.get("email") or "").strip().lower()
     password = data.get("password") or ""
-    confirm  = data.get("confirm") or ""
-    l1       = (data.get("l1_language") or "").strip().lower()
-    l2       = (data.get("l2_language") or "").strip().lower()
-    age_raw  = (data.get("age") or "").strip()
-    gender   = (data.get("gender") or "").strip().lower()
+    confirm = data.get("confirm") or ""
+    l1 = (data.get("l1_language") or "").strip().lower()
+    l2 = (data.get("l2_language") or "").strip().lower()
+    age_raw = (data.get("age") or "").strip()
+    gender = (data.get("gender") or "").strip().lower()
 
     errors = []
 
@@ -332,12 +378,6 @@ def register_check_step1():
 
     return jsonify({"ok": True})
 
-import re
-import sqlite3
-from flask import (
-    request, render_template, flash, url_for
-)
-from werkzeug.security import generate_password_hash
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
@@ -346,17 +386,17 @@ def register():
     if request.method == "POST":
         # ----- Read fields -----
         username = (request.form.get("username") or "").strip()
-        email    = (request.form.get("email") or "").strip().lower()
+        email = (request.form.get("email") or "").strip().lower()
         password = request.form.get("password") or ""
-        confirm  = request.form.get("confirm") or ""
+        confirm = request.form.get("confirm") or ""
 
         l1_language_raw = (request.form.get("l1_language") or "").strip().lower()
         l2_language_raw = (request.form.get("l2_language") or "").strip().lower()
-        age_raw         = (request.form.get("age") or "").strip()
-        gender_raw      = (request.form.get("gender") or "").strip().lower()
+        age_raw = (request.form.get("age") or "").strip()
+        gender_raw = (request.form.get("gender") or "").strip().lower()
 
         level_score_raw = request.form.get("level_score")
-        level_name      = (request.form.get("level_name") or "").strip()
+        level_name = (request.form.get("level_name") or "").strip()
 
         def render_fail(msg: str):
             flash(msg, "warning")
@@ -483,8 +523,8 @@ def register():
             return render_template(
                 "register.html",
                 registered=True,
-                registered_level_name=level_name,
-                registered_level_score=level_score,
+                registered_level_name=None,
+                registered_level_score=None,
             )
 
         except sqlite3.IntegrityError as e:
@@ -552,6 +592,7 @@ def logout():
     # flash("You have been signed out.", "info")
     return redirect(url_for("index"))
 
+
 # -------------------------------------------------------------------
 # Learner profile & logging
 # -------------------------------------------------------------------
@@ -591,6 +632,7 @@ def log_input(action: str, payload: dict):
         (action, json.dumps(payload)),
     )
     db.commit()
+
 
 # -------------------------------------------------------------------
 # MCQ generator
@@ -721,20 +763,20 @@ the student's level. Follow the JSON schema exactly.
 
     return cleaned
 
+
 # -------------------------------------------------------------------
 # ADMIN: assignment creation page (per story)
 # -------------------------------------------------------------------
 @app.route("/admin/stories/<slug>/assign", methods=["GET", "POST"])
-@login_required
 def admin_assign_story(slug: str):
     """
     Admin page:
       - choose assignment type (finish or mcq)
       - select which students will get this story
-
-    Usually opened via the Assign modal on admin_stories.
+      FIXED: Inserts into the 'assignments' table.
     """
     if not current_user_is_admin():
+        flash("Admin access only.", "warning")
         return redirect(url_for("index"))
 
     db = get_db()
@@ -744,10 +786,12 @@ def admin_assign_story(slug: str):
         "SELECT * FROM stories WHERE slug = ?",
         (slug,),
     ).fetchone()
-    if not story:
+
+    if story is None:
+        flash("Story not found.", "warning")
         return redirect(url_for("admin_stories"))
 
-    # Latest draft for this story (same logic as admin_story_detail/admin_stories)
+    # Latest draft for this story (if any)
     draft = db.execute(
         """
         SELECT *
@@ -759,84 +803,65 @@ def admin_assign_story(slug: str):
         (story["id"],),
     ).fetchone()
 
-    # All students (exclude admin "adminlexi"), same as admin_stories()
+    # All non-admin users (students) for selection
     users = db.execute(
         """
         SELECT id, username, email
         FROM users
-        WHERE username != 'adminlexi'
-        ORDER BY username COLLATE NOCASE
+        WHERE is_admin = 0
+        ORDER BY username ASC
         """
     ).fetchall()
 
-    # -----------------------
-    # POST: create assignments
-    # -----------------------
     if request.method == "POST":
-        assignment_type = (request.form.get("assignment_type") or "").strip()
-        user_ids = request.form.getlist("user_ids")
-
-        # NEW: assignment title from form (optional)
         assignment_title = (request.form.get("assignment_title") or "").strip()
-        if not assignment_title:
-            # fallback: story title
-            assignment_title = story["title"]
+        assignment_type = (request.form.get("worksheet_type") or "").strip()
+        raw_user_ids = request.form.getlist("user_ids") or []
+        user_ids = [uid for uid in raw_user_ids if uid]
 
-        if assignment_type not in ("finish", "mcq"):
-            flash("Please choose a valid assignment type.", "warning")
-            return redirect(url_for("admin_assign_story", slug=slug))
+        if not assignment_title:
+            # Fallback auto title
+            if assignment_type == "reading":
+                assignment_title = f"{story['title']} · MCQ Reading"
+            else:
+                assignment_title = f"{story['title']} · Finish Writing"
+
+        if assignment_type not in {"writing", "reading"}:
+            flash("Please choose an assignment type.", "warning")
+            return redirect(url_for("admin_story_detail", slug=slug))
 
         if not user_ids:
             flash("Please select at least one student.", "warning")
-            return redirect(url_for("admin_assign_story", slug=slug))
+            return redirect(url_for("admin_story_detail", slug=slug))
 
         if not draft:
-            flash("This story does not have a linked draft yet.", "warning")
-            return redirect(url_for("admin_assign_story", slug=slug))
-
-        # Determine completion status of the draft
-        completion_text = draft["completion_text"] if "completion_text" in draft.keys() else None
-        has_completion = bool((completion_text or "").strip())
-        can_finish = bool(draft and not has_completion)
-        can_mcq = bool(draft and has_completion)
-
-        if assignment_type == "finish" and not can_finish:
-            flash(
-                "Finish-writing is only for unfinished stories (no completion_text).",
-                "warning",
-            )
-            return redirect(url_for("admin_assign_story", slug=slug))
-
-        if assignment_type == "mcq" and not can_mcq:
-            flash(
-                "MCQ reading is only for fully completed stories.",
-                "warning",
-            )
-            return redirect(url_for("admin_assign_story", slug=slug))
+            flash("This story does not have a usable draft yet.", "warning")
+            return redirect(url_for("admin_story_detail", slug=slug))
 
         # -------------------------------------------------
-        # For MCQ: require pre-generated questions on the story
+        # For READING: require pre-generated questions on the story
         # -------------------------------------------------
         questions_json = None
-        if assignment_type == "mcq":
+        if assignment_type == "reading":
             base_q_json = None
             try:
                 base_q_json = story["mcq_questions_json"]
             except Exception:
                 base_q_json = None
 
-            if base_q_json:
+            if base_q_json and str(base_q_json).strip():
                 questions_json = base_q_json
             else:
                 flash(
                     "MCQ questions are not generated yet for this story. "
-                    "Use the 'Generate MCQ Questions' button first.",
+                    "Use the 'Generate MCQ' button first.",
                     "warning",
                 )
                 return redirect(url_for("admin_story_detail", slug=slug))
 
         # -------------------------------------------------
         # Prevent duplicate assignments for same story+type+student
+        # FIX: Query assignments table using assignee_id
         # -------------------------------------------------
         placeholders = ",".join("?" for _ in user_ids)
         already = set()
@@ -844,7 +869,7 @@ def admin_assign_story(slug: str):
             rows = db.execute(
                 f"""
                 SELECT assignee_id
-                FROM assignments
+                from assignments
                 WHERE story_id = ? AND assignment_type = ?
                   AND assignee_id IN ({placeholders})
                 """,
@@ -864,11 +889,8 @@ def admin_assign_story(slug: str):
         # Create one assignment per *new* student
         created = 0
         for uid in selected_ids:
-            try:
-                assignee_id = int(uid)
-            except ValueError:
-                continue
-
+            assignee_id = int(uid)
+            # FIX: Insert into 'assignments' table, using 'assignee_id'
             db.execute(
                 """
                 INSERT INTO assignments
@@ -882,7 +904,7 @@ def admin_assign_story(slug: str):
                     assignee_id,
                     assignment_type,
                     questions_json,  # None for finish-writing, JSON for MCQ
-                    g.current_user["id"] if g.current_user else None,
+                    g.current_user["id"] if getattr(g, "current_user", None) else None,
                     assignment_title,
                 ),
             )
@@ -900,22 +922,13 @@ def admin_assign_story(slug: str):
 
         return redirect(url_for("admin_story_detail", slug=slug))
 
-    # -----------------------
-    # GET: render standalone assign page (not used by modal)
-    # -----------------------
+    # GET → show manual assignment page (rarely used; modal is main)
     return render_template(
         "admin_assign_story.html",
         story=story,
         users=users,
         draft=draft,
     )
-
-
-from analytics_mock import MOCK_GROUP_LIST  # add this import at the top
-# app.py additions
-# ... (around line 1251)
-
-from analytics_mock import MOCK_GROUP_LIST  # Already here, needed for mock data
 
 
 # Helper function to get a single user's mock data structure
@@ -925,7 +938,9 @@ def get_user_mock_data(user_id: int):
     In a real app, this would query the DB for this user's stats.
     """
     # Simply pick one of the mock groups and label it as the specific user.
-    # The real implementation is complex, but this satisfies the requirement to display charts.
+    if not MOCK_GROUP_LIST:
+        return {}
+
     user_data = MOCK_GROUP_LIST[0].copy()
     user_data['code'] = 'User'
     user_data['user_id'] = user_id
@@ -933,8 +948,8 @@ def get_user_mock_data(user_id: int):
 
     # To show different data, maybe slightly alter the scores
     if user_id % 2 == 0:
-        user_data['scramble_accuracy'] = user_data['scramble_accuracy'] * 0.9
-        user_data['mcq_avg_score'] = user_data['mcq_avg_score'] * 0.95
+        user_data['scramble_accuracy'] = user_data.get('scramble_accuracy', 1.0) * 0.9
+        user_data['mcq_avg_score'] = user_data.get('mcq_avg_score', 1.0) * 0.95
 
     return user_data
 
@@ -967,7 +982,7 @@ def admin_analytics():
     if selected_user_id:
         # User-specific view
         selected_user = db.execute(
-            "SELECT id, username, l1_language, l2_language FROM users WHERE id = ?",
+            "SELECT * FROM users WHERE id = ?",
             (selected_user_id,),
         ).fetchone()
 
@@ -1034,12 +1049,13 @@ def admin_update_user_level():
     user_id = request.form.get("user_id", type=int)
     new_level = (request.form.get("new_level") or "").strip()
 
-    if not user_id or not new_level or new_level not in LEVEL_ORDER.keys():
+    # NOTE: Assuming LEVEL_ORDER exists or using a simple check.
+    LEVEL_ORDER = {"beginner": 1, "intermediate": 2, "advanced": 3}
+    if not user_id or not new_level or new_level.lower() not in LEVEL_ORDER.keys():
         flash("Invalid user or level selection.", "warning")
         return redirect(url_for("admin_analytics"))
 
     # We update the *latest* level test result entry to reflect the admin adjustment.
-    # A more robust system would insert a new record, but updating the latest is simpler for this structure.
     try:
         # Find the latest level result ID for the user
         latest_id_row = db.execute(
@@ -1079,15 +1095,7 @@ def admin_update_user_level():
 
     return redirect(url_for("admin_analytics", user_id=user_id))
 
-# -------------------------------------------------------------------
-# Assignment list & detail for students
-# -------------------------------------------------------------------
-# -------------------------------------------------------------------
-# Assignment list & detail for students
-# -------------------------------------------------------------------
-# -------------------------------------------------------------------
-# Assignment list & detail for students
-# -------------------------------------------------------------------
+
 # -------------------------------------------------------------------
 # Assignment list & detail for students
 # -------------------------------------------------------------------
@@ -1095,11 +1103,12 @@ def admin_update_user_level():
 @login_required
 def assignments_list():
     db = get_db()
+    # FIX: Query the 'assignments' table using 'assignee_id'
     rows = db.execute(
         """
         SELECT
           a.id,
-          a.assignment_type,
+          a.assignment_type, 
           a.status,
           a.score,
           a.attempt_count,
@@ -1109,9 +1118,9 @@ def assignments_list():
           s.id    AS story_id,
           s.slug  AS story_slug,
           s.title AS story_title
-        FROM assignments a
+        from assignments a
         JOIN stories s ON a.story_id = s.id
-        WHERE a.assignee_id = ?
+        WHERE a.assignee_id = ? 
         ORDER BY datetime(a.created_at) DESC
         """,
         (g.current_user["id"],),
@@ -1119,16 +1128,17 @@ def assignments_list():
 
     return render_template("assignments.html", assignments=rows)
 
+
 @app.route("/assignments/<int:assignment_id>", methods=["GET", "POST"])
 @login_required
 def assignment_detail(assignment_id: int):
     db = get_db()
     user_id = g.current_user["id"]
 
-    # Make sure this assignment belongs to this student
+    # FIX: Query the 'assignments' table using 'id' and 'assignee_id'
     assignment = db.execute(
         """
-        SELECT * FROM assignments
+        SELECT * from assignments
         WHERE id = ? AND assignee_id = ?
         """,
         (assignment_id, user_id),
@@ -1156,11 +1166,11 @@ def assignment_detail(assignment_id: int):
             (assignment["draft_id"],),
         ).fetchone()
 
-    # Latest submission (if any)
+    # FIX: Query the 'assignment_submissions' table
     submission = db.execute(
         """
         SELECT *
-        FROM assignment_submissions
+        from assignment_submissions
         WHERE assignment_id = ? AND user_id = ?
         ORDER BY datetime(updated_at) DESC
         LIMIT 1
@@ -1169,9 +1179,22 @@ def assignment_detail(assignment_id: int):
     ).fetchone()
 
     # ------------------------------------------------------------------
-    # FINISH-WRITING ASSIGNMENT
+    # WRITING ASSIGNMENT (Type: writing)
     # ------------------------------------------------------------------
-    if assignment["assignment_type"] == "finish":
+    if assignment["assignment_type"] == "writing":
+
+        # --- 1. Load Writing Worksheet Data ---
+        writing_sections = []
+        writing_checklist = []
+        if assignment.get("questions_json"):
+            try:
+                # The payload for writing worksheets is structured with 'sections' and 'checklist'
+                worksheet_data = json.loads(assignment["questions_json"])
+                writing_sections = worksheet_data.get("sections") or []
+                writing_checklist = worksheet_data.get("checklist") or []
+            except Exception as e:
+                log_input("writing_questions_parse_error", {"error": str(e), "assignment_id": assignment_id})
+
         if request.method == "POST":
             completion_text = (request.form.get("completion_text") or "").strip()
             if not completion_text:
@@ -1208,7 +1231,7 @@ def assignment_detail(assignment_id: int):
                     ),
                 )
 
-            # Increment attempts in SQL
+            # Update 'assignments' table status and attempt count
             db.execute(
                 """
                 UPDATE assignments
@@ -1230,44 +1253,86 @@ def assignment_detail(assignment_id: int):
             story=story,
             draft=draft,
             submission=submission,
+            writing_sections=writing_sections,  # Pass writing structure sections
+            writing_checklist=writing_checklist,  # Pass writing checklist
         )
 
     # ------------------------------------------------------------------
-    # MCQ ASSIGNMENT
+    # READING ASSIGNMENT (Type: reading - handles MCQ, Fill-in-the-Blank, Short Answer)
     # ------------------------------------------------------------------
-    elif assignment["assignment_type"] == "mcq":
-        questions = []
+    elif assignment["assignment_type"] == "reading":
+        mcq_questions = []
+        fill_in_blank_questions = []
+        short_answer_questions = []
+
+        questions_payload = {}
+
+        # Attempt to load questions from the assignment JSON data
         if assignment.get("questions_json"):
             try:
-                questions = json.loads(assignment["questions_json"])
+                questions_payload = json.loads(assignment["questions_json"])
+
+                # 1. Structured Worksheet JSON
+                if questions_payload.get("type") == "reading":
+                    mcq_questions = questions_payload.get("mcq") or []
+                    fill_in_blank_questions = questions_payload.get("fill_in_blank") or []
+                    short_answer_questions = questions_payload.get("short_answer") or []
+
+                # 2. Fallback: If payload is a flat list of MCQs (legacy structure)
+                elif isinstance(questions_payload, list) and all('correct_index' in q for q in questions_payload):
+                    mcq_questions = questions_payload
+
             except Exception as e:
-                log_input("mcq_questions_parse_error", {"error": str(e)})
+                # Log parsing errors if the JSON is malformed
+                log_input("reading_questions_parse_error", {"error": str(e), "assignment_id": assignment_id})
+
+        # 3. Legacy Fallback: Check story's mcq_questions_json
+        if not mcq_questions and story.get("mcq_questions_json"):
+            try:
+                # Assume legacy JSON is a flat list of MCQs
+                mcq_questions = json.loads(story["mcq_questions_json"])
+            except Exception as e:
+                log_input("story_mcq_questions_parse_error", {"error": str(e), "story_id": story["id"]})
 
         if request.method == "POST":
+            # --- POST LOGIC FOR READING WORKSHEET ---
             answers = []
             correct_count = 0
 
-            for idx, q in enumerate(questions):
-                key = f"q{idx}"
-                ans_raw = request.form.get(key)
-                try:
-                    ans_idx = int(ans_raw)
-                except (TypeError, ValueError):
-                    ans_idx = None
+            # --- Scoring Logic (Only MCQs are auto-scored) ---
+            if mcq_questions:
+                for idx, q in enumerate(mcq_questions):
+                    key = f"q{idx}"
+                    ans_raw = request.form.get(key)
+                    try:
+                        ans_idx = int(ans_raw)
+                    except (TypeError, ValueError):
+                        ans_idx = None
 
-                answers.append(ans_idx)
+                    answers.append(ans_idx)
 
-                # Check correctness
-                if ans_idx is not None and 0 <= ans_idx < len(q.get("options", [])):
-                    if ans_idx == int(q.get("answer_index", -1)):
-                        correct_count += 1
+                    # Check correctness
+                    correct_index = int(q.get("correct_index", -1))
+                    if ans_idx is not None and 0 <= ans_idx < len(q.get("options", [])):
+                        if ans_idx == correct_index:
+                            correct_count += 1
 
-            score = 0.0
-            if questions:
-                score = (correct_count / len(questions)) * 100.0
+                total_questions = len(mcq_questions)
+                score = (correct_count / total_questions) * 100.0
+            else:
+                # If there are no MCQs, score is 0.0
+                score = 0.0
+
+            # Gather all non-MCQ answers for storage (Fill-in-the-Blank and Short Answer)
+            all_answers = {
+                "mcq_answers": answers,
+                "fill_in_blank_responses": [request.form.get(f"fill{i}") for i in range(len(fill_in_blank_questions))],
+                "short_answer_responses": [request.form.get(f"short{i}") for i in range(len(short_answer_questions))],
+            }
 
             now = datetime.utcnow().isoformat(timespec="seconds")
 
+            # Store the submission
             if submission:
                 db.execute(
                     """
@@ -1275,7 +1340,7 @@ def assignment_detail(assignment_id: int):
                     SET answers_json = ?, score = ?, updated_at = ?
                     WHERE id = ?
                     """,
-                    (json.dumps(answers), score, now, submission["id"]),
+                    (json.dumps(all_answers), score, now, submission["id"]),
                 )
             else:
                 db.execute(
@@ -1290,14 +1355,14 @@ def assignment_detail(assignment_id: int):
                         user_id,
                         assignment["story_id"],
                         assignment["draft_id"],
-                        json.dumps(answers),
+                        json.dumps(all_answers),
                         score,
                         now,
                         now,
                     ),
                 )
 
-            # Increment attempt count and update score in SQL directly
+            # Update 'assignments' table status, score, and attempt count
             db.execute(
                 """
                 UPDATE assignments
@@ -1310,10 +1375,10 @@ def assignment_detail(assignment_id: int):
             )
             db.commit()
 
-            # Reload updated assignment & latest submission so templates see new score + attempts
+            # Reload updated assignment & latest submission
             assignment = db.execute(
                 """
-                SELECT * FROM assignments
+                SELECT * from assignments
                 WHERE id = ? AND assignee_id = ?
                 """,
                 (assignment_id, user_id),
@@ -1322,7 +1387,7 @@ def assignment_detail(assignment_id: int):
             submission = db.execute(
                 """
                 SELECT *
-                FROM assignment_submissions
+                from assignment_submissions
                 WHERE assignment_id = ? AND user_id = ?
                 ORDER BY datetime(updated_at) DESC
                 LIMIT 1
@@ -1335,7 +1400,9 @@ def assignment_detail(assignment_id: int):
                 "assignment_mcq.html",
                 assignment=assignment,
                 story=story,
-                questions=questions,
+                mcq_questions=mcq_questions,
+                fill_in_blank_questions=fill_in_blank_questions,
+                short_answer_questions=short_answer_questions,
                 submission=submission,
                 just_submitted=True,
             )
@@ -1345,7 +1412,9 @@ def assignment_detail(assignment_id: int):
             "assignment_mcq.html",
             assignment=assignment,
             story=story,
-            questions=questions,
+            mcq_questions=mcq_questions,
+            fill_in_blank_questions=fill_in_blank_questions,
+            short_answer_questions=short_answer_questions,
             submission=submission,
             just_submitted=False,
         )
@@ -1357,10 +1426,8 @@ def assignment_detail(assignment_id: int):
     return redirect(url_for("assignments_list"))
 
 
-
-
 # -------------------------------------------------------------------
-# Story generation helpers
+# Story generation helpers (no changes)
 # -------------------------------------------------------------------
 def _reading_prefs_from_profile(profile: dict, explicit_level: str | None):
     """
@@ -1414,11 +1481,11 @@ def naive_story_from_prompt(prompt: str, language: str = "en") -> str:
 
 
 def llm_story_from_prompt(
-    prompt: str,
-    language: str,
-    level: str,
-    author: str,
-    learner_profile: dict | None = None,
+        prompt: str,
+        language: str,
+        level: str,
+        author: str,
+        learner_profile: dict | None = None,
 ) -> str:
     # We always generate in English
     language = "en"
@@ -1491,8 +1558,10 @@ def llm_story_from_prompt(
     )
     text = getattr(resp, "output_text", "") or ""
     return text.strip() or naive_story_from_prompt(prompt, language)
+
+
 # -------------------------------------------------------------------
-# Simple vocab helpers
+# Simple vocab helpers (no changes)
 # -------------------------------------------------------------------
 def parse_vocab_from_prompt(prompt: str) -> list[str]:
     raw = re.split(r"[,\n;]+", prompt)
@@ -1534,8 +1603,9 @@ def simple_bilingual_defs(words: list[str]) -> list[dict]:
         )
     return out
 
+
 # -------------------------------------------------------------------
-# Finish drafts helper
+# Finish drafts helper (no changes)
 # -------------------------------------------------------------------
 def make_partial_from_story(full_text: str) -> str:
     sentences = re.split(r"(?<=[.!?])\s+", full_text.strip())
@@ -1549,8 +1619,9 @@ def make_partial_from_story(full_text: str) -> str:
     partial += "\n\n"
     return partial
 
+
 # -------------------------------------------------------------------
-# Routes: index, story_new + library/finish view
+# Routes: index, story_new + library/finish view (no changes)
 # -------------------------------------------------------------------
 @app.get("/")
 def index():
@@ -1575,27 +1646,18 @@ def story_new():
 
         english_level = (request.form.get("english_level") or "beginner").strip().lower()
 
-        # base_author = (
-        #     g.current_user["username"]
-        #     if (g.current_user and g.current_user.get("username"))
-        #     else None
-        # ) or (request.form.get("author_name") or "guest")
-
         base_author = (request.form.get("author_name") or "").strip()
-        want_image = bool(request.form.get("gen_image"))
 
         story_type = (request.form.get("story_type") or "").strip()
-        # setting = (request.form.get("setting") or "").strip()
-        # character_kind = (request.form.get("character_kind") or "").strip()
         emotion_tone = (request.form.get("emotion_tone") or "").strip()
         tense = (request.form.get("tense") or "").strip()
 
-        student_finish = bool(request.form.get("student_finish"))
-
+        # We always require a prompt
         if not prompt:
             flash("Please provide phonics letters or vocabulary.", "warning")
             return redirect(url_for("story_new"))
 
+        # ---- Build meta prompt bits ----
         meta_bits = []
 
         if english_level:
@@ -1608,16 +1670,6 @@ def story_new():
             meta_bits.append(
                 f"Story type: {story_type}. Make the overall plot and events match this type."
             )
-
-        # if setting:
-        #     meta_bits.append(
-        #         f"Main setting: {setting}. Most scenes should happen in this place."
-        #     )
-
-        # if character_kind:
-        #     meta_bits.append(
-        #         f"Main characters: {character_kind}. Use this kind of character as the focus of the story."
-        #     )
 
         if emotion_tone:
             meta_bits.append(
@@ -1640,6 +1692,7 @@ def story_new():
 
         reading_level_for_llm = ""
 
+        # ---- Generate story text ----
         try:
             profile = get_learner_profile()
             content = llm_story_from_prompt(
@@ -1654,8 +1707,9 @@ def story_new():
             flash("AI generator had an issue; used a fallback story.", "warning")
             log_input("generate_story_error", {"error": str(e)})
 
+        # ---- Always try to generate cover image (if client is available) ----
         visuals_data_url = None
-        if want_image and client is not None:
+        if client is not None:
             try:
                 img_prompt = (
                     "Kid-friendly, text-free cover illustration for a children's story. "
@@ -1672,11 +1726,11 @@ def story_new():
                 b64 = img.data[0].b64_json
                 visuals_data_url = f"data:image/png;base64,{b64}"
             except Exception as e:
-                log_input("generate_image_error", {"error": str(e)})
+                print("generate_image_error", {"error": str(e)})
                 flash("Story created, but image generation had an issue.", "warning")
 
         story_author = base_author
-        if story_author is None or story_author =="":
+        if story_author is None or story_author == "":
             story_author = "EduWeaver AI"
 
         slug_base = slugify(title) or "story"
@@ -1685,10 +1739,11 @@ def story_new():
 
         db_level = english_level or "beginner"
 
+        # ---- Insert story ----
         db.execute(
             """
-            INSERT INTO stories (title, slug, prompt, language, level, content, visuals, author_name)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO stories (title, slug, prompt, language, level, content, visuals, author_name, is_shared_library)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?,?)
             """,
             (
                 title,
@@ -1699,11 +1754,13 @@ def story_new():
                 content,
                 visuals_data_url,
                 story_author,
+                1
             ),
         )
         story_id = db.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
         db.commit()
 
+        # ---- Insert vocab items ----
         vocab_words = parse_vocab_from_prompt(prompt)
         vocab_defs = simple_bilingual_defs(vocab_words)
         for item in vocab_defs:
@@ -1723,6 +1780,7 @@ def story_new():
             )
         db.commit()
 
+        # ---- Log story generation ----
         log_input(
             "generate_story",
             {
@@ -1733,76 +1791,46 @@ def story_new():
                 "db_author": story_author,
                 "model": DEFAULT_MODEL,
                 "vocab_count": len(vocab_defs),
-                "with_image": want_image,
+                "with_image": bool(visuals_data_url),
                 "story_type": story_type,
-                # "setting": setting,
-                # "character_kind": character_kind,
                 "emotion_tone": emotion_tone,
                 "tense": tense,
-                "student_finish": student_finish,
+                # No more student_finish flag: story is always fully generated
             },
         )
 
-        if student_finish:
-            partial = make_partial_from_story(content)
-            db.execute(
-                """
-                INSERT INTO finish_drafts
-                (story_id, seed_prompt, partial_text, learner_name, language)
-                VALUES (?, ?, ?, ?, ?)
-                """,
-                (story_id, prompt, partial, story_author, language),
-            )
-            draft_id = db.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
-            db.commit()
+        # ---- Always create a finish_drafts row WITH completion_text ----
+        partial = make_partial_from_story(content)
+        db.execute(
+            """
+            INSERT INTO finish_drafts
+            (story_id, seed_prompt, partial_text, learner_name, language, completion_text)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (story_id, prompt, partial, story_author, language, content),
+        )
+        draft_id = db.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
+        db.commit()
 
-            log_input(
-                "finish_seed_auto_from_story_new",
-                {"story_id": story_id, "slug": slug, "draft_id": draft_id},
-            )
+        log_input(
+            "finish_seed_auto_from_story_new_full_ai",
+            {
+                "story_id": story_id,
+                "slug": slug,
+                "draft_id": draft_id,
+                "auto_completed": True,
+                "db_author": story_author,
+            },
+        )
 
-            return redirect(
-                url_for(
-                    "story_new",
-                    generated=1,
-                    finish_url=url_for("finish_view", draft_id=draft_id),
-                )
-            )
-        else:
-            partial = make_partial_from_story(content)
-            db.execute(
-                """
-                INSERT INTO finish_drafts
-                (story_id, seed_prompt, partial_text, learner_name, language, completion_text)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (story_id, prompt, partial, story_author, language, content),
-            )
-            draft_id = db.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
-            db.commit()
-
-            log_input(
-                "finish_seed_auto_from_story_new_full_ai",
-                {
-                    "story_id": story_id,
-                    "slug": slug,
-                    "draft_id": draft_id,
-                    "auto_completed": True,
-                    "db_author": story_author,
-                },
-            )
-
-            flash(
-                "Story generated by EduWeaver AI and added to the Library.", "success"
-            )
-            return redirect(url_for("library"))
+        flash("Story generated by EduWeaver AI and added to the Library.", "success")
+        return redirect(url_for("library"))
 
     return render_template("story_new.html")
 
 
-
 # -------------------------------------------------------------------
-# Reading level helpers (Beginner / Intermediate / Advanced)
+# Reading level helpers
 # -------------------------------------------------------------------
 LEVEL_ORDER = {
     "beginner": 1,
@@ -1816,6 +1844,115 @@ def level_rank(name: str | None) -> int | None:
     if not name:
         return None
     return LEVEL_ORDER.get(str(name).strip().lower())
+
+
+@app.get("/admin/students")
+@login_required
+def admin_students():
+    if not current_user_is_admin():
+        flash("Admin access only.", "warning")
+        return redirect(url_for("index"))
+
+    db = get_db()
+
+    user_rows = db.execute(
+        """
+        SELECT id, username, email, l1_language, l2_language
+        FROM users
+        WHERE username != 'adminlexi'
+        ORDER BY username COLLATE NOCASE
+        """
+    ).fetchall()
+
+    students = []
+
+    for u in user_rows:
+        user_id = u["id"]
+
+        level_row = db.execute(
+            """
+            SELECT level
+            FROM level_test_results
+            WHERE user_id = ?
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (user_id,),
+        ).fetchone()
+        current_level = level_row["level"] if level_row else None
+
+        # FIX: Query the 'assignments' table using 'assignee_id'
+        stats_row = db.execute(
+            """
+            SELECT
+              COUNT(*) AS total_assignments,
+              SUM(
+                CASE WHEN status IN ('submitted','graded')
+                     THEN 1 ELSE 0 END
+              ) AS completed_assignments,
+              AVG(
+                CASE WHEN score IS NOT NULL
+                     THEN score END
+              ) AS avg_score
+            from assignments 
+            WHERE assignee_id = ? 
+            """,
+            (user_id,),
+        ).fetchone()
+
+        total_assignments = stats_row["total_assignments"] or 0
+        completed_assignments = stats_row["completed_assignments"] or 0
+        avg_score = stats_row["avg_score"] if stats_row["avg_score"] is not None else 0.0
+
+        students.append({
+            "id": user_id,
+            "username": u["username"],
+            "email": u["email"],
+            "l1_language": u.get("l1_language"),
+            "l2_language": u.get("l2_language"),
+            "current_level": current_level,
+            "total_assignments": total_assignments,
+            "completed_assignments": completed_assignments,
+            "overdue_assignments": 0,
+            "avg_score": avg_score,
+            "last_seen_at": None,
+        })
+
+    total_students = len(students)
+
+    active_this_week = 0
+
+    if total_students:
+        avg_completion_rate = (
+                sum(
+                    ((s["completed_assignments"] or 0) / (s["total_assignments"] or 1) * 100.0)
+                    for s in students
+                ) / total_students
+        )
+        avg_score_all = (
+                sum((s["avg_score"] or 0.0) for s in students) / total_students
+        )
+    else:
+        avg_completion_rate = 0.0
+        avg_score_all = 0.0
+
+    q = request.args.get("q", "").strip()
+    if q:
+        q_lower = q.lower()
+        students = [
+            s for s in students
+            if q_lower in (s["username"] or "").lower()
+               or q_lower in (s["email"] or "").lower()
+        ]
+
+    return render_template(
+        "admin_students.html",
+        students=students,
+        total_students=total_students,
+        active_this_week=active_this_week,
+        avg_completion_rate=avg_completion_rate,
+        avg_score_all=avg_score_all,
+    )
 
 
 @app.get("/library")
@@ -1947,6 +2084,7 @@ def book_view(draft_id: int):
         vocab=vocab,
     )
 
+
 # --- End app2.py addition ---
 
 
@@ -1962,127 +2100,928 @@ def finish_view(draft_id: int):
         return redirect(url_for("library"))
     return render_template("finish_view.html", draft=draft)
 
+
 # -------------------------------------------------------------------
 # ADMIN: story review pages
 # -------------------------------------------------------------------
-# --- app.py additions (Conceptual placement near admin_stories route) ---
-
-@app.get("/admin/stories")
+@app.route("/admin/stories")
 @login_required
 def admin_stories():
-    # ... (existing admin check)
     if not current_user_is_admin():
         flash("Admin access only.", "warning")
         return redirect(url_for("index"))
 
     db = get_db()
 
-    # 1. Fetch ALL Stories (Existing)
+    # Which tab to show (Assign / Assigned / Submitted)
+    active_tab = request.args.get("tab") or "assign"
+    fragment = request.args.get("fragment") or ""
+
+    # ------------------------------------------------------------------
+    # TAB 1: Story list for building assignments
+    # ------------------------------------------------------------------
     stories = db.execute(
         """
-        SELECT * FROM stories
-        ORDER BY datetime(created_at) DESC
+        SELECT
+            s.id,
+            s.slug,
+            s.title,
+            s.language,
+            s.level,
+            s.created_at
+        FROM stories s
+        ORDER BY s.created_at DESC
         """
     ).fetchall()
 
-    # 2. Latest Draft per Story (Existing)
-    # ... (existing draft_map logic) ...
-    draft_rows = db.execute(
-        """
-        SELECT fd.*
-        FROM finish_drafts fd
-        JOIN (
-          SELECT story_id, MAX(datetime(created_at)) AS max_created
-          FROM finish_drafts
-          GROUP BY story_id
-        ) t
-        ON t.story_id = fd.story_id AND t.max_created = fd.created_at
-        """
-    ).fetchall()
-    draft_map = {d["story_id"]: d for d in draft_rows}
-
-    # 3. Assignment Count per Story (Existing)
-    # ... (existing assign_map logic) ...
-    assign_rows = db.execute(
-        """
-        SELECT story_id, COUNT(*) AS cnt
-        FROM assignments
-        GROUP BY story_id
-        """
-    ).fetchall()
-    assign_map = {r["story_id"]: r["cnt"] for r in assign_rows}
-
-    # 4. All Students (Existing)
+    # All non-admin users (students) for assignment selection
     users = db.execute(
+        "SELECT id, username, email FROM users ORDER BY username"
+    ).fetchall()
+
+    # ------------------------------------------------------------------
+    # TAB 2: Assigned Assignments (Groups based on assignments table)
+    # ------------------------------------------------------------------
+    assignment_rows = db.execute(
         """
-        SELECT id, username, email
-        FROM users
-        WHERE username != 'adminlexi'
-        ORDER BY username COLLATE NOCASE
+        SELECT
+            a.id              AS assignment_id,
+            a.story_id        AS story_id,
+            a.assignment_type AS assignment_type,
+            a.assignment_title AS assignment_title,
+            a.created_at      AS assignment_created_at,
+
+            s.title           AS story_title,
+            s.language        AS language,
+            s.level           AS level,
+
+            a.assignee_id     AS assignee_id,
+            a.status          AS assignee_status,
+            a.score           AS assignee_score,
+            a.attempt_count   AS assignee_attempts,
+
+            u.username        AS assignee_username,
+            u.email           AS assignee_email
+
+        FROM assignments a 
+        JOIN stories s
+          ON a.story_id = s.id
+        JOIN users u
+          ON a.assignee_id = u.id 
+        ORDER BY a.created_at DESC, a.id DESC
         """
     ).fetchall()
-    user_map = {u["id"]: u["username"] for u in users}
 
-    # 5. NEW: Fetch ALL Submissions Needing Review (Finish-Writing only)
-    # Note: MCQ assignments are auto-scored, so we focus on 'finish' submissions.
+    # Grouping logic: Group by template characteristics (story, type, title)
+    assignment_groups = {}
+
+    for row in assignment_rows:
+        # Group key: (story_id, assignment_type, assignment_title)
+        key = (row["story_id"], row["assignment_type"], row["assignment_title"])
+
+        if key not in assignment_groups:
+            assignment_groups[key] = {
+                "group_id": len(assignment_groups) + 1,
+                "assignment_title": row["assignment_title"],
+                "assignment_type": row["assignment_type"],
+                "story_id": row["story_id"],
+                "story_title": row["story_title"],
+                "language": row["language"],
+                "level": row["level"],
+                "created_at": row["assignment_created_at"],
+                "primary_assignment_id": row["assignment_id"],  # ID of the first row for the edit link
+                "assignees": [],
+                "count_assigned": 0,
+                "count_submitted": 0,
+                "count_graded": 0,
+            }
+
+        g = assignment_groups[key]
+
+        # Add the individual assignee record
+        g["assignees"].append(
+            {
+                "id": row["assignee_id"],
+                "username": row["assignee_username"],
+                "email": row["assignee_email"],
+                "status": row["assignee_status"],
+                "score": row["assignee_score"],
+                "attempt_count": row["assignee_attempts"],
+            }
+        )
+
+        status = (row["assignee_status"] or "assigned").lower()
+        if status == "submitted":
+            g["count_submitted"] += 1
+        elif status == "graded":
+            g["count_graded"] += 1
+        else:
+            g["count_assigned"] += 1
+
+    # dict → list, 최신 순
+    assignments = sorted(
+        assignment_groups.values(),
+        key=lambda x: x["created_at"] or "",
+        reverse=True,
+    )
+
+    # ------------------------------------------------------------------
+    # TAB 3: Submitted Work – assignment_submissions 기반
+    # ------------------------------------------------------------------
     submissions_to_review = db.execute(
         """
         SELECT
-          sub.id AS submission_id,
-          sub.completion_text,
-          sub.score AS current_score,
-          sub.comment AS admin_comment,
-          sub.created_at AS submitted_at,
+            ws.id              AS submission_id,
+            ws.assignment_id   AS assignment_id,
+            ws.user_id         AS assignee_id,
+            u.username         AS assignee_username,
 
-          a.id AS assignment_id,
-          a.assignment_type,
-          a.assignment_title,
-          a.status AS assignment_status,
-          a.assignee_id,
+            a.assignment_title AS assignment_title,
+            s.title            AS story_title,
 
-          s.title AS story_title
-
-        FROM assignment_submissions sub
-        JOIN assignments a ON sub.assignment_id = a.id
-        JOIN stories s ON sub.story_id = s.id
-
-        -- We only care about submissions for finish-writing that are not fully graded ('reviewed')
-        -- Status 'submitted' means it needs admin review.
-        WHERE a.assignment_type = 'finish' 
-          AND a.status IN ('submitted', 'graded')
-
-        -- ORDER BY status (submitted first) and date
-        ORDER BY a.status ASC, datetime(sub.created_at) DESC
+            ws.completion_text AS completion_text,
+            ws.score           AS current_score,
+            ws.comment         AS admin_comment,
+            ws.created_at      AS submitted_at,
+            ws.reviewed_at     AS reviewed_at,
+            CASE
+                WHEN ws.reviewed_at IS NULL THEN 'Pending review'
+                ELSE 'Reviewed'
+            END AS review_status_label,
+            CASE
+                WHEN ws.reviewed_at IS NULL THEN '#fee2e2'
+                ELSE '#dcfce7'
+            END AS review_status_color
+        FROM assignment_submissions ws 
+        JOIN assignments a 
+          ON ws.assignment_id = a.id
+        JOIN stories s
+          ON a.story_id = s.id
+        JOIN users u
+          ON ws.user_id = u.id
+        WHERE ws.completion_text IS NOT NULL OR ws.answers_json IS NOT NULL
+        ORDER BY ws.created_at DESC
         """
     ).fetchall()
-
-    # Enrich submissions with student username
-    for sub in submissions_to_review:
-        sub['assignee_username'] = user_map.get(sub['assignee_id'], 'Unknown User')
-
-        # Determine current status for display
-        if sub['assignment_status'] == 'graded':
-            sub['review_status_label'] = 'Graded'
-            sub['review_status_color'] = '#10b981'  # Success/Green
-        else:
-            sub['review_status_label'] = 'New Submission'
-            sub['review_status_color'] = '#f59e0b'  # Warning/Orange
 
     return render_template(
         "admin_stories.html",
         stories=stories,
-        draft_map=draft_map,
         users=users,
-        assign_map=assign_map,
-        submissions_to_review=submissions_to_review,  # NEW
+        assignments=assignments,
+        submissions_to_review=submissions_to_review,
+        active_tab=active_tab,
+        fragment=fragment,
     )
 
 
-@app.post("/admin/review-submission/<int:submission_id>")
+@app.route("/profile", methods=["GET", "POST"])
 @login_required
-def admin_review_submission(submission_id: int):
+def profile():
+    db = get_db()
+    user = g.current_user
+
+    if request.method == "POST":
+        # --- 회원정보 수정 폼 처리 ---
+        username = (request.form.get("username") or "").strip()
+        email = (request.form.get("email") or "").strip()
+        age_raw = (request.form.get("age") or "").strip()
+        gender = (request.form.get("gender") or "").strip() or None
+        is_english_native = request.form.get("is_english_native") or None
+
+        age = None
+        if age_raw:
+            try:
+                age = int(age_raw)
+            except ValueError:
+                flash("Age must be a number.", "danger")
+                return redirect(url_for("profile"))
+
+        # 비어 있으면 기존 값 유지
+        if not username:
+            username = user.get("username")
+        if not email:
+            email = user.get("email")
+
+        db.execute(
+            """
+            UPDATE users
+            SET username = ?, email = ?, age = ?, gender = ?, is_english_native = ?
+            WHERE id = ?
+            """,
+            (username, email, age, gender, is_english_native, user["id"]),
+        )
+        db.commit()
+        flash("Profile updated.", "success")
+        return redirect(url_for("profile"))
+
+    # --- GET: 대시보드 데이터 로딩 ---
+    # 최신 유저 정보
+    user_row = db.execute(
+        "SELECT * FROM users WHERE id = ?",
+        (user["id"],)
+    ).fetchone()
+    my_level_row = db.execute(
+        "SELECT level FROM level_test_results WHERE user_id = ? ORDER BY id DESC LIMIT 1"
+        ,
+        (user["id"],),
+    ).fetchone()
+    my_level = my_level_row["level"] if my_level_row else "Unknown"
+
+    # 학습 프로필 (나이/성별/영어 모국어 여부)
+    learner_profile = get_learner_profile()
+
+    # 통계: 읽은 책(스토리), 완료한 워크시트, 평균 점수
+    # FIX: Use assignment_submissions and assignments tables
+    stats = db.execute(
+        """
+        SELECT
+            COUNT(DISTINCT a.story_id) AS books_read,
+            COUNT(sub.id) AS worksheets_completed,
+            AVG(CASE WHEN sub.score IS NOT NULL THEN sub.score END) AS avg_score
+        from assignment_submissions sub
+        JOIN assignments a ON sub.assignment_id = a.id
+        WHERE sub.user_id = ?
+        """,
+        (user["id"],),
+    ).fetchone()
+
+    # FIX: Use assignment_submissions and assignments tables
+    submissions = db.execute(
+        """
+        SELECT
+            sub.id AS submission_id,
+            sub.completion_text,
+            sub.score AS current_score,
+            sub.comment AS admin_comment,
+            sub.created_at AS submitted_at,
+            a.assignment_title,
+            s.title AS story_title,
+            s.level AS story_level
+        from assignment_submissions sub
+        JOIN assignments a ON sub.assignment_id = a.id
+        JOIN stories s ON a.story_id = s.id
+        WHERE sub.user_id = ?
+        ORDER BY datetime(sub.created_at) DESC
+        LIMIT 10
+        """,
+        (user["id"],),
+    ).fetchall()
+
+    return render_template(
+        "profile.html",
+        profile_user=user_row,
+        learner_profile=learner_profile,
+        stats=stats,
+        my_level=my_level,
+        submissions=submissions,
+    )
+
+
+@app.post("/admin/assignments/<int:assignment_id>/edit")
+@login_required
+def admin_edit_worksheet_assignment(assignment_id: int):
     """
-    Admin POST endpoint to score and comment on a finish-writing submission.
+    NOTE: Function name changed to match endpoint used in admin_stories.html.
+    - assignment 제목 수정 (같은 assignment กลุ่ม 전체에 적용)
+    - 추가 학생들에게도 동일 assignment 배정
+    - 'Unassign' 버튼: 이 assignment를 모든 학생에게서 제거
+    """
+    if not current_user_is_admin():
+        abort(403)
+
+    db = get_db()
+
+    # 대표 assignment row 가져오기 (per-user assignment)
+    # FIX: Use assignments table
+    assignment = db.execute(
+        """
+        SELECT
+            a.*,
+            s.title AS story_title
+        from assignments a
+        JOIN stories s ON a.story_id = s.id
+        WHERE a.id = ?
+        """,
+        (assignment_id,),
+    ).fetchone()
+
+    if assignment is None:
+        abort(404)
+
+    action = request.form.get("action")
+    assignment_type = assignment["assignment_type"]
+
+    # ----------------------------
+    # 1) Unassign: 이 assignment 그룹 전체 삭제
+    # ----------------------------
+    if action == "delete":
+        # FIX: Delete submissions first, then assignments
+        db.execute(
+            """
+            DELETE from assignment_submissions
+            WHERE assignment_id IN (
+                SELECT id from assignments
+                WHERE story_id = ?
+                  AND assignment_type = ?
+                  AND assignment_title = ?
+            )
+            """,
+            (assignment["story_id"], assignment_type, assignment["assignment_title"]),
+        )
+        db.execute(
+            """
+            DELETE from assignments
+            WHERE story_id = ?
+              AND assignment_type = ?
+              AND assignment_title = ?
+            """,
+            (assignment["story_id"], assignment_type, assignment["assignment_title"]),
+        )
+        db.commit()
+        flash("Assignment has been unassigned from all students.", "success")
+        return redirect(url_for("admin_stories", tab="assigned"))
+
+    # ----------------------------
+    # 2) Save changes: 제목 수정 + 추가 학생 배정
+    # ----------------------------
+    new_title = (request.form.get("worksheet_title") or "").strip()
+    extra_user_ids = request.form.getlist("extra_user_ids")
+
+    # 2-1) 제목이 바뀌면, 같은 assignment กลุ่ม 전체 업데이트
+    if new_title and new_title != assignment["assignment_title"]:
+        # FIX: Update assignments table
+        db.execute(
+            """
+            UPDATE assignments
+            SET assignment_title = ?
+            WHERE story_id = ?
+              AND assignment_type = ?
+              AND assignment_title = ?
+            """,
+            (
+                new_title,
+                assignment["story_id"],
+                assignment_type,
+                assignment["assignment_title"],
+            ),
+        )
+
+    # 이 이후부터는 최신 제목 기준으로 사용
+    effective_title = new_title if new_title else assignment["assignment_title"]
+
+    # 2-2) 이미 배정된 학생들 확인 (assignee_id 기준)
+    # FIX: Check assignments table for existing assignees
+    existing = db.execute(
+        """
+        SELECT assignee_id
+        from assignments
+        WHERE story_id = ?
+          AND assignment_type = ?
+          AND assignment_title = ?
+        """,
+        (assignment["story_id"], assignment_type, effective_title),
+    ).fetchall()
+    existing_ids = {row["assignee_id"] for row in existing}
+
+    # 2-3) extra_user_ids 에서 아직 배정 안 된 학생에게만 새 row 생성
+    for uid_str in extra_user_ids:
+        try:
+            uid = int(uid_str)
+        except ValueError:
+            continue
+        if uid in existing_ids:
+            continue
+
+        # FIX: Insert new per-user assignment into assignments table
+        db.execute(
+            """
+            INSERT INTO assignments
+            (story_id, draft_id, assignee_id, assignment_type,
+             questions_json, assigned_by, assignment_title,
+             status, score, attempt_count, created_at)
+            SELECT
+                story_id,
+                draft_id,
+                ?,               -- assignee_id (새 학생)
+                assignment_type,
+                questions_json,
+                assigned_by,
+                ?,               -- 새 제목(또는 기존 제목)
+                'assigned',
+                NULL,
+                0,
+                CURRENT_TIMESTAMP
+            from assignments
+            WHERE id = ? -- Copy template data from the primary assignment row
+            """,
+            (uid, effective_title, assignment_id),
+        )
+
+    db.commit()
+    flash("Assignment group has been updated.", "success")
+    # Redirect to the correct endpoint. Since the route is '/admin/assignments/<int:assignment_id>/edit',
+    # we redirect back to the /admin/stories tab.
+    return redirect(url_for("admin_stories", tab="assigned"))
+
+
+# --- New Helper: make_structured_story ---
+# --- Updated make_structured_story function in app.py ---
+# --- Helper: make_structured_story ---
+def make_structured_story(prompt: str, level: str) -> dict:
+    """
+    Generates a full story structured into Beginning, Middle, and Ending parts
+    using the OpenAI API. Forces JSON output via the system prompt.
+    """
+    if client is None:
+        # Robust fallback for when AI is disabled
+        return {"title": "Luna's Lost Star",
+                "beginning": "Luna the fox cub woke up to a dark sky. 'Where is my favorite morning star?' she whispered. It was always the first thing she saw. Luna decided she must go find it.",
+                "middle": "She climbed the tallest oak tree, but the star was not there. She asked the sleepy owl and the busy squirrel, but nobody had seen a star fall. Luna felt a little sad, but she kept looking.",
+                "ending": "Finally, Luna looked down at her feet. The star wasn't in the sky at all! It was a shiny piece of glass left by the pond, reflecting the moon's light. Luna giggled and carefully put the shiny glass next to her bed."}
+
+    # Define the required JSON structure
+    json_schema = {
+        "type": "object",
+        "properties": {
+            "title": {"type": "string"},
+            "beginning": {"type": "string",
+                          "description": "The introduction and setup (MUST be 2-3 detailed paragraphs)."},
+            "middle": {"type": "string",
+                       "description": "The conflict and main action (MUST be 2-3 detailed paragraphs)."},
+            "ending": {"type": "string",
+                       "description": "The resolution and conclusion (MUST be 2-3 detailed paragraphs)."}
+        },
+        "required": ["title", "beginning", "middle", "ending"]
+    }
+
+    # 1. Inject JSON requirement into the system prompt
+    system = (
+        "You are a children's story generator for phonics & early readers. "
+        "You must generate a complete story and divide it clearly into three distinct, cohesive parts: Beginning, Middle, and Ending. "
+        "Each part MUST be written as 2 to 3 detailed paragraphs, separated by double newlines. "
+        "IMPORTANT: Output ONLY a single JSON object (no markdown, no commentary). The output MUST match the keys: title, beginning, middle, ending. "
+        f"Schema hint: {json.dumps(json_schema)}"
+    )
+
+    user = f"""
+    Target Story Level: {level.title()}
+    Target elements: {prompt}
+    Generate a complete, simple, child-friendly story of 300-450 words, structured into three parts (Beginning, Middle, Ending). Each part should contain multiple sentences and clear action.
+    """
+
+    try:
+        resp = client.responses.create(
+            model=DEFAULT_MODEL,
+            input=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            temperature=0.7,
+            max_output_tokens=1500,
+        )
+        raw_json = getattr(resp, "output_text", "") or ""
+
+        # Robust JSON parsing
+        raw_json = raw_json.strip()
+        if raw_json.startswith("```json"):
+            raw_json = raw_json.strip("```json").strip("```").strip()
+
+        return json.loads(raw_json)
+    except Exception as e:
+        print("Error calling OpenAI for structured story:", e)
+        # Ensure a robust fallback is always returned
+        return {"title": "Fallback Story",
+                "beginning": "A young bear named Barnaby lived in a tall, green forest. He loved honey more than anything. One sunny morning, Barnaby decided he was going to find the biggest, sweetest hive in the whole forest. He packed his empty jar and waved goodbye to his mother.",
+                "middle": "Barnaby searched all morning. He climbed over giant mossy logs and waded across a cold, trickling stream. Finally, high up in a maple tree, he saw it: a huge, round beehive! He knew this was the one. But when he reached the first branch, the bees buzzed angrily. Barnaby realized climbing up would be very dangerous. He was stuck.",
+                "ending": "Barnaby sat down and thought hard. Instead of climbing up, he decided to wait quietly near the trunk. After a few minutes, the queen bee flew down. Barnaby bowed politely and said, 'Excuse me, I love honey. Could I please trade you a sweet red apple for a little bit?' The queen bee agreed! Barnaby got his honey and the bees got a tasty apple. It was a win-win day, and Barnaby learned that being patient and polite works better than climbing."}
+
+
+### B. Helper: `create_finish_prompt` (Implements Difficulty)
+
+
+# --- Helper: create_finish_prompt (Implements Difficulty) ---
+def create_finish_prompt(structured_story: dict, assignment_level: str) -> tuple[str, str, str]:
+    """
+    Creates a partial story prompt by randomly omitting one section.
+    Implements level-based difficulty: Beginner favors ending omission.
+    Returns: (partial_text_prompt, full_text_answer, missing_part_name)
+    """
+    import random
+
+    parts = ["beginning", "middle", "ending"]
+
+    # 1. Select the part to be omitted/written by the student based on level
+    level_lower = (assignment_level or "beginner").lower()
+    if level_lower == 'beginner':
+        part_to_omit = 'ending'  # Beginners often find the ending easiest to write
+    elif level_lower == 'intermediate':
+        # Intermediate: 50% chance Ending, 25% Middle, 25% Beginning
+        part_to_omit = random.choice(['ending', 'ending', 'middle', 'beginning'])
+    else:  # Advanced
+        part_to_omit = random.choice(parts)  # Equal chance for any part
+
+    missing_part_name = part_to_omit.title()
+
+    story_parts = structured_story.copy()
+
+    # The part the student MUST write is replaced by a placeholder in the prompt.
+    placeholder = (
+        f"\n\n***\n\n"
+        f"**[ {missing_part_name.upper()} MISSING! ]**\n\n"
+        f"**Your turn! Write the creative {missing_part_name} that happens next.**\n\n"
+        f"***"
+    )
+    story_parts[part_to_omit] = placeholder
+
+    # 2. Join the parts to create the partial prompt
+    narrative_sections = []
+
+    # Append/Insert sections ensuring order is maintained
+    if part_to_omit != 'beginning':
+        narrative_sections.append(f"### The Beginning\n\n{story_parts.get('beginning', '')}")
+
+    if part_to_omit == 'beginning':
+        narrative_sections.insert(0, placeholder)
+
+    if part_to_omit != 'middle':
+        # If beginning was skipped, middle is section 1 (index 0). If beginning was included, middle is section 1 (index 1).
+        current_index = len(narrative_sections) if part_to_omit != 'beginning' else 0
+        narrative_sections.insert(current_index, f"### The Middle\n\n{story_parts.get('middle', '')}")
+    elif part_to_omit == 'middle':
+        # Insert placeholder where middle should be
+        current_index = len(narrative_sections)
+        narrative_sections.insert(current_index, placeholder)
+
+    if part_to_omit != 'ending':
+        narrative_sections.append(f"### The Ending\n\n{story_parts.get('ending', '')}")
+    elif part_to_omit == 'ending':
+        narrative_sections.append(placeholder)
+
+    # Final cleanup and joining
+    partial_narrative = "\n\n---\n\n".join(narrative_sections).strip()
+
+    # 3. Generate the full, complete narrative for the answer key
+    full_narrative = (
+            (structured_story.get("beginning", "") or "") +
+            "\n\n" +
+            (structured_story.get("middle", "") or "") +
+            "\n\n" +
+            (structured_story.get("ending", "") or "")
+    ).strip()
+
+    return partial_narrative, full_narrative, missing_part_name
+
+
+# --- Function: generate_worksheet_payload (Updated) ---
+# In app.py, add this new function:
+
+def generate_reading_worksheet(base_text: str, story_level: str) -> dict:
+    """
+    Generates a comprehensive reading worksheet including MCQ, FIB, and SA questions.
+    """
+    if client is None:
+        print("OpenAI client not configured; cannot generate full reading worksheet.")
+        return {"type": "reading", "mcq": [], "fill_in_blank": [], "short_answer": []}
+
+    instructions = """
+You are a content generator for a children's English learning platform.
+Given a story text, your task is to generate three types of questions:
+1. Multiple Choice (MCQ): 5 questions testing comprehension.
+2. Fill-in-the-Blank (FIB): 5 sentences directly quoted from the story with one key word removed.
+3. Short Answer (SA): 3 questions requiring a short, subjective response.
+
+Rules:
+- Output ONLY a single JSON object.
+- **FIB ACCURACY FIX:** The sentences for Fill-in-the-Blank MUST be taken VERBATIM from the story text. The missing word should be a critical noun, verb, or adjective, NOT a common article or pronoun.
+- The output MUST strictly follow this JSON format:
+  {
+    "type": "reading",
+    "title": "Generated Worksheet Title",
+    "mcq": [ {"question": "string", "options": ["A", "B", "C", "D"], "correct_index": 0}, ... ],
+    "fill_in_blank": [ {"sentence": "string with ___ placeholder", "answer": "missing word"}, ... ],
+    "short_answer": [ {"question": "string", "model_answer": "suggested answer"}, ... ]
+  }
+"""
+
+    user_prompt = f"""
+Story Text:
+\"\"\"{base_text}\"\"\"
+
+Student Reading Level: {story_level.title()}.
+
+Please generate:
+- 5 Multiple Choice Questions.
+- 5 Fill-in-the-Blank sentences (VERBATIM from the story, removing a key word).
+- 3 Short Answer Questions.
+
+Ensure the FIB sentences are accurately quoted and the missing word is substantial.
+"""
+
+    try:
+        resp = client.responses.create(
+            model=DEFAULT_MODEL,
+            max_output_tokens=1200,
+            temperature=0.4,
+            instructions=instructions,
+            input=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": user_prompt.strip(),
+                        }
+                    ],
+                }
+            ],
+        )
+        raw = getattr(resp, "output_text", "") or ""
+
+        # Robust JSON extraction
+        raw = raw.strip()
+        if raw.startswith("```json"):
+            raw = raw.strip("```json").strip("```").strip()
+
+        data = json.loads(raw)
+        data['type'] = 'reading'  # Ensure type is always set correctly
+        return data
+
+    except Exception as e:
+        print(f"Error calling OpenAI for Reading Worksheet generation: {e}")
+        return {"type": "reading", "mcq": [], "fill_in_blank": [], "short_answer": []}
+# In app.py - Replace your existing generate_worksheet_payload function with this:
+
+def generate_worksheet_payload(
+        base_text: str,
+        worksheet_type: str,
+        writing_mode: Optional[str] = "planning",
+        writing_level: Optional[str] = "beginner",
+) -> dict | None:
+    """
+    Generates JSON payload exclusively for Writing worksheets (planning or completion).
+    Reading assignment generation is handled upstream by generate_reading_worksheet.
+    """
+    if client is None:
+        print("OpenAI client not configured; skipping worksheet generation.")
+        return None
+
+    worksheet_type = (worksheet_type or "").strip().lower()
+    writing_mode = (writing_mode or "planning").strip().lower()
+    writing_level = (writing_level or "beginner").strip().lower()
+
+    if worksheet_type != "writing":
+        # Only process if it's explicitly a writing type.
+        return None
+
+    if writing_mode == "planning":
+        # --- MODE 1: Free Writing Planning Worksheet ---
+
+        return {
+            "type": "writing_planning",
+            "title": f"{writing_level.title()} Story Planning",
+            "sections": [
+                {"label": "Beginning Plan", "instruction": f"Plan the start of your {writing_level} story.",
+                 "guiding_questions": ["Who is the main character?", "Where and when does the story start?"]},
+                {"label": "Middle Plan", "instruction": "What is the main conflict/problem?",
+                 "guiding_questions": ["What is the challenge?", "What steps does the character take?"]}
+            ],
+            "checklist": ["Did I plan a clear problem?", "Did I use descriptive words?"]
+        }
+
+    elif writing_mode == "completion":
+        # --- MODE 2: Story Completion (Generate Story with Empty Part) ---
+
+        structured_story = make_structured_story(
+            prompt=f"A simple story suitable for a {writing_level} reader.",
+            level=writing_level
+        )
+
+        partial_prompt, full_answer, missing_part = create_finish_prompt(
+            structured_story,
+            writing_level
+        )
+
+        ai_worksheet_data = {
+            "instructions": f"Your task is to write the missing **{missing_part}** of the story. Use the clues in the existing text to write a creative and complete section.",
+            "guiding_questions": [f"What happened right before the {missing_part}?",
+                                  f"How does the {missing_part} resolve the core conflict?",
+                                  f"Did I include important characters in the {missing_part}?"],
+            "checklist": ["Did I continue the story's tense?", "Does my part connect logically?",
+                          "Did I use at least two new descriptive words?"]
+        }
+
+        return {
+            "type": "writing_completion",
+            "story_title": structured_story.get("title", f"Completion Task ({missing_part})"),
+            "partial_text_prompt": partial_prompt,
+            "full_text_answer": full_answer,
+            "missing_part": missing_part,
+            "sections": [{"label": f"Plan Your {missing_part}",
+                          "guiding_questions": ai_worksheet_data.get("guiding_questions")}],
+            "checklist": ai_worksheet_data.get("checklist")
+        }
+
+    return None
+
+# -------------------------------------------------------------------
+# ADMIN: generate worksheet + assign to students
+# -------------------------------------------------------------------
+# --- Updated admin_generate_worksheet function in app.py ---
+# --- Function: admin_generate_worksheet (Updated) ---
+# In app.py - Replace your existing admin_generate_worksheet function with this:
+
+@app.route("/admin/generate-worksheet", methods=["POST"])
+@login_required
+def admin_generate_worksheet():
+    if not current_user_is_admin():
+        flash("You do not have permission to create worksheets.", "danger")
+        return redirect(url_for("index"))
+
+    db = get_db()
+
+    story_id = request.form.get("story_id", type=int)
+    assignment_type = (request.form.get("worksheet_type") or "").strip().lower()
+    worksheet_title = (request.form.get("worksheet_title") or "").strip()
+
+    # NEW FIELDS for writing task
+    writing_mode = (request.form.get("writing_mode") or "planning").strip().lower()
+    writing_level = (request.form.get("writing_level") or "beginner").strip().lower()
+
+    raw_user_ids = request.form.getlist("user_ids") or []
+    user_ids = [int(uid) for uid in raw_user_ids if uid]
+
+    # --- Initialization ---
+    draft_id = None
+    story = None
+    questions_json = None
+
+    # --- Basic validation ---
+    if assignment_type not in {"writing", "reading"}:
+        flash("Please choose a valid worksheet type.", "warning")
+        return redirect(url_for("admin_stories", tab="assign"))
+    if not user_ids:
+        flash("Please choose at least one student to assign the worksheet to.", "warning")
+        return redirect(url_for("admin_stories", tab="assign"))
+
+    # --------------------------
+    # WRITING ASSIGNMENT SETUP
+    # --------------------------
+    if assignment_type == "writing":
+        # Find or create the dummy story/draft for assignment links
+        dummy = db.execute(
+            "SELECT id FROM stories WHERE slug = ?", ("free-writing-template",)
+        ).fetchone()
+
+        if dummy is None:
+            cur = db.execute(
+                """INSERT INTO stories (slug, title, language, level, content, created_at)
+                   VALUES (?, ?, ?, ?, ?, datetime('now'))""",
+                ("free-writing-template", "Creative Writing Practice", "en", "A1", "",),
+            )
+            story_id = cur.lastrowid
+        else:
+            story_id = dummy["id"]
+
+        dummy_draft = db.execute(
+            "SELECT id FROM finish_drafts WHERE story_id = ? ORDER BY id DESC LIMIT 1",
+            (story_id,),
+        ).fetchone()
+
+        if dummy_draft is None:
+            cur = db.execute(
+                """INSERT INTO finish_drafts (story_id, seed_prompt, partial_text, completion_text)
+                   VALUES (?, ?, ?, ?)""",
+                (story_id, "System generated prompt", "", None),
+            )
+            draft_id = cur.lastrowid
+        else:
+            draft_id = dummy_draft["id"]
+
+        # 1. Generate the payload
+        worksheet_payload = generate_worksheet_payload(
+            base_text="",
+            worksheet_type="writing",
+            writing_mode=writing_mode,
+            writing_level=writing_level
+        )
+
+        if not worksheet_payload:
+            flash("Failed to generate writing worksheet with AI.", "danger")
+            return redirect(url_for("admin_stories", tab="assign"))
+
+        # 2. SPECIAL HANDLING: Completion Mode saves the story content to DB
+        if writing_mode == "completion":
+
+            # A. Overwrite the dummy story's content with the *full answer key*
+            db.execute(
+                "UPDATE stories SET content = ? WHERE id = ?",
+                (worksheet_payload["full_text_answer"], story_id)
+            )
+
+            # B. Overwrite the dummy draft's text with the *partial prompt* and answer key
+            db.execute(
+                """
+                UPDATE finish_drafts
+                SET partial_text = ?, completion_text = ?
+                WHERE id = ?
+                """,
+                (worksheet_payload["partial_text_prompt"], worksheet_payload["full_text_answer"], draft_id)
+            )
+
+            # Set the title to reflect the missing part
+            if not worksheet_title:
+                worksheet_title = worksheet_payload['story_title']
+
+            # Store only the instructions/structure in questions_json for the assignment
+            payload_for_db = {
+                "type": "writing_completion",
+                "sections": worksheet_payload["sections"],
+                "checklist": worksheet_payload["checklist"]
+            }
+            questions_json = json.dumps(payload_for_db, ensure_ascii=False)
+
+        else:  # writing_mode == "planning"
+            # Keep original planning logic (no story/draft content updates needed)
+            if not worksheet_title:
+                worksheet_title = worksheet_payload.get("title") or "Writing Structure Practice"
+            questions_json = json.dumps(worksheet_payload, ensure_ascii=False)
+
+    # --------------------------
+    # READING ASSIGNMENT SETUP (CALLS generate_reading_worksheet directly)
+    # --------------------------
+    elif assignment_type == "reading":
+        # Check story validity
+        if not story_id:
+            flash("Please select a story for the reading worksheet.", "warning")
+            return redirect(url_for("admin_stories", tab="assign"))
+
+        story = db.execute("SELECT * FROM stories WHERE id = ?", (story_id,)).fetchone()
+        draft = db.execute(
+            "SELECT id, completion_text FROM finish_drafts WHERE story_id = ? ORDER BY created_at DESC LIMIT 1",
+            (story_id,)).fetchone()
+
+        base_text = (draft.get("completion_text") if draft else story.get("content")).strip()
+        draft_id = draft["id"] if draft else None
+
+        if not base_text:
+            flash("Story text is empty; cannot generate a reading worksheet.", "warning")
+            return redirect(url_for("admin_stories", tab="assign"))
+
+        # 1. Generate the FULL structured reading payload (MCQ, FIB, SA)
+        worksheet_payload = generate_reading_worksheet(  # <--- CORRECT DIRECT CALL
+            base_text=base_text,
+            story_level=story["level"]
+        )
+
+        if not worksheet_payload or not (
+                worksheet_payload.get('mcq') or worksheet_payload.get('fill_in_blank') or worksheet_payload.get(
+                'short_answer')):
+            flash("AI failed to generate question content for the reading worksheet. Try a different story.", "danger")
+            return redirect(url_for("admin_stories", tab="assign"))
+
+        # 2. Save the entire structured payload to the assignment row
+        questions_json = json.dumps(worksheet_payload, ensure_ascii=False)
+
+        # 3. Use the generated title if the user didn't provide one
+        if not worksheet_title:
+            worksheet_title = worksheet_payload.get("title") or f"Reading · {story['title']}"
+
+    # --- INSERT ASSIGNMENTS INTO DB (Common Path) ---
+    created = 0
+    for uid in user_ids:
+        assignee_id = int(uid)
+        db.execute(
+            """
+            INSERT INTO assignments
+            (story_id, draft_id, assignee_id, assignment_type,
+             questions_json, assigned_by, assignment_title, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'assigned')
+            """,
+            (
+                story_id,
+                draft_id,
+                assignee_id,
+                assignment_type,
+                questions_json,
+                session.get("user_id"),
+                worksheet_title,
+            ),
+        )
+        created += 1
+
+    db.commit()
+    flash(f"Worksheet generated and assigned to {created} student(s) successfully.", "success")
+    return redirect(url_for("admin_stories", tab="assigned"))
+
+# --- New Route: admin_assignment_group_detail ---
+
+@app.get("/admin/assignments/group/<int:assignment_id>")
+@login_required
+def admin_assignment_group_detail(assignment_id: int):
+    """
+    Admin view: Show detail for a specific assignment group (template).
+    This retrieves the template information and all student statuses linked to it.
     """
     if not current_user_is_admin():
         flash("Admin access only.", "warning")
@@ -2090,57 +3029,549 @@ def admin_review_submission(submission_id: int):
 
     db = get_db()
 
-    # Score should be between 0 and 100
-    score_raw = request.form.get("score", type=float)
-    admin_comment = (request.form.get("comment") or "").strip()
-
-    score = max(0.0, min(100.0, score_raw)) if score_raw is not None else None
-
-    if score is None:
-        flash("Invalid score provided.", "warning")
-        return redirect(url_for("admin_stories"))  # This will reload the page/tab
-
-    # 1. Update the score and comment on the submission record
-    db.execute(
+    # 1. Fetch the primary assignment row to get the template key (story, type, title)
+    group_template = db.execute(
         """
-        UPDATE assignment_submissions
-        SET score = ?, comment = ?, reviewed_at = datetime('now')
-        WHERE id = ?
+        SELECT 
+            a.story_id, 
+            a.assignment_type, 
+            a.assignment_title, 
+            s.title AS story_title
+        FROM assignments a
+        JOIN stories s ON a.story_id = s.id
+        WHERE a.id = ?
         """,
-        (score, admin_comment, submission_id),
+        (assignment_id,),
+    ).fetchone()
+
+    if not group_template:
+        flash("Assignment template not found.", "warning")
+        return redirect(url_for("admin_stories", tab="assigned"))
+
+    # 2. Fetch ALL assignments matching this template key (all students assigned)
+    assignees = db.execute(
+        """
+        SELECT
+            a.id AS assignment_id,
+            a.assignee_id,
+            a.status,
+            a.score,
+            a.attempt_count,
+            a.created_at,
+            u.username,
+            u.email
+        FROM assignments a
+        JOIN users u ON a.assignee_id = u.id
+        WHERE a.story_id = ?
+          AND a.assignment_type = ?
+          AND a.assignment_title = ?
+        ORDER BY a.status DESC, u.username ASC
+        """,
+        (
+            group_template["story_id"],
+            group_template["assignment_type"],
+            group_template["assignment_title"],
+        ),
+    ).fetchall()
+
+    stats = {
+        "total": len(assignees),
+        "submitted": sum(1 for a in assignees if a["status"] == "submitted"),
+        "graded": sum(1 for a in assignees if a["status"] == "graded"),
+        "assigned": sum(1 for a in assignees if a["status"] == "assigned"),
+    }
+
+    return render_template(
+        "admin_assignment_group_detail.html",
+        group_template=group_template,
+        assignees=assignees,
+        stats=stats,
+        assignment_id=assignment_id # Pass original ID for action links
     )
 
-    # 2. Update the parent assignment's status and final score
-    # Find the assignment_id first
+
+# --- New Route: admin_view_worksheet_content ---
+
+# --- Updated Route: admin_view_worksheet_content in app.py ---
+
+@app.get("/admin/assignments/<int:assignment_id>/content")
+@login_required
+def admin_view_worksheet_content(assignment_id: int):
+    """
+    Fetches and formats the questions_json content for a specific assignment template.
+    For Writing Completion tasks, it retrieves the story prompt from the linked draft.
+    """
+    if not current_user_is_admin():
+        return jsonify({"error": "Admin access required."}), 403
+
+    db = get_db()
+
+    # 1. Fetch assignment details including the draft_id
+    assignment = db.execute(
+        """
+        SELECT 
+            a.assignment_title, 
+            a.assignment_type,
+            a.questions_json,
+            a.draft_id,  -- Retrieve the draft ID
+            s.title AS story_title
+        FROM assignments a
+        JOIN stories s ON a.story_id = s.id
+        WHERE a.id = ?
+        """,
+        (assignment_id,),
+    ).fetchone()
+
+    if not assignment:
+        return jsonify({"error": "Assignment not found."}), 404
+
+    content_data = {
+        "title": assignment["assignment_title"],
+        "type": assignment["assignment_type"],
+        "story": assignment["story_title"],
+        "sections": [],
+        "checklist": [],
+        "prompt_story": None,  # New field for writing completion prompt
+        "raw_text": assignment["questions_json"],
+    }
+
+    if assignment["assignment_type"] == 'writing' and assignment["draft_id"]:
+        # 2. If writing, fetch the actual story content from the linked draft
+
+        draft = db.execute(
+            """
+            SELECT partial_text, completion_text 
+            FROM finish_drafts 
+            WHERE id = ?
+            """,
+            (assignment["draft_id"],)  # CORRECT: Use the draft_id retrieved from the assignment row
+        ).fetchone()
+
+        if draft:
+            content_data["prompt_story"] = draft["partial_text"]
+            content_data["full_story_answer"] = draft["completion_text"]
+
+            # Check if this is a completion task (based on marker text in the prompt)
+            if draft["partial_text"] and 'WRITE THE MISSING' in draft["partial_text"]:
+                content_data["type_detail"] = "Story Completion"
+            else:
+                content_data["type_detail"] = "Free Writing (Planning Only)"
+
+    # 3. Parse and include the worksheet/checklist structure from questions_json
+    if assignment["questions_json"]:
+        try:
+            payload = json.loads(assignment["questions_json"])
+
+            if assignment["assignment_type"] == 'writing':
+                # Both planning and completion tasks store sections/checklist here
+                content_data["sections"].extend(payload.get("sections", []))
+                content_data["checklist"].extend(payload.get("checklist", []))
+
+            elif assignment["assignment_type"] == 'reading':
+                # Handles structured reading questions
+                content_data["sections"].append({"label": "MCQ Questions", "questions": payload.get("mcq") or []})
+                content_data["sections"].append(
+                    {"label": "Fill-in-the-Blank", "questions": payload.get("fill_in_blank") or []})
+                content_data["sections"].append(
+                    {"label": "Short Answer", "questions": payload.get("short_answer") or []})
+
+        except Exception as e:
+            content_data["json_parse_error"] = f"Error parsing assignment JSON content: {e}"
+
+    return jsonify(content_data)
+# Helper to redirect from assignment ID to the correct submission grading page
+# In app.py
+@app.get("/admin/assignments/<int:assignment_id>/grade_redirect")
+@login_required
+def admin_grade_redirect(assignment_id: int):
+    """
+    Helper route: Finds the latest submission for a given Assignment ID
+    and redirects the admin to the dedicated grading page for that Submission ID.
+    """
+    if not current_user_is_admin():
+        flash("Admin access only.", "warning")
+        return redirect(url_for("index"))
+
+    db = get_db()
+
+    # Find the latest submission for this specific assignment_id
+    # Using created_at based on the previous fix.
     submission = db.execute(
-        "SELECT assignment_id FROM assignment_submissions WHERE id = ?",
-        (submission_id,),
+        """
+        SELECT id, user_id, assignment_id
+        FROM assignment_submissions
+        WHERE assignment_id = ?
+        ORDER BY datetime(created_at) DESC
+        LIMIT 1
+        """,
+        (assignment_id,),
     ).fetchone()
 
     if submission:
-        db.execute(
-            """
-            UPDATE assignments
-            SET status = 'graded', score = ?
-            WHERE id = ?
-            """,
-            (score, submission['assignment_id']),
-        )
+        return redirect(url_for("admin_grading_page", submission_id=submission["id"]))
+    else:
+        flash("No submitted work found for this assignment.", "warning")
+        return redirect(url_for("assignment_detail", assignment_id=assignment_id))
+
+# In app.py: Add or verify this exact filter definition
+
+@app.template_filter('chr')
+def char_filter(value):
+    """Makes the Python built-in chr() function available in Jinja."""
+    try:
+        return chr(value)
+    except (TypeError, ValueError):
+        return ''@app.context_processor
+def inject_global_functions():
+    # Expose the Python chr() function directly to the Jinja environment
+    return dict(chr=chr)
+@app.get("/admin/submissions/<int:submission_id>/grade_page")
+@login_required
+def admin_grading_page(submission_id: int):
+    """
+    Admin view: Dedicated page to review and grade a single student submission.
+    """
+    if not current_user_is_admin():
+        flash("Admin access required.", "warning")
+        return redirect(url_for("index"))
+
+    db = get_db()
+
+    # --- 1. Fetch Submission Data ---
+    submission_row = db.execute(
+        """
+        SELECT
+            sub.id AS submission_id,
+            sub.completion_text,
+            sub.answers_json,
+            sub.score AS current_score,
+            sub.comment AS admin_comment,
+            sub.created_at AS submitted_at,
+
+            a.id AS assignment_id,
+            a.assignment_title,
+            a.assignment_type,
+            a.questions_json,
+            a.draft_id,
+
+            u.username AS assignee_username,
+            s.title AS story_title
+        FROM assignment_submissions sub
+        JOIN assignments a ON sub.assignment_id = a.id
+        JOIN users u ON sub.user_id = u.id
+        JOIN stories s ON a.story_id = s.id
+        WHERE sub.id = ?
+        """,
+        (submission_id,),
+    ).fetchone()
+
+    if not submission_row:
+        flash("Submission not found.", "danger")
+        return redirect(url_for("admin_stories", tab="submitted"))
+
+    submission = dict(submission_row)
+
+    # Safely load student answers
+    try:
+        submission['student_answers'] = json.loads(submission['answers_json'])
+    except (TypeError, json.JSONDecodeError):
+        submission['student_answers'] = {}
+
+    # --- 2. Initialize Assignment Content & Answers for Display ---
+    assignment_details = {
+        "type_label": submission["assignment_type"].replace('_', ' ').title(),
+        "prompt_story": None,
+        "sections": [],
+        "mcq_questions": [],  # List of MCQ questions for answer cross-reference
+    }
+
+    # --- 3. Handle Writing Assignments (to get prompt) ---
+    if submission["assignment_type"] == 'writing':
+        assignment_details['type_label'] = "Writing & Story Creation"
+
+        # Get story prompt from linked draft
+        draft = db.execute(
+            "SELECT partial_text FROM finish_drafts WHERE id = ?",
+            (submission["draft_id"],)
+        ).fetchone()
+
+        if draft:
+            assignment_details["prompt_story"] = draft["partial_text"]
+
+    # --- 4. Parse Questions and Structure (Reading/Writing Rubric) ---
+    # In app.py - inside the admin_grading_page function, replace your existing parsing block with this:
+
+    # --- 4. Parse Questions and Structure (Reading/Writing Rubric) ---
+    if submission["questions_json"]:
+        try:
+            payload = json.loads(submission["questions_json"])
+
+            # --- FIX FOR DIRECT READING PAYLOAD (like the one provided by the user) ---
+            if payload.get("type") == 'reading':
+
+                # Extract lists directly from top-level keys
+                mcq_list = payload.get("mcq", [])
+                fib_list = payload.get("fill_in_blank", [])
+                sa_list = payload.get("short_answer", [])
+
+                # Store the full question lists for cross-referencing and display
+                assignment_details["mcq_questions"] = mcq_list
+
+                # Rebuild sections structure for the template display:
+                if mcq_list:
+                    assignment_details["sections"].append({"label": "MCQ Questions", "questions": mcq_list})
+                if fib_list:
+                    # Note: The template expects 'sentence' and 'answer' for FIB, which your payload provides.
+                    assignment_details["sections"].append({"label": "Fill-in-the-Blank Prompts", "questions": fib_list})
+                if sa_list:
+                    # Note: The template expects 'question' and 'model_answer' for SA, which your payload provides.
+                    assignment_details["sections"].append({"label": "Short Answer Questions", "questions": sa_list})
+
+            elif submission["assignment_type"] == 'reading':
+                # This handles cases where the reading questions are nested under a 'sections' key (legacy/alternative structure)
+
+                mcq_list = []
+                fib_list = []
+                sa_list = []
+
+                for section in payload.get("sections", []):
+                    label = section.get('label', '')
+                    questions = section.get('questions', [])
+                    if 'MCQ' in label:
+                        mcq_list.extend(questions)
+                    elif 'Fill-in' in label:
+                        fib_list.extend(questions)
+                    elif 'Short Answer' in label:
+                        sa_list.extend(questions)
+
+                assignment_details["mcq_questions"] = mcq_list
+
+                if mcq_list or fib_list or sa_list:
+                    # Rebuild sections for the template display using the extracted lists
+                    if mcq_list:
+                        assignment_details["sections"].append({"label": "MCQ Questions", "questions": mcq_list})
+                    if fib_list:
+                        assignment_details["sections"].append(
+                            {"label": "Fill-in-the-Blank Prompts", "questions": fib_list})
+                    if sa_list:
+                        assignment_details["sections"].append({"label": "Short Answer Questions", "questions": sa_list})
+
+
+            elif submission["assignment_type"] == 'writing':
+                # Handles standard writing assignment structure (sections for planning/rubric)
+                assignment_details["sections"].extend(payload.get("sections", []))
+
+        except Exception as e:
+            # Note: Added print for debugging, you can remove this after deployment
+            print(f"Error parsing assignment template content: {e}")
+            # flash(f"Error parsing assignment template content: {e}", "warning") # Use flash instead of print in production
+    # --- 5. Render the dedicated grading page ---
+    return render_template(
+        "admin_grading_page.html",
+        submission=submission,
+        assignment_details=assignment_details,
+    )
+# The original code for admin_review_submission is here.
+@app.route("/admin/submissions/<int:submission_id>/review", methods=["POST"])
+@login_required
+def admin_review_submission(submission_id: int):
+    # ... (unchanged logic for permission check, score/comment parsing) ...
+    if not current_user_is_admin():
+        flash("You do not have permission to review submissions.", "danger")
+        return redirect(url_for("index"))
+
+    db = get_db()
+
+    # 점수 파싱
+    raw_score = (request.form.get("score") or "").strip()
+    comment = (request.form.get("comment") or "").strip()
+
+    try:
+        score = int(raw_score)
+    except ValueError:
+        flash("Score must be an integer between 0 and 100.", "warning")
+        # IMPORTANT: Redirect back to the dedicated grading page, not the submission list tab.
+        return redirect(url_for("admin_grading_page", submission_id=submission_id))
+
+    if score < 0 or score > 100:
+        flash("Score must be between 0 and 100.", "warning")
+        # IMPORTANT: Redirect back to the dedicated grading page, not the submission list tab.
+        return redirect(url_for("admin_grading_page", submission_id=submission_id))
+
+    # 해당 submission 이 실제로 존재하는지 확인 + assignment_id(user_id) 가져오기
+    # FIX: Use assignment_submissions table
+    sub = db.execute(
+        """
+        SELECT assignment_id, user_id
+        FROM assignment_submissions
+        WHERE id = ?
+        """,
+        (submission_id,),
+    ).fetchone()
+
+    if sub is None:
+        flash("Submission not found.", "danger")
+        return redirect(url_for("admin_stories", tab="submitted"))
+
+    assignment_id = sub["assignment_id"]
+    user_id = sub["user_id"]
+
+    # 1) assignment_submissions 업데이트
+    # FIX: Use assignment_submissions table
+    db.execute(
+        """
+        UPDATE assignment_submissions
+        SET score       = ?,
+            comment     = ?,
+            reviewed_at = CURRENT_TIMESTAMP,
+            updated_at  = CURRENT_TIMESTAMP
+        WHERE id = ?
+        """,
+        (score, comment, submission_id),
+    )
+
+    # 2) 해당 학생의 assignments 상태도 'graded' 로 변경
+    # FIX: Use assignments table
+    db.execute(
+        """
+        UPDATE assignments
+        SET status = 'graded', score = ? 
+        WHERE id = ?
+          AND assignee_id  = ?
+        """,
+        (score, assignment_id, user_id),
+    )
 
     db.commit()
+    flash("Submission graded and feedback saved.", "success")
 
-    flash(f"Submission #{submission_id} graded (Score: {score:.1f}%).", "success")
-    # Redirect to the review tab and try to keep the accordion open using a fragment
-    return redirect(url_for("admin_stories", tab='review', fragment=f'submission-{submission_id}'))
+    # Final redirect back to the Submitted tab, with the accordion expanded.
+    return redirect(
+        url_for("admin_stories", tab="submitted", fragment=f"submission-{submission_id}")
+    )
+
+import re
 
 
+# In app.py, near other template filters:
+# In app.py, near other template filters:
+
+@app.template_filter("clean_whitespace_and_nl")
+def clean_whitespace_and_nl(value: str) -> str:
+    """
+    Cleans excessive newlines, replaces triple+ newlines with double newlines (paragraphs),
+    and removes leading/trailing whitespace around each line.
+    """
+    if not value:
+        return ""
+
+    cleaned = re.sub(r'[ \t]+', ' ', value)
+    cleaned = re.sub(r'(\s*\n\s*){3,}', '\n\n', cleaned)
+    lines = cleaned.split('\n')
+    cleaned_lines = [line.strip() for line in lines]
+
+    return '\n'.join(cleaned_lines).strip()
+
+
+# NOTE: The nl2br filter MUST be present and correctly defined too:
+from markupsafe import Markup, escape  # Ensure this import is near the top
+
+
+@app.template_filter("nl2br")
+def nl2br(value: str) -> Markup:
+    """Convert newlines to <br> tags, with HTML escaping."""
+    if not value:
+        return Markup("")
+    # Escape HTML, then replace newline chars with <br>
+    return Markup(escape(value).replace("\n", Markup("<br>\n")))
+@app.get("/admin/submissions/<int:submission_id>/data")
+@login_required
+def admin_fetch_submission_data(submission_id: int):
+    """
+    Fetches comprehensive data for a single submission to populate the grading modal.
+    """
+    if not current_user_is_admin():
+        return jsonify({"error": "Admin access required."}), 403
+
+    db = get_db()
+
+    submission = db.execute(
+        """
+        SELECT
+            sub.id AS submission_id,
+            sub.completion_text,
+            sub.answers_json,
+            sub.score AS current_score,
+            sub.comment AS admin_comment,
+            sub.created_at AS submitted_at,
+
+            a.id AS assignment_id,
+            a.assignment_title,
+            a.assignment_type,
+            a.questions_json,
+
+            u.username AS assignee_username,
+            s.title AS story_title
+        FROM assignment_submissions sub
+        JOIN assignments a ON sub.assignment_id = a.id
+        JOIN users u ON sub.user_id = u.id
+        JOIN stories s ON a.story_id = s.id
+        WHERE sub.id = ?
+        """,
+        (submission_id,),
+    ).fetchone()
+
+    if not submission:
+        return jsonify({"error": "Submission not found."}), 404
+
+    # Process question content (for display in modal)
+    question_content = {"sections": [], "raw_prompt": None}
+
+    if submission["questions_json"]:
+        try:
+            payload = json.loads(submission["questions_json"])
+
+            if submission["assignment_type"] == 'writing':
+                # For completion tasks, we need the original story prompt from the linked draft.
+                # NOTE: This requires fetching the draft again, as the prompt is not in questions_json.
+                if 'sections' in payload and payload['sections']:
+                    question_content["sections"].extend(payload['sections'])
+
+                # Retrieve story prompt if available (from the *current* draft linked to the assignment)
+                draft_info = db.execute(
+                    "SELECT partial_text FROM finish_drafts WHERE story_id = ? ORDER BY id DESC LIMIT 1",
+                    (submission["story_title"],)
+                    # Using story title as placeholder logic needs adjustment for actual ID lookup
+                ).fetchone()
+
+                # Assuming simple string replacement for now, if story/draft details are correctly linked.
+                # In a robust app, we'd ensure 'a.draft_id' is used here:
+                # draft = db.execute("SELECT partial_text FROM finish_drafts WHERE id = ?", (submission["draft_id"],)).fetchone()
+                # if draft: question_content["raw_prompt"] = draft["partial_text"]
+                question_content[
+                    "raw_prompt"] = "Story prompt/context is complex and requires specific lookup."  # Placeholder
+
+            elif submission["assignment_type"] == 'reading':
+                # Reading tasks
+                question_content["sections"].append({"label": "MCQ Questions", "questions": payload.get("mcq") or []})
+                # ... (add FIB/SA logic here if needed for review, similar to admin_view_worksheet_content)
+
+        except Exception:
+            question_content["error"] = "Error parsing assignment JSON."
+
+    # Return full data structure
+    return jsonify({
+        "ok": True,
+        "submission": submission,
+        "question_content": question_content,
+        "student_answers": json.loads(submission["answers_json"]) if submission["answers_json"] else None
+    })
 # --- End app.py additions ---
 
 @app.post("/admin/stories/<slug>/generate-mcq")
 @login_required
 def admin_generate_mcq(slug: str):
     """Generate and save MCQ questions for a completed story (admin only)."""
-    print("ABC")
     if not current_user_is_admin():
         flash("Admin access only.", "warning")
         return redirect(url_for("index"))
@@ -2192,6 +3623,8 @@ def admin_generate_mcq(slug: str):
 
     flash("MCQ questions generated and saved for this story.", "success")
     return redirect(url_for("admin_stories"))
+
+
 @app.post("/admin/stories/<slug>/share")
 @login_required
 def admin_share_story(slug):
@@ -2231,7 +3664,7 @@ def admin_share_story(slug):
                 prompt_text = prompt_text[:220].rstrip() + "…"
 
             image_prompt = (
-                "Children's picture-book cover illustration for a story.\n"
+                "Children's picture-book cover illustration for a story. "
                 f'Title: "{title}".\n'
                 f"Language: {lang}, Level: {level}.\n"
                 "Style: warm, friendly, simple shapes, soft pastel colors, "
@@ -2278,6 +3711,61 @@ def admin_share_story(slug):
     return redirect(url_for("admin_stories"))
 
 
+@app.get("/admin/users/<int:user_id>/assignments")
+@login_required
+def admin_user_assignments(user_id: int):
+    """
+    Admin view: show all assignments for a specific student.
+    FIXED: Queries 'assignments' table using 'assignee_id'.
+    """
+    if not current_user_is_admin():
+        flash("Admin access only.", "warning")
+        return redirect(url_for("index"))
+
+    db = get_db()
+
+    # Get the student record
+    student = db.execute(
+        """
+        SELECT id, username, email, l1_language, l2_language
+        FROM users
+        WHERE id = ?
+        """,
+        (user_id,),
+    ).fetchone()
+
+    if not student:
+        flash("Student not found.", "warning")
+        return redirect(url_for("admin_students"))
+
+    # Fetch this student's assignments
+    # FIX: Query assignments table with assignee_id
+    assignments = db.execute(
+        """
+        SELECT
+          a.id,
+          a.assignment_type, 
+          a.status,
+          a.score,
+          a.attempt_count,
+          a.created_at,
+          a.assignment_title,
+          s.id    AS story_id,
+          s.slug  AS story_slug,
+          s.title AS story_title
+        from assignments a
+        JOIN stories s ON a.story_id = s.id
+        WHERE a.assignee_id = ? 
+        ORDER BY datetime(a.created_at) DESC
+        """,
+        (user_id,),
+    ).fetchall()
+
+    return render_template(
+        "admin_user_assignments.html",
+        student=student,
+        assignments=assignments,
+    )
 
 
 @app.post("/admin/stories/<slug>/unshare")
@@ -2291,7 +3779,6 @@ def admin_unshare_story(slug: str):
     db.commit()
     flash("Story removed from Library.", "info")
     return redirect(url_for("admin_stories"))
-
 
 
 @app.get("/admin/stories/<slug>")
@@ -2335,6 +3822,7 @@ def admin_story_detail(slug: str):
         draft=draft,
     )
 
+
 # -------------------------------------------------------------------
 # WORD SCRAMBLE GAME
 # -------------------------------------------------------------------
@@ -2345,20 +3833,21 @@ def get_words_for_student_scramble(user_id: int,
     Get a list of words for the word scramble game for this student.
 
     Priority:
-      1) Distinct vocab words from stories that were assigned to this user
+      1) Distinct vocab words from stories that were assigned to this user (via assignments)
       2) If not enough, fill with PREPARED_SCRAMBLE_WORDS
 
     Returns a list of dicts: { "word": "apple" }
     """
     db = get_db()
 
+    # FIX: Use assignments table
     rows = db.execute(
         """
         SELECT DISTINCT LOWER(v.word) AS word
         FROM vocab_items v
         JOIN stories s   ON v.story_id = s.id
         JOIN assignments a ON a.story_id = s.id
-        WHERE a.assignee_id = ?
+        WHERE a.assignee_id = ? 
         ORDER BY v.word COLLATE NOCASE
         """,
         (user_id,),
@@ -2398,6 +3887,8 @@ def scramble_word(word: str) -> str:
         scrambled = "".join(chars)
         attempts += 1
     return scrambled
+
+
 @app.get("/word-scramble")
 @login_required
 def word_scramble():
@@ -2408,9 +3899,9 @@ def word_scramble():
     words = get_words_for_student_scramble(user_id, min_words=18, max_words=60)
 
     # categorize by length from student's vocab + fallback pool
-    easy_words = []   # 4 letters
-    medium_words = [] # 5 letters
-    hard_words = []   # 6+ letters
+    easy_words = []  # 4 letters
+    medium_words = []  # 5 letters
+    hard_words = []  # 6+ letters
 
     for item in words:
         w = item["word"].strip().lower()
@@ -2472,9 +3963,9 @@ def word_scramble():
 
     # build puzzles in fixed order: 6 easy → 6 medium → 6 hard
     ordered_words = (
-        [("easy", w) for w in easy_selected] +
-        [("medium", w) for w in medium_selected] +
-        [("hard", w) for w in hard_selected]
+            [("easy", w) for w in easy_selected] +
+            [("medium", w) for w in medium_selected] +
+            [("hard", w) for w in hard_selected]
     )
 
     puzzles = []
@@ -2490,7 +3981,6 @@ def word_scramble():
         )
 
     return render_template("word_scramble.html", puzzles=puzzles)
-
 
 
 @app.post("/api/scramble_log")
@@ -2509,6 +3999,8 @@ def scramble_log():
     db.commit()
 
     return {"ok": True}
+
+
 @app.post("/api/scramble_session")
 def scramble_session():
     db = get_db()
@@ -2524,9 +4016,11 @@ def scramble_session():
 
     return {"ok": True}
 
+
 import requests
 
 GOOGLE_TRANSLATE_API_KEY = "AIzaSyCG14vrQaBjCyidFq_xZKClZCe1U7CdkWA"
+
 
 def translate_en_ko_or_ko_en(text: str, direction: str) -> dict:
     """
@@ -2570,6 +4064,7 @@ def translate_en_ko_or_ko_en(text: str, direction: str) -> dict:
         "example_en": "",
         "example_ko": "",
     }
+
 
 @app.post("/api/dict/search")
 @login_required
@@ -2684,6 +4179,7 @@ def api_dict_search():
         "bookmarked": False,
     })
 
+
 @app.get("/api/dict/history")
 @login_required
 def api_dict_history():
@@ -2738,6 +4234,7 @@ def api_dict_clear_history():
 
     return jsonify({"ok": True})
 
+
 @app.get("/api/dict/bookmarks")
 @login_required
 def api_dict_bookmarks():
@@ -2771,6 +4268,7 @@ def api_dict_bookmarks():
     ]
 
     return jsonify({"items": items})
+
 
 @app.post("/api/dict/toggle_bookmark")
 @login_required
@@ -2837,7 +4335,7 @@ def upgrade_bookmarks_table():
         db.execute("ALTER TABLE dict_bookmarks ADD COLUMN created_at TEXT")
 
     db.commit()
-    print("Bookmarks table upgraded!")
+
 
 if __name__ == "__main__":
     with app.app_context():

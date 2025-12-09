@@ -11,7 +11,13 @@
       <div class="card border-0 finish-card-v8">
         <div class="card-body p-4 p-md-5">
 
-          <h1 class="mb-2 finish-main-title">Finish the Story</h1>
+          <h1 class="mb-2 finish-main-title">
+            {% if assignment.assignment_type == 'writing' %}
+              Creative Writing Workshop
+            {% else %}
+              Finish the Story
+            {% endif %}
+          </h1>
           <p class="mb-4 finish-sub-text">
             Mission: <strong class="text-deep-blue">{{ assignment.assignment_title or story.title }}</strong>
           </p>
@@ -23,25 +29,116 @@
             </div>
           {% endif %}
 
-          <h5 class="fw-semibold mb-3 finish-section-title">The Story So Far...</h5>
-          <div class="border rounded-4 p-4 bg-story-preview finish-text-body mb-4 story-preview-box">
-            {{ draft.partial_text | nl2br }}
-          </div>
+          {# ---------- NEW: WRITING WORKSHEET SECTIONS ---------- #}
+          {% if writing_sections %}
+            <h5 class="fw-semibold mb-3 finish-section-title">
+              {% if assignment.assignment_type == 'writing' %}
+                Plan Your Story
+              {% else %}
+                Plan Your Ending
+              {% endif %}
+            </h5>
+            <div class="row g-3 mb-4">
+              {% for sec in writing_sections %}
+                <div class="col-md-4">
+                  <div class="finish-section-card h-100">
+                    <h6 class="finish-section-label mb-2">
+                      {{ sec.label }}
+                    </h6>
+                    {% if sec.instruction %}
+                      <p class="finish-text-body small mb-2">
+                        {{ sec.instruction }}
+                      </p>
+                    {% endif %}
+                    {% if sec.guiding_questions %}
+                      <ul class="finish-guiding-list mb-0">
+                        {% for q in sec.guiding_questions %}
+                          <li class="small">{{ q }}</li>
+                        {% endfor %}
+                      </ul>
+                    {% endif %}
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
+          {# ---------- END NEW: WRITING WORKSHEET SECTIONS ---------- #}
+
+          {# ---------- CONDITIONAL STORY PREVIEW (Only for Story Completion) ---------- #}
+          {# Show if it's NOT a 'writing' type (i.e., a true Finish the Story task linked to content) #}
+          {% if assignment.assignment_type != 'writing' or draft and draft.partial_text and draft.partial_text | length > 10 %}
+            <h5 class="fw-semibold mb-3 finish-section-title">The Story So Far...</h5>
+            <div class="border rounded-4 p-4 bg-story-preview finish-text-body mb-4 story-preview-box story-content-rendered">
+
+              {# --- CUSTOM RENDERING LOGIC FOR MARKDOWN SECTIONS --- #}
+              {# Check if draft content exists and contains the structured marker (###) #}
+              {% if draft and draft.partial_text and '###' in draft.partial_text %}
+
+                {% set parts = draft.partial_text.split('###') %}
+                {% set formatted_text = '' %}
+
+                {% for part in parts %}
+                  {% if loop.index > 1 %}
+                    {# The split relies on the Python structure: ### [SECTION NAME] --- CONTENT --- #}
+                    {% set split_content = part.split('---', 1) %}
+                    {% set section_name_full = split_content[0] | default('') | trim %}
+                    {% set section_content = split_content[1] | default('') | replace('***', '') | trim %}
+                    {% set section_name = section_name_full | replace('The', '') | trim %}
+
+                    {# --- Render Section Title --- #}
+                    {% if section_name %}
+                      <div class="story-section-header">
+                          <span class="story-section-label">{{ section_name }}</span>
+                      </div>
+                    {% endif %}
+
+                    {# --- Render Content, treating newlines as paragraphs/breaks --- #}
+                    <div class="story-section-content">
+                      {{ section_content | nl2br | safe }}
+                    </div>
+
+                    {# --- Add Separator (FIXED: Use 'in' operator for 'MISSING') --- #}
+                    {% set content_check = section_content | default('') %}
+                    {% if not 'MISSING' in content_check and not loop.last %}
+                        <hr class="story-section-divider">
+                    {% endif %}
+
+                  {% endif %}
+                {% endfor %}
+
+              {# Fallback for simple rendering if no structured markers are found #}
+              {% elif draft and draft.partial_text %}
+                 {{ draft.partial_text | nl2br }}
+              {% endif %}
+
+            </div>
+          {% endif %}
+          {# ---------- END CONDITIONAL STORY PREVIEW ---------- #}
+
+
+          {# ---------- END NEW: CHECKLIST ---------- #}
 
           <form method="post">
             <div class="mb-3">
-              <label class="form-label fw-semibold finish-section-title">Write your brilliant ending!</label>
+              <label class="form-label fw-semibold finish-section-title">
+                {% if assignment.assignment_type == 'writing' %}
+                  Write your full story here!
+                {% else %}
+                  Write your brilliant ending!
+                {% endif %}
+              </label>
               <textarea
                 name="completion_text"
                 rows="6"
                 class="form-control rounded-3 finish-textarea"
                 placeholder="Continue the story in your own words. Use your best words and imagination!"
+              {% if assignment.user_status == 'submitted' %}disabled{% endif %}
               >{{ submission.completion_text if submission else "" }}</textarea>
             </div>
 
             {% if assignment.user_status == 'submitted' %}
               <p class="small text-muted finish-text-body mt-3">
-                <i class="bi bi-info-circle me-1"></i> You have already submitted this assignment. Submitting again will overwrite your previous answer.
+                <i class="bi bi-info-circle me-1"></i> You have already submitted this assignment. You can view your work on the assignments list.
               </p>
             {% endif %}
 
@@ -49,8 +146,11 @@
               <a href="{{ url_for('assignments_list') }}" class="btn btn-lg btn-outline-secondary finish-text-button rounded-pill">
                 Back to missions
               </a>
-              <button type="submit" class="btn btn-lg btn-action-primary finish-text-button rounded-pill shadow-lg">
-                Submit Ending <i class="bi bi-send-fill ms-1"></i>
+              <button type="submit"
+                      class="btn btn-lg btn-action-primary finish-text-button rounded-pill shadow-lg"
+                      {% if assignment.user_status == 'submitted' %}disabled{% endif %}
+                      id="submitButton">
+                Submit {% if assignment.assignment_type == 'writing' %}Story{% else %}Ending{% endif %} <i class="bi bi-send-fill ms-1"></i>
               </button>
             </div>
           </form>
@@ -61,6 +161,35 @@
   </div>
 </div>
 
+{# Submission Success Modal #}
+{% if assignment.user_status == 'submitted' and request.method == 'POST' %}
+<div class="modal fade" id="submissionSuccessModal" tabindex="-1" aria-labelledby="submissionSuccessLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content rounded-4 modal-success-v8">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title finish-main-title text-success-color" id="submissionSuccessLabel">Mission Accomplished!</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body finish-text-body text-center">
+        <p class="fs-4 text-deep-blue"><i class="bi bi-check-circle-fill me-2"></i>Submission Successful!</p>
+        <p>Your writing has been saved. Your teacher will review it soon!</p>
+      </div>
+      <div class="modal-footer border-0 pt-0">
+        <a href="{{ url_for('assignments_list') }}" class="btn btn-action-primary rounded-pill finish-text-button">
+          Go to Missions List
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const successModal = new bootstrap.Modal(document.getElementById('submissionSuccessModal'));
+  successModal.show();
+});
+</script>
+{% endif %}
+
 <style>
 /* Define Child-Like Theme Variables */
 :root {
@@ -69,7 +198,7 @@
     --ink: #111827;
     --muted: #6b7280;
     --paper: #ffffff;
-    --success-color: #10b981;
+    --success-color: #10b981; /* Green */
     --info-color: #3b82f6;
     --deep-blue: #0A3D62;
     --shadow-soft: 0 10px 30px rgba(255, 107, 107, 0.1), 0 4px 8px rgba(0, 0, 0, 0.05);
@@ -107,6 +236,9 @@
 .text-deep-blue {
     color: var(--deep-blue) !important;
 }
+.text-success-color {
+    color: var(--success-color) !important;
+}
 
 /* --- Card & Layout --- */
 .finish-card-v8 {
@@ -127,10 +259,95 @@
     border: 2px solid rgba(135, 206, 250, 0.2) !important;
     box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
     color: #475569;
-
-    /* FIX: Remove fixed height and scroll */
     max-height: none !important;
     overflow: visible !important;
+}
+.story-content-rendered .story-section-header {
+    /* Styles for the visible part header */
+    padding: 0.5rem 0;
+    margin-top: 1rem;
+}
+.story-content-rendered .story-section-label {
+    /* Styles for the text like 'Beginning' or 'Middle' */
+    font-family: 'Baloo 2', cursive;
+    font-size: 1.25rem;
+    color: var(--deep-blue);
+    display: inline-block;
+    padding-bottom: 0.2rem;
+/*    border-bottom: 3px solid var(--coral-light);*/
+}
+.story-content-rendered .story-section-content {
+    /* Styles for the main text blocks */
+    margin-top: 0.5rem;
+    margin-bottom: 1rem;
+    line-height: 1.7;
+}
+.story-content-rendered .story-section-content strong {
+    /* Style for the [ MISSING! ] placeholder */
+    display: block;
+    text-align: center;
+    font-family: 'Baloo 2', cursive;
+    font-size: 1.2rem;
+    color: var(--coral-main);
+    padding: 1.5rem 0;
+    background: #fff6ed;
+    border-radius: 0.75rem;
+    border: 2px dashed var(--coral-light);
+    margin: 1rem 0;
+}
+.story-content-rendered .story-section-divider {
+    /* Custom dashed separator between visible parts */
+    border: none;
+    border-top: 2px dashed #ccc;
+    margin: 2rem 0;
+}
+.story-content-rendered .story-section-content br {
+    /* Reduce vertical space for single line breaks */
+    content: "";
+    display: block;
+    margin: 0;
+    line-height: 0;
+}
+.story-content-rendered .story-section-content br+br {
+    /* Increase vertical space for double line breaks (paragraphs) */
+    margin: 1em 0 0;
+    line-height: normal;
+}
+
+
+/* --- NEW: Worksheet section cards --- */
+.finish-section-card {
+    background: #fffdf7;
+    border-radius: 1.25rem;
+    border: 2px dashed rgba(255, 107, 107, 0.35);
+    padding: 0.9rem 1rem;
+    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.03);
+}
+.finish-section-label {
+    font-family: 'Baloo 2', cursive;
+    font-size: 1.1rem;
+    color: var(--deep-blue);
+}
+.finish-guiding-list {
+    padding-left: 1.2rem;
+    margin-bottom: 0;
+}
+.finish-guiding-list li {
+    margin-bottom: 0.2rem;
+}
+
+/* --- NEW: Checklist --- */
+.finish-checklist-list {
+    list-style: none;
+    padding-left: 0;
+    margin-bottom: 0;
+}
+.finish-checklist-list li + li {
+    margin-top: 0.2rem;
+}
+.checklist-checkbox {
+    width: 1rem;
+    height: 1rem;
 }
 
 /* --- Alerts --- */
@@ -161,6 +378,10 @@
     border-color: var(--coral-main);
     box-shadow: 0 0 0 .2rem rgba(255,107,107,.25);
 }
+.finish-textarea[disabled] {
+    background-color: #f7f7f7;
+    cursor: not-allowed;
+}
 
 /* --- Buttons --- */
 .btn-lg {
@@ -176,14 +397,41 @@
     box-shadow: 0 6px 14px rgba(255, 107, 107, 0.35);
     transition: all 0.2s ease;
 }
-.btn-action-primary:hover {
+.btn-action-primary:hover:not(:disabled) {
     background-color: #e86060;
     border-color: #e86060;
     transform: translateY(-2px);
     box-shadow: 0 8px 16px rgba(255, 107, 107, 0.5);
 }
+.btn-action-primary:disabled {
+    background-color: #ccc;
+    border-color: #ccc;
+    box-shadow: none;
+    cursor: not-allowed;
+}
+
 .btn-outline-secondary {
     font-weight: 500;
+}
+
+/* --- Modal Theming --- */
+.modal-success-v8 {
+    background-color: #e6fff4; /* Very light success background */
+    border: 3px solid var(--success-color);
+    box-shadow: 0 0 0 0.5rem rgba(16, 185, 129, 0.1);
+}
+.modal-success-v8 .finish-main-title {
+    color: var(--success-color);
+}
+.modal-footer .btn-action-primary {
+    background-color: var(--deep-blue);
+    border-color: var(--deep-blue);
+    box-shadow: 0 4px 8px rgba(10, 61, 98, 0.3);
+}
+.modal-footer .btn-action-primary:hover {
+    background-color: #082a45;
+    border-color: #082a45;
+    transform: translateY(-1px);
 }
 </style>
 
