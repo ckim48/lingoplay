@@ -19,7 +19,7 @@
   </div>
 
   {# --- Search Bar & Controls --- #}
-  <div class="row mb-5 g-3 align-items-center">
+  <div class="row mb-4 g-3 align-items-center">
     <div class="col-lg-8">
       <div class="input-group input-group-lg library-search-input">
         <span class="input-group-text"><i class="bi bi-search"></i></span>
@@ -30,103 +30,165 @@
       <div class="input-group input-group-lg" style="max-width: 250px;">
         <label class="input-group-text library-sort-label" for="storySort">Sort By:</label>
         <select class="form-select form-select-lg" id="storySort">
-          <option selected>Newest</option>
-          <option>Title (A-Z)</option>
-          <option>Level (Easiest)</option>
+          <option value="newest" selected>Newest</option>
+          <option value="title_asc">Title (A-Z)</option>
+          <option value="level_asc">Level (Easiest)</option>
         </select>
       </div>
     </div>
   </div>
   {# --- END Search Bar & Controls --- #}
 
-  {% if stories %}
   <div class="row g-4 g-lg-5">
-    {% for s in stories %}
-    <div class="col-sm-6 col-lg-4 col-xl-3">
-      <div class="book-wrap-v6">
-        <div class="card border-0 library-card-v6 h-100 p-0 position-relative">
 
-          {# Admin Remove Button (Positioned top-right of the whole card) #}
-          {% if is_admin %}
-          <form method="post" action="{{ url_for('admin_unshare_story', slug=s.slug) }}"
-                onsubmit="return confirm('Are you sure you want to remove \'{{ s.title }}\' from the Library?');"
-                class="admin-remove-form">
-            <button type="submit" class="btn btn-sm library-remove-btn-v6">
-              <i class="bi bi-x-lg"></i>
-            </button>
-          </form>
-          {% endif %}
+    {# --- COLUMN 1: FILTER SIDEBAR --- #}
+    <div class="col-lg-3">
+        <h5 class="fw-bold mb-3 v6-section-title-small">
+            <i class="bi bi-funnel me-2"></i>Filter Stories
+        </h5>
 
-          <a href="{{ url_for('book_view', draft_id=s.draft_id) }}"
-             class="text-decoration-none text-reset d-flex flex-column h-100">
-
-            {# Image Wrapper #}
-            <div class="library-card-img-wrap-v6"
-                 style="background-image: url('{{ s.visuals or url_for('static', filename='img/fallback_cover.png') }}');">
-              </div>
-
-            <div class="card-body p-4 d-flex flex-column flex-grow-1 card-details-area">
-
-              {# Tags Refined and Grouped (Must match the image style: EN | Beginner) #}
-              <div class="d-flex align-items-center mb-3 gap-2">
-                <span class="v6-tag-level">{{ s.language|upper }}</span>
-                <span class="v6-tag-level v6-tag-level-accent">{{ s.level|title }}</span>
-              </div>
-
-              {# Story Title (Large and Bold) #}
-              <h4 class="fw-bold mb-3 text-v6-title truncate-2-lines">
-                {{ s.title or "Box" }}
-              </h4>
-
-              {# Author (Small and Muted) #}
-              <p class="small text-v6-muted mb-3 flex-grow-1 library-text-body">
-                By <span class="fw-semibold">{{ s.author_name or "EduWeaver AI" }}</span>
-              </p>
-
-              {# Footer CTA and Status (Matches image CTA style) #}
-              <div class="mt-auto pt-3 d-flex justify-content-between align-items-center border-top border-v6-soft">
-                <span class="badge tag-shared-v6">
-                  Shared
-                </span>
-                <span class="small text-v6-link fw-bold library-cta-text">
-                  Read Now <i class="bi bi-arrow-right-circle-fill ms-1"></i>
-                </span>
-              </div>
+        {# --- Filter Card 1: Level --- #}
+        <div class="card library-filter-card mb-4">
+            <div class="card-body">
+                <h6 class="fw-bold v6-filter-heading">Reading Level</h6>
+                <div class="form-check">
+                    <input class="form-check-input filter-checkbox" type="checkbox" value="beginner" id="filterBeginner" data-filter-group="level">
+                    <label class="form-check-label library-text-body" for="filterBeginner">Beginner</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input filter-checkbox" type="checkbox" value="intermediate" id="filterIntermediate" data-filter-group="level">
+                    <label class="form-check-label library-text-body" for="filterIntermediate">Intermediate</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input filter-checkbox" type="checkbox" value="advanced" id="filterAdvanced" data-filter-group="level">
+                    <label class="form-check-label library-text-body" for="filterAdvanced">Advanced</label>
+                </div>
             </div>
-          </a>
         </div>
-      </div>
+
+        {# --- Filter Card 2: Language --- #}
+<!--        <div class="card library-filter-card mb-4">-->
+<!--            <div class="card-body">-->
+<!--                <h6 class="fw-bold v6-filter-heading">Language</h6>-->
+<!--                <div class="form-check">-->
+<!--                    <input class="form-check-input filter-checkbox" type="checkbox" value="en" id="filterEnglish" data-filter-group="language">-->
+<!--                    <label class="form-check-label library-text-body" for="filterEnglish">English</label>-->
+<!--                </div>-->
+<!--                <div class="form-check">-->
+<!--                    <input class="form-check-input filter-checkbox" type="checkbox" value="ko" id="filterKorean" data-filter-group="language">-->
+<!--                    <label class="form-check-label library-text-body" for="filterKorean">Korean (Placeholder)</label>-->
+<!--                </div>-->
+<!--                {# Add more languages here as needed #}-->
+<!--            </div>-->
+<!--        </div>-->
+
     </div>
-    {% endfor %}
-  </div>
+    {# --- END FILTER SIDEBAR --- #}
 
-  {# --- Pagination --- #}
-  <div class="d-flex justify-content-center mt-5">
-    <nav aria-label="Library Pagination">
-      <ul class="pagination pagination-lg library-pagination-v6">
-        <li class="page-item disabled">
-          <a class="page-link" href="#" tabindex="-1" aria-disabled="true">Previous</a>
-        </li>
-        <li class="page-item active"><a class="page-link" href="#">1</a></li>
-        <li class="page-item"><a class="page-link" href="#">2</a></li>
-        <li class="page-item"><a class="page-link" href="#">3</a></li>
-        <li class="page-item">
-          <a class="page-link" href="#">Next</a>
-        </li>
-      </ul>
-    </nav>
-  </div>
-  {# --- END Pagination --- #}
 
-  {% else %}
-  <div class="py-5 text-center text-v6-muted">
-    <p class="mb-1 fw-semibold library-text-body">No stories in the Library yet.</p>
-    <p class="small mb-0 library-text-body">
-      Your teacher can share stories from the <span class="fw-bold">Story Review</span> page.
-    </p>
-    <i class="bi bi-box-seam display-4 mt-4 d-block" style="color: var(--color-play-soft-border);"></i>
+    {# --- COLUMN 2: STORY LIST --- #}
+    <div class="col-lg-9">
+      {% if stories %}
+      <div class="row g-4 g-lg-5" id="storyListContainer">
+        {% for s in stories %}
+        <div class="col-sm-6 col-md-4 story-item"
+             data-title="{{ s.title | lower | e }}"
+             data-author="{{ s.author_name | lower | e }}"
+             data-level-rank="{{ s.level | lower | e }}"
+             data-language="{{ s.language | lower | e }}"
+             data-date="{{ s.story_created_at | dt('%s') }}">
+          <div class="book-wrap-v6">
+            <div class="card border-0 library-card-v6 h-100 p-0 position-relative">
+
+              {# Admin Remove Button (Positioned top-right of the whole card) #}
+              {% if is_admin %}
+              <form method="post" action="{{ url_for('admin_unshare_story', slug=s.slug) }}"
+                    onsubmit="return confirm('Are you sure you want to remove \'{{ s.title }}\' from the Library?');"
+                    class="admin-remove-form">
+                <button type="submit" class="btn btn-sm library-remove-btn-v6">
+                  <i class="bi bi-x-lg"></i>
+                </button>
+              </form>
+              {% endif %}
+
+              <a href="{{ url_for('book_view', draft_id=s.draft_id) }}"
+                 class="text-decoration-none text-reset d-flex flex-column h-100">
+
+                {# Image Wrapper #}
+                <div class="library-card-img-wrap-v6"
+                     style="background-image: url('{{ s.visuals or url_for('static', filename='img/fallback_cover.png') }}');">
+                  </div>
+
+                <div class="card-body p-4 d-flex flex-column flex-grow-1 card-details-area">
+
+                  {# Tags Refined and Grouped (Must match the image style: EN | Beginner) #}
+                  <div class="d-flex align-items-center mb-3 gap-2">
+                    <span class="v6-tag-level">{{ s.language|upper }}</span>
+                    <span class="v6-tag-level v6-tag-level-accent">{{ s.level|title }}</span>
+                  </div>
+
+                  {# Story Title (Large and Bold) #}
+                  <h4 class="fw-bold mb-3 text-v6-title truncate-2-lines">
+                    {{ s.title or "Box" }}
+                  </h4>
+
+                  {# Author (Small and Muted) #}
+                  <p class="small text-v6-muted mb-3 flex-grow-1 library-text-body">
+                    By <span class="fw-semibold">{{ s.author_name or "EduWeaver AI" }}</span>
+                  </p>
+
+                  {# Footer CTA and Status (Matches image CTA style) #}
+                  <div class="mt-auto pt-3 d-flex justify-content-between align-items-center border-top border-v6-soft">
+                    <span class="badge tag-shared-v6">
+                      Shared
+                    </span>
+                    <span class="small text-v6-link fw-bold library-cta-text">
+                      Read Now <i class="bi bi-arrow-right-circle-fill ms-1"></i>
+                    </span>
+                  </div>
+                </div>
+              </a>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+
+      <div class="py-5 text-center text-v6-muted" id="noResultsMessage" style="display: none;">
+        <p class="mb-1 fw-semibold library-text-body">No stories match your current filters and search query.</p>
+        <i class="bi bi-box-seam display-4 mt-4 d-block" style="color: var(--color-play-soft-border);"></i>
+      </div>
+
+      {# --- Pagination Placeholder --- #}
+      <div class="d-flex justify-content-center mt-5">
+        <nav aria-label="Library Pagination">
+          <ul class="pagination pagination-lg library-pagination-v6">
+            <li class="page-item disabled">
+              <a class="page-link" href="#" tabindex="-1" aria-disabled="true">Previous</a>
+            </li>
+            <li class="page-item active"><a class="page-link" href="#">1</a></li>
+            <li class="page-item"><a class="page-link" href="#">2</a></li>
+            <li class="page-item"><a class="page-link" href="#">3</a></li>
+            <li class="page-item">
+              <a class="page-link" href="#">Next</a>
+            </li>
+          </ul>
+        </nav>
+      </div>
+      {# --- END Pagination --- #}
+
+      {% else %}
+      <div class="py-5 text-center text-v6-muted">
+        <p class="mb-1 fw-semibold library-text-body">No stories in the Library yet.</p>
+        <p class="small mb-0 library-text-body">
+          Your teacher can share stories from the <span class="fw-bold">Story Review</span> page.
+        </p>
+        <i class="bi bi-box-seam display-4 mt-4 d-block" style="color: var(--color-play-soft-border);"></i>
+      </div>
+      {% endif %}
+    </div>
+    {# --- END STORY LIST COLUMN --- #}
   </div>
-  {% endif %}
 </div>
 
 <style>
@@ -186,10 +248,35 @@ body {
     line-height: 1.1;
     font-weight: 800;
 }
+.v6-section-title-small {
+    font-family: 'Baloo 2', cursive;
+    font-size: 1.4rem;
+    color: var(--color-play-heading);
+    font-weight: 700;
+}
 .v6-section-p {
     font-size: 1rem;
     color: var(--color-play-muted) !important;
     font-family: 'Fredoka', 'Nunito', sans-serif;
+}
+
+/* --- FILTER CARD STYLES --- */
+.library-filter-card {
+    border-radius: 1rem !important;
+    border: 2px solid var(--color-play-soft-border) !important;
+    background-color: #fffdfc;
+}
+.v6-filter-heading {
+    font-family: 'Baloo 2', cursive;
+    color: var(--color-play-coral);
+    font-size: 1.1rem;
+}
+.form-check-input:checked {
+    background-color: var(--color-play-coral);
+    border-color: var(--color-play-coral);
+}
+.form-check-input {
+    border-radius: 0.25rem;
 }
 
 /* --- SEARCH & SORT STYLES --- */
@@ -199,6 +286,7 @@ body {
     font-family: 'Fredoka', sans-serif;
     padding: 0.6rem 1rem;
     font-size: 1.1rem;
+    transition: all 0.2s;
 }
 .library-search-input .input-group-text {
     border-radius: 1.25rem 0 0 1.25rem;
@@ -210,14 +298,24 @@ body {
     border-radius: 0 1.25rem 1.25rem 0;
     border-left: none;
 }
+.library-search-input .form-control:focus {
+    border-color: var(--color-play-coral);
+    box-shadow: 0 0 0 0.1rem var(--color-play-coral-light);
+}
+
 .library-sort-label {
     background: #f1f5f9;
     color: var(--color-play-muted);
     font-family: 'Fredoka', sans-serif;
     border-radius: 1.25rem 0 0 1.25rem;
+    font-size: 1.1rem;
 }
 .form-select-lg {
     border-radius: 0 1.25rem 1.25rem 0;
+}
+.form-select-lg:focus {
+    border-color: var(--color-play-coral);
+    box-shadow: 0 0 0 0.1rem var(--color-play-coral-light);
 }
 
 
@@ -363,26 +461,128 @@ body {
 // Placeholder JavaScript for basic search/sort functionality (actual filtering requires backend/AJAX)
 (function() {
     const searchInput = document.getElementById('storySearch');
-    const stories = document.querySelectorAll('.book-wrap-v6');
+    const sortSelect = document.getElementById('storySort');
+    const storyListContainer = document.getElementById('storyListContainer');
+    const storyItems = Array.from(document.querySelectorAll('.story-item'));
+    const filterCheckboxes = document.querySelectorAll('.filter-checkbox');
+    const noResultsMessage = document.getElementById('noResultsMessage');
 
-    searchInput.addEventListener('input', function() {
-        const query = searchInput.value.toLowerCase();
+    // --- Data mapping and comparison functions ---
 
-        stories.forEach(storyWrap => {
-            const title = storyWrap.querySelector('.text-v6-title').textContent.toLowerCase();
-            const author = storyWrap.querySelector('.text-v6-muted span').textContent.toLowerCase();
+    const levelRankMap = {
+        'beginner': 1,
+        'intermediate': 2,
+        'advanced': 3
+    };
 
-            // Check if the current element has the 'truncate-2-lines' class applied
-            // Since the title is inside the card-body, we use a more robust check
-            const titleElement = storyWrap.querySelector('.text-v6-title.truncate-2-lines');
+    function getSortValue(item, sortKey) {
+        switch (sortKey) {
+            case 'title_asc':
+                return item.dataset.title; // String comparison
+            case 'level_asc':
+                // Get numeric rank for proper sorting
+                return levelRankMap[item.dataset.levelRank] || 99;
+            case 'newest':
+            default:
+                // Sort by date (timestamp is large integer)
+                return parseInt(item.dataset.date) * -1; // Use negative for DESC (Newest first)
+        }
+    }
 
-            if (title.includes(query) || author.includes(query)) {
-                storyWrap.parentElement.style.display = 'block';
-            } else {
-                storyWrap.parentElement.style.display = 'none';
+    // --- Core Filtering Logic ---
+    function isStoryVisible(item, lowerQuery, activeFilters) {
+        const title = item.dataset.title;
+        const author = item.dataset.author;
+        const level = item.dataset.levelRank;
+        const language = item.dataset.language;
+
+        // 1. Search Query Check (Must pass OR be empty)
+        const passesSearch = lowerQuery === '' || title.includes(lowerQuery) || author.includes(lowerQuery);
+
+        if (!passesSearch) return false;
+
+        // 2. Checkbox Filtering (AND logic between groups, OR logic within groups)
+        const passesLevel = activeFilters.level.length === 0 || activeFilters.level.includes(level);
+        const passesLanguage = activeFilters.language.length === 0 || activeFilters.language.includes(language);
+
+        // Combined filter check
+        return passesLevel && passesLanguage;
+    }
+
+
+    // --- Combined Update Logic ---
+    function updateView() {
+        const lowerQuery = searchInput.value.trim().toLowerCase();
+        const sortKey = sortSelect.value;
+        let visibleCount = 0;
+
+        // 1. Collect active filters
+        const activeFilters = {
+            level: [],
+            language: []
+        };
+        filterCheckboxes.forEach(checkbox => {
+            if (checkbox.checked) {
+                const group = checkbox.dataset.filterGroup;
+                if (activeFilters[group]) {
+                    activeFilters[group].push(checkbox.value);
+                }
             }
         });
+
+        // 2. Filter and collect visible items
+        const currentVisibleItems = [];
+
+        storyItems.forEach(item => {
+            if (isStoryVisible(item, lowerQuery, activeFilters)) {
+                item.style.display = 'block';
+                currentVisibleItems.push(item);
+                visibleCount++;
+            } else {
+                item.style.display = 'none';
+            }
+        });
+
+        // 3. Sort visible items
+        currentVisibleItems.sort((a, b) => {
+            const valA = getSortValue(a, sortKey);
+            const valB = getSortValue(b, sortKey);
+
+            if (typeof valA === 'string' && typeof valB === 'string') {
+                return valA.localeCompare(valB);
+            }
+            // Numeric comparison (for newest and level_asc)
+            return valA - valB;
+        });
+
+        // 4. Re-append items to update order
+        currentVisibleItems.forEach(item => {
+            storyListContainer.appendChild(item);
+        });
+
+        // 5. Show/Hide No Results Message
+        noResultsMessage.style.display = visibleCount === 0 ? 'block' : 'none';
+    }
+
+
+    // --- Event Listeners ---
+
+    // Search (Debounced)
+    let searchTimeout;
+    searchInput.addEventListener('input', function() {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(updateView, 300);
     });
+
+    // Sort/Filter Checkboxes (Immediate)
+    sortSelect.addEventListener('change', updateView);
+    filterCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', updateView);
+    });
+
+    // Initial load: Apply default sort and filters
+    updateView();
+
 })();
 </script>
 
