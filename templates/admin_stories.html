@@ -6,10 +6,13 @@
 
 {% set active_tab = request.args.get('tab') or active_tab or 'assign' %}
 {% set fragment = request.args.get('fragment') or fragment or '' %}
+{% set selected_class_id = request.args.get('class_id') or selected_class_id or '' %}
 
 <div class="admin-stories-wrap-v2 mt-3 mt-md-4">
   <div class="p-3 p-md-4">
-    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3 mb-md-4">
+
+    <!-- Header: Title + Class Switcher + Create Class -->
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3 mb-md-4">
       <div class="d-flex align-items-center gap-3">
         <div class="admin-pill-icon-v7">
           <i class="bi bi-stars"></i>
@@ -21,12 +24,87 @@
           </p>
         </div>
       </div>
-      <div>
-        <a href="{{ url_for('story_new') }}" class="btn btn-sm btn-action-primary-v7 rounded-pill shadow-sm admin-text-button">
-          <i class="bi bi-plus-lg me-1"></i> New Story
+
+      <div class="d-flex align-items-center gap-2 flex-wrap">
+
+        <!-- Class selector (changes dashboard scope) -->
+        <form method="get" action="{{ url_for('admin_stories') }}" class="d-flex align-items-center gap-2">
+          <input type="hidden" name="tab" value="{{ active_tab }}">
+          {% if fragment %}
+            <input type="hidden" name="fragment" value="{{ fragment }}">
+          {% endif %}
+
+          <div class="d-flex flex-column align-items-start">
+            <label class="form-label small text-uppercase text-muted admin-text-label mb-1" for="classSelectTop">
+              Select a class
+            </label>
+            <select id="classSelectTop"
+                    name="class_id"
+                    class="form-select rounded-pill admin-text-body class-select-v7"
+                    onchange="this.form.submit()">
+              <option value="">All classes</option>
+              {% for c in classes or [] %}
+                <option value="{{ c.id }}" {% if selected_class_id and (selected_class_id|string) == (c.id|string) %}selected{% endif %}>
+                  {{ c.name }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+        </form>
+
+        <!-- Create Class button (replaces New Story in header) -->
+        <button type="button"
+                class="btn d-none mt-4 btn-sm btn-action-primary-v7 rounded-pill shadow-sm admin-text-button"
+                data-bs-toggle="modal"
+                data-bs-target="#createClassModal">
+          <i class="bi bi-people-fill me-1"></i> Create Class
+        </button>
+        <a href="/classes"
+                class="btn mt-4 btn-sm btn-action-primary-v7 rounded-pill shadow-sm admin-text-button">
+
+          Manage Class
         </a>
+
       </div>
     </div>
+
+    <!-- Join code helper (shown when a class is selected and code is available) -->
+    {% if selected_class and (selected_class.join_code or selected_class.code) %}
+      {% set join_code = selected_class.join_code or selected_class.code %}
+      <div class="card border-0 rounded-4 shadow-sm mb-4">
+        <div class="card-body p-3 p-md-4">
+          <div class="d-flex align-items-start justify-content-between flex-wrap gap-2">
+            <div>
+              <h6 class="fw-bold mb-1 admin-text-title" style="font-size:1.1rem;">
+                Class Join Code · <span class="text-coral-dark">{{ selected_class.name }}</span>
+              </h6>
+              <div class="small text-muted admin-text-body">
+                Share this code with students so they can join your class.
+              </div>
+            </div>
+
+            <div class="d-flex align-items-center gap-2">
+              <div class="joincode-pill">
+                <span class="joincode-label">CODE</span>
+                <span class="joincode-value" id="joinCodeValue">{{ join_code }}</span>
+              </div>
+              <button type="button"
+                      class="btn btn-sm btn-action-outline-v7 rounded-pill admin-text-button"
+                      id="copyJoinCodeBtn"
+                      data-copy-text="{{ join_code }}">
+                <i class="bi bi-clipboard me-1"></i> Copy
+              </button>
+            </div>
+          </div>
+
+          <div class="mt-3 small admin-text-body">
+            Students can join at:
+            <span class="text-muted">Classes → Join Class</span>
+            (or whatever page you provide for joining).
+          </div>
+        </div>
+      </div>
+    {% endif %}
 
     <ul class="nav nav-pills mb-4 gap-2" id="adminTabs" role="tablist">
       <li class="nav-item" role="presentation">
@@ -34,7 +112,7 @@
            id="assign-tab"
            data-bs-toggle="pill"
            data-bs-target="#assign-pane"
-           href="{{ url_for('admin_stories', tab='assign') }}"
+           href="{{ url_for('admin_stories', tab='assign', class_id=selected_class_id or None) }}"
            role="tab"
            aria-controls="assign-pane"
            aria-selected="{{ 'true' if active_tab == 'assign' else 'false' }}">
@@ -47,7 +125,7 @@
            id="assigned-tab"
            data-bs-toggle="pill"
            data-bs-target="#assigned-pane"
-           href="{{ url_for('admin_stories', tab='assigned') }}"
+           href="{{ url_for('admin_stories', tab='assigned', class_id=selected_class_id or None) }}"
            role="tab"
            aria-controls="assigned-pane"
            aria-selected="{{ 'true' if active_tab == 'assigned' else 'false' }}">
@@ -60,7 +138,7 @@
            id="submitted-tab"
            data-bs-toggle="pill"
            data-bs-target="#review-pane"
-           href="{{ url_for('admin_stories', tab='submitted') }}"
+           href="{{ url_for('admin_stories', tab='submitted', class_id=selected_class_id or None) }}"
            role="tab"
            aria-controls="review-pane"
            aria-selected="{{ 'true' if active_tab == 'submitted' else 'false' }}">
@@ -71,6 +149,7 @@
 
     <div class="tab-content" id="adminTabsContent">
 
+      <!-- ASSIGN TAB -->
       <div class="tab-pane fade {% if active_tab == 'assign' %}show active{% endif %}"
            id="assign-pane" role="tabpanel" aria-labelledby="assign-tab">
 
@@ -81,7 +160,21 @@
             </h2>
             <p class="text-muted small admin-text-body mb-4">
               Choose a worksheet type, let GPT generate the tasks, and assign it to specific students.
+              {% if selected_class %}
+                <span class="d-block mt-1">Current class: <b class="text-coral-dark">{{ selected_class.name }}</b></span>
+              {% elif selected_class_id %}
+                <span class="d-block mt-1">Current class selected.</span>
+              {% else %}
+                <span class="d-block mt-1 text-warning-v7">Tip: Select a class to assign only to students in that class.</span>
+              {% endif %}
             </p>
+
+            {% if not selected_class_id %}
+              <div class="alert bg-light-soft-blue-v7 small admin-text-body mb-4">
+                <b>Please select a class</b> at the top to assign worksheets by class.
+                (You can still create stories any time using “New Story”.)
+              </div>
+            {% endif %}
 
             <div class="worksheet-stepper d-flex align-items-center gap-3 mb-4">
               <div class="d-flex align-items-center gap-2">
@@ -106,6 +199,9 @@
                   action="{{ url_for('admin_generate_worksheet') }}"
                   class="worksheet-gen-form">
 
+              <!-- IMPORTANT: pass class_id so backend can assign by class -->
+              <input type="hidden" name="class_id" value="{{ selected_class_id }}">
+
               <div class="worksheet-step active" data-step="1">
                 <div class="row g-3 mb-3">
                   <div class="col-md-8">
@@ -117,7 +213,8 @@
                            name="worksheet_title"
                            class="form-control rounded-3 admin-text-body"
                            placeholder="e.g. Writing · My Adventure Story"
-                           required>
+                           required
+                           {% if not selected_class_id %}disabled{% endif %}>
                     <div class="form-text small text-muted admin-text-body">
                       This title appears on the student's assignment page.
                     </div>
@@ -127,7 +224,8 @@
                 <div class="d-flex justify-content-end mt-3">
                   <button type="button"
                           class="btn btn-action-primary-v7 rounded-pill shadow-sm admin-text-button btn-step-next"
-                          data-next-step="2">
+                          data-next-step="2"
+                          {% if not selected_class_id %}disabled{% endif %}>
                     Next: Choose type <i class="bi bi-arrow-right ms-1"></i>
                   </button>
                 </div>
@@ -145,7 +243,8 @@
                              name="worksheet_type"
                              id="worksheetTypeWriting"
                              value="writing"
-                             required>
+                             required
+                             {% if not selected_class_id %}disabled{% endif %}>
                       <label class="form-check-label fw-medium admin-text-body" for="worksheetTypeWriting">
                         Writing & Story Creation
                       </label>
@@ -155,7 +254,8 @@
                              type="radio"
                              name="worksheet_type"
                              id="worksheetTypeReading"
-                             value="reading">
+                             value="reading"
+                             {% if not selected_class_id %}disabled{% endif %}>
                       <label class="form-check-label fw-medium admin-text-body" for="worksheetTypeReading">
                         Reading comprehension – <b>MCQ + fill-in-the-blank + short answer</b> based on a selected story.
                       </label>
@@ -177,7 +277,8 @@
                         <select id="writingLevelSelect"
                                 name="writing_level"
                                 class="form-select rounded-3 admin-text-body"
-                                required>
+                                required
+                                {% if not selected_class_id %}disabled{% endif %}>
                             <option value="beginner">Beginner</option>
                             <option value="intermediate">Intermediate</option>
                             <option value="advanced">Advanced</option>
@@ -194,7 +295,8 @@
                         <select id="writingModeSelect"
                                 name="writing_mode"
                                 class="form-select rounded-3 admin-text-body"
-                                required>
+                                required
+                                {% if not selected_class_id %}disabled{% endif %}>
                             <option value="planning">1. Free Writing (Planning Worksheet)</option>
                             <option value="completion" selected>2. Story Completion (Missing Part)</option>
                         </select>
@@ -218,7 +320,8 @@
                         </label>
                         <select id="worksheetStorySelect"
                                 name="story_id"
-                                class="form-select rounded-3 admin-text-body">
+                                class="form-select rounded-3 admin-text-body"
+                                {% if not selected_class_id %}disabled{% endif %}>
                           <option value="">Select a story…</option>
                           {% for s in stories %}
                             <option value="{{ s.id }}"
@@ -238,12 +341,14 @@
                 <div class="d-flex justify-content-between mt-3">
                   <button type="button"
                           class="btn btn-outline-secondary rounded-pill admin-text-button btn-step-prev"
-                          data-prev-step="1">
+                          data-prev-step="1"
+                          {% if not selected_class_id %}disabled{% endif %}>
                     <i class="bi bi-arrow-left me-1"></i> Back
                   </button>
                   <button type="button"
                           class="btn btn-action-primary-v7 rounded-pill shadow-sm admin-text-button btn-step-next"
-                          data-next-step="3">
+                          data-next-step="3"
+                          {% if not selected_class_id %}disabled{% endif %}>
                     Next: Select students <i class="bi bi-arrow-right ms-1"></i>
                   </button>
                 </div>
@@ -263,7 +368,8 @@
                              type="checkbox"
                              name="user_ids"
                              value="{{ u.id }}"
-                             id="worksheet_user_{{ u.id }}">
+                             id="worksheet_user_{{ u.id }}"
+                             {% if not selected_class_id %}disabled{% endif %}>
                       <label class="form-check-label fw-medium admin-text-body" for="worksheet_user_{{ u.id }}">
                         {{ u.username }}
                         <span class="text-muted">· {{ u.email }}</span>
@@ -276,7 +382,7 @@
                   </div>
                   {% else %}
                   <p class="small text-muted mb-0 admin-text-body">
-                    No students found. Ask students to sign up first.
+                    No students found in this class.
                   </p>
                   {% endif %}
                 </div>
@@ -284,12 +390,14 @@
                 <div class="d-flex justify-content-between mt-3">
                   <button type="button"
                           class="btn btn-outline-secondary rounded-pill admin-text-button btn-step-prev"
-                          data-prev-step="2">
+                          data-prev-step="2"
+                          {% if not selected_class_id %}disabled{% endif %}>
                     <i class="bi bi-arrow-left me-1"></i> Back
                   </button>
                   <button type="submit"
                           id="worksheetSubmitBtn"
-                          class="btn btn-action-primary-v7 rounded-pill shadow-sm admin-text-button">
+                          class="btn btn-action-primary-v7 rounded-pill shadow-sm admin-text-button"
+                          {% if not selected_class_id %}disabled{% endif %}>
                     <i class="bi bi-magic me-1"></i>
                     Generate & Assign Worksheet
                   </button>
@@ -307,6 +415,7 @@
         </div>
       </div>
 
+      <!-- ASSIGNED TAB -->
       <div class="tab-pane fade {% if active_tab == 'assigned' %}show active{% endif %}"
            id="assigned-pane" role="tabpanel" aria-labelledby="assigned-tab">
 
@@ -338,6 +447,11 @@
                          class="fw-bold text-coral-dark admin-text-body text-decoration-none">
                         {{ g.assignment_title or ('Writing Worksheet' if g.assignment_type == 'finish' else 'Reading Worksheet') }}
                       </a>
+                      {% if g.class_name %}
+                        <div class="small text-muted admin-text-body mt-1">
+                          Class: {{ g.class_name }}
+                        </div>
+                      {% endif %}
                     </td>
 
                     <td class="table-td-padding">
@@ -423,8 +537,7 @@
             <div class="modal-dialog modal-lg modal-dialog-centered">
               <div class="modal-content rounded-4">
                 <form method="POST"
-                      action="{{ url_for('admin_edit_worksheet_assignment',
-                                         assignment_id=g.primary_assignment_id) }}">
+                      action="{{ url_for('admin_edit_worksheet_assignment', assignment_id=g.primary_assignment_id) }}">
                   <div class="modal-header border-0">
                     <h5 class="modal-title fw-bold admin-text-title"
                         id="editAssignmentGroupLabel-{{ g.group_id }}">
@@ -556,6 +669,7 @@
         {% endif %}
       </div>
 
+      <!-- SUBMITTED TAB -->
       <div class="tab-pane fade {% if active_tab == 'submitted' %}show active{% endif %}"
            id="review-pane" role="tabpanel" aria-labelledby="submitted-tab">
         <h2 class="fw-bold mb-3 admin-title-v7" style="font-size: 1.75rem;">
@@ -577,6 +691,9 @@
                     <span class="text-coral-dark">
                         {{ sub.assignee_username }}
                         <span class="text-muted fw-normal small"> · {{ sub.story_title }}</span>
+                        {% if sub.class_name %}
+                          <span class="text-muted fw-normal small"> · {{ sub.class_name }}</span>
+                        {% endif %}
                     </span>
 
                     <div class="d-flex gap-2 align-items-center">
@@ -596,19 +713,15 @@
                   <div class="d-flex justify-content-between align-items-center mb-3">
                       <p class="small text-muted mb-0">Submitted: {{ sub.submitted_at|dt("%Y-%m-%d %H:%M") }} &bull; Assignment: {{ sub.assignment_title }}</p>
 
-                      {# --- REVIEW/GRADE BUTTON LINKS TO DEDICATED PAGE (main action) --- #}
                       <a href="{{ url_for('admin_grading_page', submission_id=sub.submission_id) }}"
                          class="btn btn-action-primary-v7 rounded-pill shadow-sm admin-text-button btn-sm">
                           <i class="bi bi-pencil-fill me-1"></i> Review & Grade
                       </a>
-                      {# --- END REVIEW/GRADE BUTTON --- #}
                   </div>
 
-                  {# --- PREVIEW REMOVED PER USER REQUEST ---#}
                   <div class="small text-muted pt-2">
                     Click 'Review & Grade' to view the full assignment and student response.
                   </div>
-                  {# --- END PREVIEW REMOVED --- #}
                 </div>
               </div>
             </div>
@@ -625,7 +738,7 @@
   </div>
 </div>
 
-{# Loading overlay for Worksheet generation with GPT #}
+<!-- Loading overlay -->
 <div id="worksheetLoadingOverlay"
      class="position-fixed top-0 start-0 w-100 h-100 d-none"
      style="background: rgba(15,23,42,0.65); z-index: 1057;">
@@ -639,9 +752,56 @@
   </div>
 </div>
 
-{# --- GRADING MODAL STRUCTURE REMOVED --- #}
-{# The entire modal structure for #gradingModal is removed as requested. #}
+<!-- Create Class Modal -->
+<div class="modal fade" id="createClassModal" tabindex="-1" aria-labelledby="createClassLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content rounded-4">
+      <form method="POST" action="{{ url_for('admin_create_class') }}">
+        <div class="modal-header border-0">
+          <h5 class="modal-title fw-bold admin-text-title" id="createClassLabel">
+            Create a New Class
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
 
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label small text-uppercase text-muted admin-text-label">
+              Class Name
+            </label>
+            <input type="text"
+                   name="class_name"
+                   class="form-control rounded-3 admin-text-body"
+                   placeholder="e.g. Grade 5 · English A"
+                   required>
+            <div class="form-text small text-muted admin-text-body">
+              A join code will be generated automatically so students can join.
+            </div>
+          </div>
+
+          <div class="alert bg-light-soft-blue-v7 small admin-text-body">
+            After creating the class, you can share the <b>join code</b> with students.
+            Students will enter the code on the <b>Join Class</b> page to enroll.
+          </div>
+        </div>
+
+        <div class="modal-footer border-0 d-flex justify-content-between">
+          <button type="button"
+                  class="btn btn-outline-secondary rounded-pill admin-text-button"
+                  data-bs-dismiss="modal">
+            Cancel
+          </button>
+          <button type="submit"
+                  class="btn btn-action-primary-v7 rounded-pill admin-text-button">
+            <i class="bi bi-plus-circle me-1"></i> Create Class
+          </button>
+
+
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
 
 <script>
 (function(){
@@ -657,7 +817,6 @@
 
     if (!step2Writing || !step2Reading) return;
 
-    // Show/Hide Writing/Reading sub-sections
     if (type === 'writing') {
       step2Writing.classList.remove('d-none');
       step2Reading.classList.add('d-none');
@@ -669,7 +828,6 @@
       step2Reading.classList.add('d-none');
     }
 
-    // Manage story selection requirement based on type
     if (storySelect) {
       if (type === 'reading') {
         storySelect.disabled = false;
@@ -680,22 +838,20 @@
       }
     }
 
-    // Manage writing level/mode requirement only if writing is selected
     const writingLevelSelect = document.getElementById('writingLevelSelect');
     const writingModeSelect = document.getElementById('writingModeSelect');
 
-    if (writingLevelSelect) {
-        if (type === 'writing') {
-            writingLevelSelect.setAttribute('required', 'required');
-            writingModeSelect.setAttribute('required', 'required');
-        } else {
-            writingLevelSelect.removeAttribute('required');
-            writingModeSelect.removeAttribute('required');
-        }
+    if (writingLevelSelect && writingModeSelect) {
+      if (type === 'writing') {
+        writingLevelSelect.setAttribute('required', 'required');
+        writingModeSelect.setAttribute('required', 'required');
+      } else {
+        writingLevelSelect.removeAttribute('required');
+        writingModeSelect.removeAttribute('required');
+      }
     }
   }
 
-  // Auto-fill title only when reading + story selected
   if (storySelect && worksheetTitleInput) {
     storySelect.addEventListener('change', function () {
       const selectedType = document.querySelector('input[name="worksheet_type"]:checked')?.value;
@@ -712,11 +868,8 @@
     });
   }
 
-  typeRadios.forEach(r => {
-    r.addEventListener('change', updateStep2View);
-  });
+  typeRadios.forEach(r => r.addEventListener('change', updateStep2View));
 
-  // STEP WIZARD: fade-in / fade-out
   const steps = Array.from(document.querySelectorAll('.worksheet-step'));
   const stepCircles = Array.from(document.querySelectorAll('.step-circle'));
   let currentStep = 1;
@@ -724,29 +877,24 @@
   function setStepCircleActive(stepNum) {
     stepCircles.forEach(c => {
       const s = parseInt(c.getAttribute('data-step-circle'), 10);
-      if (s === stepNum) {
-        c.classList.add('step-circle-active');
-      } else {
-        c.classList.remove('step-circle-active');
-      }
+      c.classList.toggle('step-circle-active', s === stepNum);
     });
   }
 
   function showStep(targetStep) {
-    // Basic form validation before moving to step 2/3
     if (currentStep === 1 && targetStep === 2) {
-      if (!worksheetTitleInput.value) {
+      if (worksheetTitleInput && !worksheetTitleInput.value) {
         worksheetTitleInput.reportValidity();
         return;
       }
     }
 
     if (currentStep === 2 && targetStep === 3) {
-        const selectedType = document.querySelector('input[name="worksheet_type"]:checked')?.value;
-        if (selectedType === 'reading' && storySelect && !storySelect.value) {
-            storySelect.reportValidity();
-            return;
-        }
+      const selectedType = document.querySelector('input[name="worksheet_type"]:checked')?.value;
+      if (selectedType === 'reading' && storySelect && !storySelect.value) {
+        storySelect.reportValidity();
+        return;
+      }
     }
 
     if (targetStep === currentStep) return;
@@ -765,16 +913,13 @@
     }
 
     nextEl.style.display = 'block';
-    requestAnimationFrame(() => {
-      nextEl.classList.add('active');
-    });
+    requestAnimationFrame(() => nextEl.classList.add('active'));
 
     currentStep = targetStep;
     setStepCircleActive(targetStep);
-    updateStep2View(); // Re-check view state just in case
+    updateStep2View();
   }
 
-  // Init: only step 1 visible
   steps.forEach(step => {
     const s = parseInt(step.getAttribute('data-step'), 10);
     if (s === 1) {
@@ -788,49 +933,36 @@
   setStepCircleActive(1);
   updateStep2View();
 
-  // Next / Prev buttons
   document.querySelectorAll('.btn-step-next').forEach(btn => {
     btn.addEventListener('click', () => {
       const next = parseInt(btn.getAttribute('data-next-step'), 10);
-      if (!isNaN(next)) {
-        showStep(next);
-      }
+      if (!isNaN(next)) showStep(next);
     });
   });
   document.querySelectorAll('.btn-step-prev').forEach(btn => {
     btn.addEventListener('click', () => {
       const prev = parseInt(btn.getAttribute('data-prev-step'), 10);
-      if (!isNaN(prev)) {
-        showStep(prev);
-      }
+      if (!isNaN(prev)) showStep(prev);
     });
   });
 
-  // Worksheet form: show loading overlay on submit
   const worksheetForm = document.getElementById('worksheetForm');
   const worksheetSubmitBtn = document.getElementById('worksheetSubmitBtn');
   const worksheetLoadingOverlay = document.getElementById('worksheetLoadingOverlay');
 
   if (worksheetForm) {
-    worksheetForm.addEventListener('submit', function () {
-      // Final validation (in case of skip)
+    worksheetForm.addEventListener('submit', function (e) {
       const selectedType = document.querySelector('input[name="worksheet_type"]:checked')?.value;
-
       let isValid = true;
-      if (selectedType === 'reading' && storySelect && !storySelect.value) {
-          isValid = false;
-      }
+
+      if (selectedType === 'reading' && storySelect && !storySelect.value) isValid = false;
 
       if (isValid) {
-        if (worksheetSubmitBtn) {
-          worksheetSubmitBtn.disabled = true;
-        }
-        if (worksheetLoadingOverlay) {
-          worksheetLoadingOverlay.classList.remove('d-none');
-        }
+        if (worksheetSubmitBtn) worksheetSubmitBtn.disabled = true;
+        if (worksheetLoadingOverlay) worksheetLoadingOverlay.classList.remove('d-none');
       } else {
-          // Prevent submission if invalid
-          if (selectedType === 'reading') storySelect.reportValidity();
+        e.preventDefault();
+        if (selectedType === 'reading' && storySelect) storySelect.reportValidity();
       }
     });
   }
@@ -840,53 +972,38 @@
   const fragment = '{{ fragment }}';
 
   let tabIdToShow = null;
-
-  if (activeTab === 'assigned') {
-    tabIdToShow = 'assigned-tab';
-  } else if (activeTab === 'submitted' || fragment) {
-    tabIdToShow = 'submitted-tab';
-  } else {
-    tabIdToShow = 'assign-tab';
-  }
+  if (activeTab === 'assigned') tabIdToShow = 'assigned-tab';
+  else if (activeTab === 'submitted' || fragment) tabIdToShow = 'submitted-tab';
+  else tabIdToShow = 'assign-tab';
 
   if (tabIdToShow) {
     const tabEl = document.getElementById(tabIdToShow);
-    if (tabEl && window.bootstrap && bootstrap.Tab) {
-      new bootstrap.Tab(tabEl).show();
-    }
+    if (tabEl && window.bootstrap && bootstrap.Tab) new bootstrap.Tab(tabEl).show();
   }
 
-  if (fragment) {
-    const targetAccordion = document.getElementById(fragment);
-    if (targetAccordion && window.bootstrap && bootstrap.Collapse) {
-      new bootstrap.Collapse(targetAccordion, { toggle: false }).show();
-      targetAccordion.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
+  // Copy join code
+  const copyBtn = document.getElementById('copyJoinCodeBtn');
+  if (copyBtn) {
+    copyBtn.addEventListener('click', async () => {
+      const txt = copyBtn.getAttribute('data-copy-text') || '';
+      try {
+        await navigator.clipboard.writeText(txt);
+        copyBtn.innerHTML = '<i class="bi bi-check2 me-1"></i> Copied';
+        setTimeout(() => {
+          copyBtn.innerHTML = '<i class="bi bi-clipboard me-1"></i> Copy';
+        }, 900);
+      } catch (e) {
+        // fallback
+        const ta = document.createElement('textarea');
+        ta.value = txt;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+      }
+    });
   }
 })();
-
-
-// Helper function to remove excessive newlines and format text for display
-function cleanAndFormatText(text) {
-    if (!text) return '— No text found —';
-
-    // 1. Convert Markdown headers to strong/headers (using h6)
-    let cleaned = text.replace(/###\s*(.*?)\s*/g, '<h6>$1</h6>');
-    // 2. Remove excessive newlines (more than 2 consecutive newlines/whitespace groups)
-    cleaned = cleaned.replace(/(\s*\n\s*){2,}/g, '<br><br>');
-    // 3. Convert remaining newlines to HTML breaks
-    cleaned = cleaned.replace(/\n/g, '<br>');
-
-    // Optional: Decode HTML entities if necessary (only if text was escaped before DB insertion)
-    const el = document.createElement('div');
-    el.innerHTML = cleaned;
-    return el.textContent.replace(/&amp;/g, '&'); // Basic HTML entity fix
-}
-
-
-// --- MODAL GRADING LOGIC (REMOVED) ---
-// The loadSubmissionForGrading function is removed as it's no longer needed for a modal.
-
 </script>
 
 <style>
@@ -904,17 +1021,9 @@ function cleanAndFormatText(text) {
 }
 
 /* Fonts */
-.admin-title-v7, .admin-text-title, .admin-text-button {
-    font-family: 'Baloo 2', cursive;
-    font-weight: 700;
-}
-.admin-text-body, .admin-text-label, .admin-text-tag {
-    font-family: 'Fredoka', 'Nunito', sans-serif;
-}
-.admin-title-v7 {
-    font-size: 2.25rem;
-    color: var(--coral-dark);
-}
+.admin-title-v7, .admin-text-title, .admin-text-button { font-family: 'Baloo 2', cursive; font-weight: 700; }
+.admin-text-body, .admin-text-label, .admin-text-tag { font-family: 'Fredoka', 'Nunito', sans-serif; }
+.admin-title-v7 { font-size: 2.25rem; color: var(--coral-dark); }
 .admin-text-title { font-size: 1.5rem; }
 .admin-text-label { font-weight: 600 !important; }
 .admin-text-button { font-weight: 600 !important; }
@@ -925,281 +1034,171 @@ function cleanAndFormatText(text) {
 .text-warning-v7 { color: var(--warning-v7) !important; }
 .bg-light-soft-blue-v7 { background-color: var(--light-soft-blue-v7) !important; }
 
-.admin-stories-wrap-v2 {
-  max-width: 1300px;
-  margin-inline: auto;
-}
+.admin-stories-wrap-v2 { max-width: 1300px; margin-inline: auto; }
 
 /* Header pill icon */
-.admin-pill-icon-v7 {
-  width: 52px;
-  height: 52px;
-  border-radius: 1.25rem;
-  background: linear-gradient(135deg, var(--coral-main), var(--coral-dark));
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.75rem;
-  color: #fff;
-  box-shadow: 0 0.5rem 1rem rgba(255, 107, 107, 0.4);
+.admin-pill-icon-v7{
+  width:52px;height:52px;border-radius:1.25rem;
+  background:linear-gradient(135deg,var(--coral-main),var(--coral-dark));
+  display:inline-flex;align-items:center;justify-content:center;
+  font-size:1.75rem;color:#fff;
+  box-shadow:0 0.5rem 1rem rgba(255,107,107,.4);
 }
 
 /* Buttons */
-.btn-action-primary-v7 {
-  background-color: var(--coral-main);
-  border-color: var(--coral-main);
-  color: #fff;
-  font-weight: 600;
-  padding: 0.5rem 1.2rem;
-  transition: all 0.2s;
-  box-shadow: 0 4px 8px rgba(255, 107, 107, 0.3);
+.btn-action-primary-v7{
+  background-color:var(--coral-main); border-color:var(--coral-main); color:#fff;
+  font-weight:600; padding:.5rem 1.2rem; transition:all .2s;
+  box-shadow:0 4px 8px rgba(255,107,107,.3);
 }
-.btn-action-primary-v7:hover {
-  background-color: #e86060;
-  border-color: #e86060;
-  transform: translateY(-2px);
-  box-shadow: 0 6px 12px rgba(255, 107, 107, 0.4);
+.btn-action-primary-v7:hover{
+  background-color:#e86060; border-color:#e86060;
+  transform:translateY(-2px);
+  box-shadow:0 6px 12px rgba(255,107,107,.4);
+}
+.btn-action-outline-v7{
+  color:var(--coral-dark); border-color:var(--coral-light); background-color:#fff;
+  transition:all .2s; font-weight:600; padding:.4rem 1rem;
+}
+.btn-action-outline-v7:hover{
+  background-color:#ffece5; border-color:var(--coral-main); color:var(--coral-dark);
+}
+
+/* Class selector */
+.class-select-v7{
+  min-width: 220px;
+  border: 1px solid var(--coral-light);
+}
+.class-select-v7:focus{
+  box-shadow:0 0 0 .25rem rgba(255,107,107,.25);
+  border-color:var(--coral-main);
+}
+
+/* Join code pill */
+.joincode-pill{
+  display:inline-flex; align-items:center; gap:.55rem;
+  background:linear-gradient(90deg,#ffece5,#fff7e5);
+  border:1px solid var(--coral-light);
+  padding:.4rem .8rem;
+  border-radius:999px;
+}
+.joincode-label{
+  font-size:.72rem; letter-spacing:.08em;
+  font-weight:800; color:var(--coral-dark);
+}
+.joincode-value{
+  font-weight:800;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  color:#0b1220;
 }
 
 /* Table container */
-.admin-table-shell-v7 {
-  border-radius: 1.5rem;
-  overflow: hidden;
-  border: 2px solid var(--coral-light);
-  background: #ffffff;
-  box-shadow: 0 0.5rem 1.5rem rgba(255, 107, 107, 0.15);
+.admin-table-shell-v7{
+  border-radius:1.5rem; overflow:hidden;
+  border:2px solid var(--coral-light);
+  background:#fff;
+  box-shadow:0 .5rem 1.5rem rgba(255,107,107,.15);
 }
-.table-padding-outer {
-  padding: 1.5rem !important;
-}
+.table-padding-outer{ padding:1.5rem !important; }
 
 /* Table head */
-.story-table-v7 thead {
-  background: linear-gradient(90deg, #ffece5, #fff7e5);
-  border-bottom: 2px solid var(--coral-light);
+.story-table-v7 thead{
+  background:linear-gradient(90deg,#ffece5,#fff7e5);
+  border-bottom:2px solid var(--coral-light);
 }
-.story-table-v7 thead th {
-  border-bottom: 0;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  font-size: 0.75rem;
-  color: var(--coral-dark);
+.story-table-v7 thead th{
+  border-bottom:0; font-weight:700; text-transform:uppercase;
+  letter-spacing:.05em; font-size:.75rem; color:var(--coral-dark);
 }
-.table-th-padding {
-  padding-top: 1.2rem !important;
-  padding-bottom: 1.2rem !important;
-}
-.table-td-padding {
-  padding-top: var(--table-padding-v2) !important;
-  padding-bottom: var(--table-padding-v2) !important;
-}
+.table-th-padding{ padding-top:1.2rem !important; padding-bottom:1.2rem !important; }
+.table-td-padding{ padding-top:var(--table-padding-v2) !important; padding-bottom:var(--table-padding-v2) !important; }
 
 /* Table rows */
-.story-table-v7 tbody tr td {
-  border-top-color: rgba(0,0,0,0.08);
-}
-.story-table-v7 tbody tr {
-  transition: background-color .15s ease, transform .15s ease;
-}
-.story-table-v7 tbody tr:hover {
-  background-color: var(--soft-yellow-v7);
-  transform: scale(1.005);
-}
+.story-table-v7 tbody tr td{ border-top-color:rgba(0,0,0,.08); }
+.story-table-v7 tbody tr{ transition:background-color .15s ease, transform .15s ease; }
+.story-table-v7 tbody tr:hover{ background-color:var(--soft-yellow-v7); transform:scale(1.005); }
 
 /* Status pills */
-.status-pill {
-  padding: 0.3rem 0.8rem;
-  border-radius: 1rem;
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-}
-.status-assigned-v7-yes { background-color: #d1fae5; color: #047857; }
-.status-assigned-v7-no { background-color: #F3F4F6; color: #6B7280; }
-
-/* Outline buttons */
-.btn-action-outline-v7 {
-  color: var(--coral-dark);
-  border-color: var(--coral-light);
-  background-color: #fff;
-  transition: all 0.2s;
-  font-weight: 600;
-  padding: 0.4rem 1rem;
-}
-.btn-action-outline-v7:hover {
-  background-color: #ffece5;
-  border-color: var(--coral-main);
-  color: var(--coral-dark);
-}
-
-/* Tags */
-.story-tags-wrap {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-.story-tag {
-  padding: 0.3rem 0.7rem;
-  border-radius: 1rem;
-  font-size: 0.8rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-}
-.tag-lang-v7 {
-  background-color: #fcece5;
-  color: var(--coral-dark);
-}
-.tag-level-v7 {
-  background-color: #d1fae5;
-  color: #047857;
+.status-pill{
+  padding:.3rem .8rem; border-radius:1rem; font-size:.75rem;
+  font-weight:700; letter-spacing:.02em;
 }
 
 /* Modal-style list for students */
-.admin-student-list-v7 {
-  max-height: 220px;
-  overflow-y: auto;
-  background: #fcfcfc;
-  border: 1px solid #eee;
-  padding: 1rem !important;
-  border-radius: 1rem !important;
+.admin-student-list-v7{
+  max-height:220px; overflow-y:auto;
+  background:#fcfcfc; border:1px solid #eee;
+  padding:1rem !important; border-radius:1rem !important;
 }
 
 /* Inputs */
-.form-check-input {
-  border-radius: 0.45em;
-  border-width: 2px;
+.form-check-input{ border-radius:.45em; border-width:2px; }
+.form-check-input:focus{
+  box-shadow:0 0 0 .25rem rgba(255,107,107,.3);
+  border-color:var(--coral-main);
 }
-.form-check-input:focus {
-  box-shadow: 0 0 0 0.25rem rgba(255, 107, 107, 0.3);
-  border-color: var(--coral-main);
-}
-.form-check-input:checked {
-  background-color: var(--coral-main);
-  border-color: var(--coral-main);
-}
-.form-check-input[type="radio"] {
-  border-radius: 50%;
-}
+.form-check-input:checked{ background-color:var(--coral-main); border-color:var(--coral-main); }
+.form-check-input[type="radio"]{ border-radius:50%; }
 
 /* Loading overlay spinner color */
-#worksheetLoadingOverlay .spinner-grow {
-  color: var(--coral-main) !important;
-}
+#worksheetLoadingOverlay .spinner-grow{ color:var(--coral-main) !important; }
 
-/* Accordion styling for Submitted Work */
-.accordion-item {
-  border: none;
-  margin-bottom: 0.75rem;
-  border-radius: 1rem;
+/* Accordion styling */
+.accordion-item{ border:none; margin-bottom:.75rem; border-radius:1rem; }
+.accordion-button{
+  background-color:#fff; border-radius:1rem !important;
+  border:1px solid var(--coral-light);
+  transition:background-color .2s, box-shadow .2s;
+  padding:1.25rem 1.5rem; font-size:1.1rem; color:var(--coral-dark);
 }
-.accordion-button {
-  background-color: #fff;
-  border-radius: 1rem !important;
-  border: 1px solid var(--coral-light);
-  transition: background-color 0.2s, box-shadow 0.2s;
-  padding: 1.25rem 1.5rem;
-  font-size: 1.1rem;
-  color: var(--coral-dark);
+.accordion-button:not(.collapsed){
+  background-color:var(--soft-yellow-v7); color:var(--coral-dark);
+  box-shadow:none; border-bottom-left-radius:0 !important; border-bottom-right-radius:0 !important;
+  border-bottom:1px solid var(--coral-light);
 }
-.accordion-button:not(.collapsed) {
-  background-color: var(--soft-yellow-v7);
-  color: var(--coral-dark);
-  box-shadow: none;
-  border-bottom-left-radius: 0 !important;
-  border-bottom-right-radius: 0 !important;
-  border-bottom: 1px solid var(--coral-light);
-}
-.accordion-button:focus {
-  box-shadow: 0 0 0 0.25rem rgba(255, 107, 107, 0.3);
-}
-.accordion-body {
-  background: #fff;
-  border: 1px solid var(--coral-light);
-  border-top: none;
-  border-bottom-left-radius: 1rem;
-  border-bottom-right-radius: 1rem;
-}
-.alert-success-v7 {
-  background-color: #d1fae5;
-  color: #047857;
-  border: 1px solid rgba(16, 185, 129, 0.4);
+.accordion-button:focus{ box-shadow:0 0 0 .25rem rgba(255,107,107,.3); }
+.accordion-body{
+  background:#fff; border:1px solid var(--coral-light); border-top:none;
+  border-bottom-left-radius:1rem; border-bottom-right-radius:1rem;
 }
 
 /* Nav tabs styling */
-.nav-pills .nav-item {
-  padding: 0;
+.nav-pills .nav-item{ padding:0; }
+.nav-pills .nav-link{
+  font-family:'Baloo 2', cursive;
+  font-weight:600; border-radius:999px;
+  padding:.5rem 1.2rem; color:var(--coral-dark);
+  border:1px solid var(--coral-light);
+  background:#fff; transition:all .2s;
 }
-.nav-pills .nav-link {
-  font-family: 'Baloo 2', cursive;
-  font-weight: 600;
-  border-radius: 999px;
-  padding: .5rem 1.2rem;
-  color: var(--coral-dark);
-  border: 1px solid var(--coral-light);
-  background: #fff;
-  transition: all 0.2s;
-}
-.nav-pills .nav-link:hover:not(.active) {
-  background-color: var(--soft-yellow-v7);
-  border-color: var(--coral-main);
-  color: var(--coral-dark);
+.nav-pills .nav-link:hover:not(.active){
+  background-color:var(--soft-yellow-v7);
+  border-color:var(--coral-main);
+  color:var(--coral-dark);
 }
 .nav-pills .nav-link.active,
-.nav-pills .nav-link.active:hover {
-  color: #fff;
-  background: var(--coral-main);
-  border-color: var(--coral-main);
-  box-shadow: 0 4px 8px rgba(255, 107, 107, 0.3);
-  transform: none;
+.nav-pills .nav-link.active:hover{
+  color:#fff; background:var(--coral-main); border-color:var(--coral-main);
+  box-shadow:0 4px 8px rgba(255,107,107,.3);
 }
 
-/* Stepper styling */
-.worksheet-stepper {
-  border-radius: 999px;
-  background: #fff7ef;
-  padding: 0.6rem 0.9rem;
+/* Stepper */
+.worksheet-stepper{ border-radius:999px; background:#fff7ef; padding:.6rem .9rem; }
+.step-circle{
+  width:28px;height:28px;border-radius:999px;border:2px solid #fbbfbd;
+  display:inline-flex;align-items:center;justify-content:center;
+  font-size:.8rem;font-weight:700;color:#f97373;background:#fff;transition:all .2s;
 }
-.step-circle {
-  width: 28px;
-  height: 28px;
-  border-radius: 999px;
-  border: 2px solid #fbbfbd;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: #f97373;
-  background: #fff;
-  transition: all 0.2s;
+.step-circle-active{
+  background:var(--coral-main); border-color:var(--coral-main); color:#fff;
+  box-shadow:0 .3rem .8rem rgba(255,107,107,.4);
 }
-.step-circle-active {
-  background: var(--coral-main);
-  border-color: var(--coral-main);
-  color: #fff;
-  box-shadow: 0 0.3rem 0.8rem rgba(255, 107, 107, 0.4);
-}
-.step-line {
-  height: 2px;
-  background: linear-gradient(90deg, #fed7d7, #fecaca);
-}
+.step-line{ height:2px; background:linear-gradient(90deg,#fed7d7,#fecaca); }
 
-/* Step panes fade-in/fade-out */
-.worksheet-step {
-  opacity: 0;
-  display: none;
-  transition: opacity 0.22s ease;
-}
-.worksheet-step.active {
-  display: block;
-  opacity: 1;
-}
-.worksheet-step.fading-out {
-  display: block;
-  opacity: 0;
-}
+/* Step panes fade */
+.worksheet-step{ opacity:0; display:none; transition:opacity .22s ease; }
+.worksheet-step.active{ display:block; opacity:1; }
+.worksheet-step.fading-out{ display:block; opacity:0; }
 </style>
 
 {% endblock %}

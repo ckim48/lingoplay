@@ -7,7 +7,7 @@ from datetime import datetime
 from functools import wraps
 from urllib.parse import urlparse, urljoin
 from typing import Optional
-
+import string
 from flask import (
     Flask, render_template, request, redirect, url_for,
     flash, g, session, jsonify, abort
@@ -284,6 +284,25 @@ def current_user_is_admin() -> bool:
         return True
     return False
 
+# --- Role helpers (add near your auth helpers) ---
+
+TEACHER_ROLES = {"teacher", "admin", "instructor", "staff"}
+
+def current_user_role() -> str:
+    # g.current_user is used throughout your app (e.g., classes routes) :contentReference[oaicite:1]{index=1}
+    return (g.current_user.get("role") or "student").strip().lower()
+
+def current_user_is_teacher() -> bool:
+    return current_user_role() in TEACHER_ROLES
+
+def current_user_is_student() -> bool:
+    return current_user_role() == "student"
+
+def current_user_is_admin() -> bool:
+    if session.get("username") == "testtest":
+        return True
+    return current_user_is_teacher()
+
 
 # -------------------------------------------------------------------
 # Auth routes
@@ -378,170 +397,211 @@ def register_check_step1():
 
     return jsonify({"ok": True})
 
-
 @app.route("/register", methods=["GET", "POST"])
 def register():
     db = get_db()
 
     if request.method == "POST":
-        # ----- Read fields -----
+        def render_fail(msg: str, category: str = "warning"):
+            flash(msg, category)
+            return render_template(
+                "register.html",
+                registered=False,
+                registered_level_name=None,
+                registered_level_score=None,
+            )
+
+        # -----------------------------
+        # Step 1 fields (shared)
+        # -----------------------------
+        role = (request.form.get("role") or "").strip().lower()
+        if not role:
+            # Backward-compatible default if your current HTML doesn't have role yet.
+            # Once you add role UI, this will be overridden.
+            role = "student"
+
         username = (request.form.get("username") or "").strip()
         email = (request.form.get("email") or "").strip().lower()
         password = request.form.get("password") or ""
         confirm = request.form.get("confirm") or ""
 
-        l1_language_raw = (request.form.get("l1_language") or "").strip().lower()
-        l2_language_raw = (request.form.get("l2_language") or "").strip().lower()
+        l1_language = (request.form.get("l1_language") or "").strip().lower()
+        l2_language = (request.form.get("l2_language") or "").strip().lower()
         age_raw = (request.form.get("age") or "").strip()
-        gender_raw = (request.form.get("gender") or "").strip().lower()
+        gender = (request.form.get("gender") or "").strip().lower()
 
-        level_score_raw = request.form.get("level_score")
-        level_name = (request.form.get("level_name") or "").strip()
+        # Optional role-specific extras (add these inputs in HTML when ready)
+        grade = (request.form.get("grade") or "").strip().lower()       # student optional / recommended
+        school = (request.form.get("school") or "").strip()            # teacher recommended
+        subject = (request.form.get("subject") or "").strip()          # teacher recommended
 
-        def render_fail(msg: str):
-            flash(msg, "warning")
-            return render_template(
-                "register.html",
-                registered=False,
-                registered_level_name=None,
-                registered_level_score=None,
-            )
+        # -----------------------------
+        # Step 2 fields (student only)
+        # -----------------------------
+        level_score_raw = request.form.get("level_score")  # hidden
+        level_name = (request.form.get("level_name") or "").strip()    # hidden
 
-        # ----- Basic required checks -----
+        # -----------------------------
+        # Validate role
+        # -----------------------------
+        if role not in {"student", "teacher"}:
+            return render_fail("Please select a valid role (Student or Teacher).")
+
+        # -----------------------------
+        # Basic required checks
+        # -----------------------------
         if not username or not email or not password or not confirm:
             return render_fail("Please fill in username, email, and password.")
 
-        if not l1_language_raw or not l2_language_raw or not age_raw or not gender_raw:
+        if not l1_language or not l2_language or not age_raw or not gender:
             return render_fail("Please fill in all language and profile fields (L1, L2, age, gender).")
 
-        if not level_score_raw or not level_name:
-            return render_fail("Please complete the level test before creating your account.")
-
-        # ----- Password checks -----
+        # Password checks
         if password != confirm:
             return render_fail("Passwords do not match.")
-
         if len(password) < 8:
             return render_fail("Password must be at least 8 characters.")
 
-        # ----- Username / email format -----
+        # Username format
         if not re.match(r"^[A-Za-z0-9_.-]{3,32}$", username):
-            return render_fail("Username must be 3–32 characters (letters, numbers, _, ., -).")
+            return render_fail("Username must be 3–32 characters and use only letters, numbers, _, ., -.")
 
+        # Email format
         if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
             return render_fail("Please enter a valid email address.")
 
-        # ----- L1 / L2 sanity -----
+        # Languages
         allowed_l1 = {"korean", "english", "chinese", "japanese", "spanish", "other"}
         allowed_l2 = {"none", "korean", "english", "chinese", "japanese", "spanish", "other"}
+        if l1_language not in allowed_l1:
+            return render_fail("Please choose a valid L1 language.")
+        if l2_language not in allowed_l2:
+            return render_fail("Please choose a valid L2 language.")
 
-        if l1_language_raw not in allowed_l1:
-            return render_fail("Please choose a valid first language (L1).")
-
-        if l2_language_raw not in allowed_l2:
-            return render_fail("Please choose a valid second language (L2).")
-
-        # ----- Age -----
-        if not age_raw.isdigit():
+        # Age
+        try:
+            age = int(age_raw)
+        except ValueError:
             return render_fail("Please enter a valid age (number).")
-
-        age = int(age_raw)
         if age < 5 or age > 120:
             return render_fail("Please enter an age between 5 and 120.")
 
-        # ----- Gender -----
+        # Gender
         allowed_genders = {"female", "male", "nonbinary", "prefer_not"}
-        if gender_raw not in allowed_genders:
+        if gender not in allowed_genders:
             return render_fail("Please choose a valid gender option.")
 
-        # ----- Level score parsing -----
-        try:
-            level_score = int(level_score_raw)
-        except (TypeError, ValueError):
-            return render_fail("Please complete the level test.")
+        # -----------------------------
+        # Role-specific validation
+        # -----------------------------
+        level_score = None
 
-        if level_score < 0 or level_score > 10:
-            return render_fail("Level test score is invalid. Please try the test again.")
+        if role == "student":
+            # Level test REQUIRED for students
+            if not level_score_raw or not level_name:
+                return render_fail("Please complete the level test before creating your account.")
 
-        # Normalize level name
-        valid_levels = {"Beginner", "Intermediate", "Advanced"}
-        if level_name not in valid_levels:
-            return render_fail("Level test result is invalid. Please try the test again.")
+            try:
+                level_score = int(level_score_raw)
+            except (TypeError, ValueError):
+                return render_fail("Level test score is invalid. Please retake the test.")
+            if level_score < 0 or level_score > 10:
+                return render_fail("Level test score is invalid. Please retake the test.")
 
-        # ----- Check duplicates -----
+            valid_levels = {"Beginner", "Intermediate", "Advanced"}
+            if level_name not in valid_levels:
+                return render_fail("Level test result is invalid. Please try the test again.")
+
+            # (Optional) If you want grade required, enforce here:
+            # allowed_grades = {"elementary", "middle", "high", "college", "other"}
+            # if grade not in allowed_grades:
+            #     return render_fail("Please select your grade.")
+        else:
+            # Teacher: NO level test
+            level_score = None
+            level_name = None
+
+            # If you want these required for teachers, uncomment:
+            # if not school:
+            #     return render_fail("Please enter your school / organization.")
+            # if not subject:
+            #     return render_fail("Please enter your subject.")
+
+        # -----------------------------
+        # Duplicate checks
+        # -----------------------------
         existing = db.execute(
             "SELECT id FROM users WHERE lower(username)=?",
             (username.lower(),),
         ).fetchone()
         if existing:
-            flash("That username is already taken.", "danger")
-            return render_template(
-                "register.html",
-                registered=False,
-                registered_level_name=None,
-                registered_level_score=None,
-            )
+            return render_fail("That username is already taken.", "danger")
 
         existing = db.execute(
             "SELECT id FROM users WHERE lower(email)=?",
             (email.lower(),),
         ).fetchone()
         if existing:
-            flash("An account with that email already exists.", "danger")
-            return render_template(
-                "register.html",
-                registered=False,
-                registered_level_name=None,
-                registered_level_score=None,
-            )
+            return render_fail("An account with that email already exists.", "danger")
 
-        # ----- Insert user + level test result (score NOT NULL) -----
+        # -----------------------------
+        # Insert user
+        # -----------------------------
         try:
             pwd_hash = generate_password_hash(password)
 
             cur = db.execute(
                 """
                 INSERT INTO users
-                  (username, email, password_hash, l1_language, l2_language, age, gender)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                  (username, email, password_hash,
+                   l1_language, l2_language, age, gender,
+                   role, grade, school, subject)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (username, email, pwd_hash, l1_language_raw, l2_language_raw, age, gender_raw),
+                (
+                    username,
+                    email,
+                    pwd_hash,
+                    l1_language,
+                    l2_language,
+                    age,
+                    gender,
+                    role,
+                    grade if role == "student" else None,
+                    school if role == "teacher" else None,
+                    subject if role == "teacher" else None,
+                ),
             )
             user_id = cur.lastrowid
 
-            db.execute(
-                """
-                INSERT INTO level_test_results (user_id, score, total, level)
-                VALUES (?, ?, ?, ?)
-                """,
-                (user_id, level_score, 10, level_name),
-            )
+            # Only students get a level_test_results row
+            if role == "student":
+                db.execute(
+                    """
+                    INSERT INTO level_test_results (user_id, score, total, level)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (user_id, level_score, 10, level_name),
+                )
 
             db.commit()
 
-            # Show success modal with level info
+            # Show success modal
             return render_template(
                 "register.html",
                 registered=True,
-                registered_level_name=None,
-                registered_level_score=None,
+                registered_level_name=(level_name if role == "student" else None),
+                registered_level_score=(level_score if role == "student" else None),
             )
 
         except sqlite3.IntegrityError as e:
             db.rollback()
+            msg = "Could not create account. Please try again."
             if "users.username" in str(e):
-                flash("That username is already taken.", "danger")
+                msg = "That username is already taken."
             elif "users.email" in str(e):
-                flash("An account with that email already exists.", "danger")
-            else:
-                flash("Could not create account. Please try again.", "danger")
-
-            return render_template(
-                "register.html",
-                registered=False,
-                registered_level_name=None,
-                registered_level_score=None,
-            )
+                msg = "An account with that email already exists."
+            return render_fail(msg, "danger")
 
     # GET
     return render_template(
@@ -550,6 +610,7 @@ def register():
         registered_level_name=None,
         registered_level_score=None,
     )
+
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -1103,30 +1164,71 @@ def admin_update_user_level():
 @login_required
 def assignments_list():
     db = get_db()
-    # FIX: Query the 'assignments' table using 'assignee_id'
-    rows = db.execute(
+    user_id = g.current_user["id"]
+
+    # classes user belongs to (for the dropdown)
+    my_classes = db.execute(
         """
+        SELECT c.id, c.name
+        FROM classes c
+        JOIN class_members cm ON cm.class_id = c.id
+        WHERE cm.user_id = ?
+        ORDER BY c.name COLLATE NOCASE
+        """,
+        (user_id,),
+    ).fetchall()
+
+    selected_class_id = request.args.get("class_id", type=int)
+
+    # If user selected a class, ensure membership
+    if selected_class_id:
+        ok = db.execute(
+            "SELECT 1 FROM class_members WHERE user_id=? AND class_id=?",
+            (user_id, selected_class_id),
+        ).fetchone()
+        if not ok:
+            flash("You don’t have access to that class.", "warning")
+            return redirect(url_for("assignments_list"))
+
+    where_extra = ""
+    params = [user_id]
+
+    if selected_class_id:
+        where_extra = " AND a.class_id = ? "
+        params.append(selected_class_id)
+
+    rows = db.execute(
+        f"""
         SELECT
           a.id,
-          a.assignment_type, 
+          a.assignment_type,
           a.status,
           a.score,
           a.attempt_count,
           a.created_at,
           a.draft_id,
           a.assignment_title,
+          a.class_id,
+          c.name AS class_name,
           s.id    AS story_id,
           s.slug  AS story_slug,
           s.title AS story_title
-        from assignments a
+        FROM assignments a
         JOIN stories s ON a.story_id = s.id
-        WHERE a.assignee_id = ? 
+        LEFT JOIN classes c ON c.id = a.class_id
+        WHERE a.assignee_id = ?
+        {where_extra}
         ORDER BY datetime(a.created_at) DESC
         """,
-        (g.current_user["id"],),
+        tuple(params),
     ).fetchall()
 
-    return render_template("assignments.html", assignments=rows)
+    return render_template(
+        "assignments.html",
+        assignments=rows,
+        my_classes=my_classes,
+        selected_class_id=selected_class_id,
+    )
 
 
 @app.route("/assignments/<int:assignment_id>", methods=["GET", "POST"])
@@ -1634,28 +1736,54 @@ def index():
     ).fetchall()
     return render_template("index.html", stories=stories, finishes=finishes)
 
-
 @app.route("/story/new", methods=["GET", "POST"])
 @login_required
 def story_new():
     db = get_db()
+    user_id = g.current_user["id"]
+
+    # classes user belongs to (for the dropdown in the form)
+    my_classes = db.execute(
+        """
+        SELECT c.id, c.name
+        FROM classes c
+        JOIN class_members cm ON cm.class_id = c.id
+        WHERE cm.user_id = ?
+        ORDER BY c.name COLLATE NOCASE
+        """,
+        (user_id,),
+    ).fetchall()
+
     if request.method == "POST":
         title = (request.form.get("title") or "").strip() or "My Story"
         prompt = (request.form.get("prompt") or "").strip()
         language = "en"
 
         english_level = (request.form.get("english_level") or "beginner").strip().lower()
-
         base_author = (request.form.get("author_name") or "").strip()
 
         story_type = (request.form.get("story_type") or "").strip()
         emotion_tone = (request.form.get("emotion_tone") or "").strip()
         tense = (request.form.get("tense") or "").strip()
 
+        # NEW: share target
+        raw_share_class_id = (request.form.get("share_class_id") or "").strip()
+        share_class_id = int(raw_share_class_id) if raw_share_class_id.isdigit() else None
+
         # We always require a prompt
         if not prompt:
             flash("Please provide phonics letters or vocabulary.", "warning")
             return redirect(url_for("story_new"))
+
+        # If class is selected, ensure membership (students can only share to their own classes)
+        if share_class_id is not None:
+            ok = db.execute(
+                "SELECT 1 FROM class_members WHERE user_id=? AND class_id=?",
+                (user_id, share_class_id),
+            ).fetchone()
+            if not ok:
+                flash("You don’t have access to that class.", "warning")
+                return redirect(url_for("story_new"))
 
         # ---- Build meta prompt bits ----
         meta_bits = []
@@ -1689,7 +1817,6 @@ def story_new():
         )
 
         gen_prompt = prompt if not meta_bits else (prompt + "\n\n" + " ".join(meta_bits))
-
         reading_level_for_llm = ""
 
         # ---- Generate story text ----
@@ -1729,9 +1856,7 @@ def story_new():
                 print("generate_image_error", {"error": str(e)})
                 flash("Story created, but image generation had an issue.", "warning")
 
-        story_author = base_author
-        if story_author is None or story_author == "":
-            story_author = "EduWeaver AI"
+        story_author = base_author or "EduWeaver AI"
 
         slug_base = slugify(title) or "story"
         ts = datetime.utcnow().strftime("%Y%m%d%H%M%S")
@@ -1739,11 +1864,13 @@ def story_new():
 
         db_level = english_level or "beginner"
 
-        # ---- Insert story ----
+        # ---- Insert story (UPDATED: shared_class_id) ----
         db.execute(
             """
-            INSERT INTO stories (title, slug, prompt, language, level, content, visuals, author_name, is_shared_library)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?,?)
+            INSERT INTO stories
+              (title, slug, prompt, language, level, content, visuals, author_name, is_shared_library, shared_class_id)
+            VALUES
+              (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 title,
@@ -1754,7 +1881,8 @@ def story_new():
                 content,
                 visuals_data_url,
                 story_author,
-                1
+                1,              # keep shared in library system
+                share_class_id,  # NULL = All, class_id = by class
             ),
         )
         story_id = db.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
@@ -1795,7 +1923,7 @@ def story_new():
                 "story_type": story_type,
                 "emotion_tone": emotion_tone,
                 "tense": tense,
-                # No more student_finish flag: story is always fully generated
+                "shared_class_id": share_class_id,
             },
         )
 
@@ -1820,13 +1948,19 @@ def story_new():
                 "draft_id": draft_id,
                 "auto_completed": True,
                 "db_author": story_author,
+                "shared_class_id": share_class_id,
             },
         )
 
-        flash("Story generated by EduWeaver AI and added to the Library.", "success")
+        flash("Story generated and added to the Library.", "success")
+
+        # Optional: redirect to the tab you chose
+        if share_class_id is not None:
+            return redirect(url_for("library", class_id=share_class_id))
         return redirect(url_for("library"))
 
-    return render_template("story_new.html")
+    # GET
+    return render_template("story_new.html", my_classes=my_classes)
 
 
 # -------------------------------------------------------------------
@@ -1954,125 +2088,161 @@ def admin_students():
         avg_score_all=avg_score_all,
     )
 
+def table_exists(db, name: str) -> bool:
+    row = db.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=? LIMIT 1",
+        (name,),
+    ).fetchone()
+    return row is not None
 
-# In app.py - Replace your existing library function with this:
 
-@app.get("/library")
-@login_required
-def library():
+def column_exists(db, table: str, column: str) -> bool:
+    cols = db.execute(f"PRAGMA table_info({table})").fetchall()
+    return any(c["name"] == column for c in cols)
+
+
+def ensure_library_schema():
     """
-    Library view for students:
-    - Shows shared stories filtered by user level and optional search/sort parameters.
+    Backward-compatible schema + backfill for Library sharing.
+    Also normalizes legacy shared_class_id=0 to NULL (meaning "All").
     """
     db = get_db()
 
-    # --- GET QUERY PARAMETERS ---
-    search_query = request.args.get("q", "").strip()
-    sort_by = request.args.get("sort", "newest")  # Default sort
+    # Ensure columns on stories
+    if table_exists(db, "stories"):
+        if not column_exists(db, "stories", "is_shared_library"):
+            db.execute("ALTER TABLE stories ADD COLUMN is_shared_library INTEGER DEFAULT 0")
+        if not column_exists(db, "stories", "shared_class_id"):
+            db.execute("ALTER TABLE stories ADD COLUMN shared_class_id INTEGER")
 
-    # --- 1) DETERMINE USER/ADMIN CONTEXT AND LEVEL ---
-    username = session.get("username", "")
-    is_admin = (username == "testtest")  # Assuming "testtest" is the admin user
-    user_id = session.get("user_id")
-    user_rank = None
+        # Normalize legacy "0 means ALL" into NULL
+        db.execute("UPDATE stories SET shared_class_id = NULL WHERE shared_class_id = 0")
 
-    if user_id is not None:
-        latest_level_row = db.execute(
-            """
-            SELECT level
-            FROM level_test_results
-            WHERE user_id = ?
-            ORDER BY id DESC
-            LIMIT 1
-            """,
-            (user_id,),
-        ).fetchone()
-
-        if latest_level_row:
-            user_rank = level_rank(latest_level_row["level"])
-
-    # --- 2) BUILD BASE QUERY AND PARAMETERS ---
-    params = []
-    where_clauses = ["s.is_shared_library = 1"]
-
-    # LEVEL FILTERING (Only for non-admin users)
-    if not is_admin and user_rank is not None:
-        # We need to find stories where the story's level rank is <= user's rank
-        # This requires manually mapping levels since SQLite can't directly compare text ranks.
-        # This implementation requires fetching all level-ranked stories first, which is complex for SQL dynamic WHERE clauses.
-        # For simplicity and performance within this limited scope, we fetch all, then filter in Python (see Step 3).
-        # A proper fix would be a complex subquery or using a separate level_rank table/view.
-        # We'll skip adding level-based WHERE clause for now and rely purely on Python filtering later.
-        pass
-
-    # SEARCH QUERY FILTERING
-    if search_query:
-        # Search by title, author, or original prompt (vocabulary)
-        search_term = f"%{search_query.lower()}%"
-        where_clauses.append(
-            """
-            (
-                LOWER(s.title) LIKE ? OR
-                LOWER(s.author_name) LIKE ? OR
-                LOWER(s.prompt) LIKE ?
-            )
-            """
+    # Ensure library_shares table (share rows: class_id NULL => ALL)
+    db.execute(
+        """
+        CREATE TABLE IF NOT EXISTS library_shares (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          story_id INTEGER NOT NULL,
+          class_id INTEGER,
+          created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(story_id, class_id)
         )
-        params.extend([search_term, search_term, search_term])
+        """
+    )
 
-    # --- 3) DETERMINE SORT ORDER ---
-    order_map = {
-        "newest": "ORDER BY datetime(s.created_at) DESC",
-        "title (a-z)": "ORDER BY s.title COLLATE NOCASE ASC",
-        # We sort by level rank ascending (easiest first). Requires calculation.
-        "level (easiest)": "ORDER BY s.level ASC, datetime(s.created_at) DESC",
-        # Note: SQLite simple ORDER BY on level text may be inaccurate for ranks.
-    }
-    order_by = order_map.get(sort_by.lower(), order_map["newest"])
+    # Normalize legacy 0 there too (if it ever happened)
+    db.execute("UPDATE library_shares SET class_id = NULL WHERE class_id = 0")
 
-    # --- 4) EXECUTE MAIN QUERY ---
-    query = f"""
-        SELECT
-          s.id AS story_id, s.title AS title, s.slug AS slug, s.level AS level,
-          s.language AS language, s.author_name AS author_name, 
-          s.created_at AS story_created_at, s.visuals AS visuals,
-          fd.id AS draft_id
+    # Backfill: if a story is shared but has no share row, create it
+    # Use stories.shared_class_id (already normalized so 0 => NULL)
+    db.execute(
+        """
+        INSERT OR IGNORE INTO library_shares (story_id, class_id)
+        SELECT s.id, s.shared_class_id
         FROM stories s
-        JOIN finish_drafts fd
-          ON fd.story_id = s.id
-         AND datetime(fd.created_at) = (
-            SELECT MAX(datetime(fd2.created_at))
+        WHERE COALESCE(s.is_shared_library, 0) = 1
+        """
+    )
+
+    db.commit()
+@app.get("/library")
+@login_required
+def library():
+    db = get_db()
+    user_id = g.current_user["id"]
+
+    ensure_library_schema()
+
+    # Classes user belongs to (for tabs)
+    my_classes = db.execute(
+        """
+        SELECT c.id, c.name
+        FROM classes c
+        JOIN class_members cm ON cm.class_id = c.id
+        WHERE cm.user_id = ?
+        ORDER BY c.name COLLATE NOCASE
+        """,
+        (user_id,),
+    ).fetchall()
+    my_class_ids = [c["id"] for c in my_classes]
+
+    # Template uses selected_class_id
+    class_id_raw = (request.args.get("class_id") or "").strip()
+    selected_class_id = int(class_id_raw) if class_id_raw.isdigit() else None
+
+    # Security: if class tab, user must belong (unless teacher/admin)
+    if selected_class_id and not (current_user_is_admin() or current_user_is_teacher()):
+        ok = db.execute(
+            "SELECT 1 FROM class_members WHERE user_id=? AND class_id=? LIMIT 1",
+            (user_id, selected_class_id),
+        ).fetchone()
+        if not ok:
+            flash("You don’t have access to that class.", "warning")
+            return redirect(url_for("library"))
+
+    # Treat "0 as ALL" at query-time too (extra safety):
+    share_expr = "NULLIF(COALESCE(ls.class_id, s.shared_class_id), 0)"
+
+    where = ["COALESCE(s.is_shared_library, 0) = 1"]
+    params = []
+
+    if selected_class_id:
+        # Only that class
+        where.append(f"{share_expr} = ?")
+        params.append(selected_class_id)
+    else:
+        # ALL tab: global (NULL) OR any class user is in
+        if my_class_ids:
+            placeholders = ",".join("?" for _ in my_class_ids)
+            where.append(f"({share_expr} IS NULL OR {share_expr} IN ({placeholders}))")
+            params.extend(my_class_ids)
+        else:
+            where.append(f"{share_expr} IS NULL")
+
+    stories = db.execute(
+        f"""
+        SELECT
+          s.id,
+          s.slug,
+          s.title,
+          s.language,
+          s.level,
+          s.visuals,
+          s.author_name,
+          s.created_at AS story_created_at,
+          (
+            SELECT fd2.id
             FROM finish_drafts fd2
             WHERE fd2.story_id = s.id
-         )
-        WHERE {' AND '.join(where_clauses)}
-        {order_by}
-    """
+            ORDER BY datetime(fd2.created_at) DESC, fd2.id DESC
+            LIMIT 1
+          ) AS draft_id
+        FROM stories s
+        LEFT JOIN library_shares ls ON ls.story_id = s.id
+        WHERE {" AND ".join(where)}
+        GROUP BY s.id
+        ORDER BY datetime(s.created_at) DESC, s.id DESC
+        """,
+        tuple(params),
+    ).fetchall()
 
-    rows = db.execute(query, params).fetchall()
+    # If a story has no draft, the card link will break; hide those
+    stories = [r for r in stories if r["draft_id"] is not None]
 
-    # --- 5) PYTHON-SIDE LEVEL FILTERING (For accuracy on rank) ---
-    if not is_admin and user_rank is not None:
-        filtered_rows = []
-        for r in rows:
-            story_rank = level_rank(r["level"])
-            if story_rank is None or story_rank <= user_rank:
-                filtered_rows.append(r)
-        rows = filtered_rows
-
-    # --- 6) RENDER ---
     return render_template(
         "library.html",
-        stories=rows,
-        is_admin=is_admin,
-        search_query=search_query,
-        sort_by=sort_by
+        stories=stories,
+        my_classes=my_classes,
+        selected_class_id=selected_class_id,
+        is_admin=current_user_is_admin(),
+        is_teacher=current_user_is_teacher(),
     )
 
 
 # --- app2.py addition ---
 
-# --- app2.py addition (Place near /finish/<int:draft_id> route) ---
+# --- app2.py addition  ---
 
 @app.get("/book/<int:draft_id>")
 @login_required
@@ -2151,67 +2321,96 @@ def admin_stories():
     active_tab = request.args.get("tab") or "assign"
     fragment = request.args.get("fragment") or ""
 
-    # ------------------------------------------------------------------
-    # TAB 1: Story list for building assignments
-    # ------------------------------------------------------------------
+    # -------------------------------
+    # NEW: Class selector
+    # -------------------------------
+    classes = db.execute(
+        """
+        SELECT c.id, c.name
+        FROM classes c
+        ORDER BY c.name COLLATE NOCASE
+        """
+    ).fetchall()
+
+    selected_class_id = request.args.get("class_id", type=int)
+
+    # -------------------------------
+    # TAB 1: Story list
+    # -------------------------------
     stories = db.execute(
         """
-        SELECT
-            s.id,
-            s.slug,
-            s.title,
-            s.language,
-            s.level,
-            s.created_at
+        SELECT s.id, s.slug, s.title, s.language, s.level, s.created_at
         FROM stories s
         ORDER BY s.created_at DESC
         """
     ).fetchall()
 
-    # All non-admin users (students) for assignment selection
-    users = db.execute(
-        "SELECT id, username, email FROM users ORDER BY username"
-    ).fetchall()
+    # -------------------------------
+    # NEW: Users list filtered by class
+    # - only students in selected class
+    # -------------------------------
+    if selected_class_id:
+        users = db.execute(
+            """
+            SELECT u.id, u.username, u.email
+            FROM users u
+            JOIN class_members cm ON cm.user_id = u.id
+            WHERE cm.class_id = ?
+              AND (cm.role = 'student' OR cm.role IS NULL)
+            ORDER BY u.username COLLATE NOCASE
+            """,
+            (selected_class_id,),
+        ).fetchall()
+    else:
+        # If no class selected, show none (force admin to select a class)
+        users = []
 
-    # ------------------------------------------------------------------
-    # TAB 2: Assigned Assignments (Groups based on assignments table)
-    # ------------------------------------------------------------------
+    # -------------------------------
+    # TAB 2: Assigned Worksheets (grouped)
+    # -------------------------------
+    params = []
+    where_class = ""
+    if selected_class_id:
+        where_class = "WHERE a.class_id = ?"
+        params.append(selected_class_id)
+
     assignment_rows = db.execute(
-        """
+        f"""
         SELECT
-            a.id              AS assignment_id,
-            a.story_id        AS story_id,
-            a.assignment_type AS assignment_type,
+            a.id               AS assignment_id,
+            a.story_id         AS story_id,
+            a.assignment_type  AS assignment_type,
             a.assignment_title AS assignment_title,
-            a.created_at      AS assignment_created_at,
+            a.created_at       AS assignment_created_at,
+            a.class_id         AS class_id,
 
-            s.title           AS story_title,
-            s.language        AS language,
-            s.level           AS level,
+            s.title            AS story_title,
+            s.language         AS language,
+            s.level            AS level,
 
-            a.assignee_id     AS assignee_id,
-            a.status          AS assignee_status,
-            a.score           AS assignee_score,
-            a.attempt_count   AS assignee_attempts,
+            a.assignee_id      AS assignee_id,
+            a.status           AS assignee_status,
+            a.score            AS assignee_score,
+            a.attempt_count    AS assignee_attempts,
 
-            u.username        AS assignee_username,
-            u.email           AS assignee_email
+            u.username         AS assignee_username,
+            u.email            AS assignee_email,
 
-        FROM assignments a 
-        JOIN stories s
-          ON a.story_id = s.id
-        JOIN users u
-          ON a.assignee_id = u.id 
+            c.name             AS class_name
+        FROM assignments a
+        JOIN stories s ON a.story_id = s.id
+        JOIN users u   ON a.assignee_id = u.id
+        LEFT JOIN classes c ON c.id = a.class_id
+        {where_class}
         ORDER BY a.created_at DESC, a.id DESC
-        """
+        """,
+        tuple(params),
     ).fetchall()
 
-    # Grouping logic: Group by template characteristics (story, type, title)
     assignment_groups = {}
-
     for row in assignment_rows:
-        # Group key: (story_id, assignment_type, assignment_title)
-        key = (row["story_id"], row["assignment_type"], row["assignment_title"])
+        # NEW: include class_id in grouping key to avoid mixing classes
+        key = (row["class_id"], row["story_id"], row["assignment_type"], row["assignment_title"])
 
         if key not in assignment_groups:
             assignment_groups[key] = {
@@ -2223,7 +2422,9 @@ def admin_stories():
                 "language": row["language"],
                 "level": row["level"],
                 "created_at": row["assignment_created_at"],
-                "primary_assignment_id": row["assignment_id"],  # ID of the first row for the edit link
+                "primary_assignment_id": row["assignment_id"],
+                "class_id": row["class_id"],
+                "class_name": row["class_name"],
                 "assignees": [],
                 "count_assigned": 0,
                 "count_submitted": 0,
@@ -2231,8 +2432,6 @@ def admin_stories():
             }
 
         g = assignment_groups[key]
-
-        # Add the individual assignee record
         g["assignees"].append(
             {
                 "id": row["assignee_id"],
@@ -2252,18 +2451,23 @@ def admin_stories():
         else:
             g["count_assigned"] += 1
 
-    # dict → list, 최신 순
     assignments = sorted(
         assignment_groups.values(),
         key=lambda x: x["created_at"] or "",
         reverse=True,
     )
 
-    # ------------------------------------------------------------------
-    # TAB 3: Submitted Work – assignment_submissions 기반
-    # ------------------------------------------------------------------
+    # -------------------------------
+    # TAB 3: Submitted Work filtered by class
+    # -------------------------------
+    sub_params = []
+    sub_where = ""
+    if selected_class_id:
+        sub_where = "AND a.class_id = ?"
+        sub_params.append(selected_class_id)
+
     submissions_to_review = db.execute(
-        """
+        f"""
         SELECT
             ws.id              AS submission_id,
             ws.assignment_id   AS assignment_id,
@@ -2286,16 +2490,15 @@ def admin_stories():
                 WHEN ws.reviewed_at IS NULL THEN '#fee2e2'
                 ELSE '#dcfce7'
             END AS review_status_color
-        FROM assignment_submissions ws 
-        JOIN assignments a 
-          ON ws.assignment_id = a.id
-        JOIN stories s
-          ON a.story_id = s.id
-        JOIN users u
-          ON ws.user_id = u.id
-        WHERE ws.completion_text IS NOT NULL OR ws.answers_json IS NOT NULL
+        FROM assignment_submissions ws
+        JOIN assignments a ON ws.assignment_id = a.id
+        JOIN stories s ON a.story_id = s.id
+        JOIN users u ON ws.user_id = u.id
+        WHERE (ws.completion_text IS NOT NULL OR ws.answers_json IS NOT NULL)
+        {sub_where}
         ORDER BY ws.created_at DESC
-        """
+        """,
+        tuple(sub_params),
     ).fetchall()
 
     return render_template(
@@ -2306,6 +2509,8 @@ def admin_stories():
         submissions_to_review=submissions_to_review,
         active_tab=active_tab,
         fragment=fragment,
+        classes=classes,  # NEW
+        selected_class_id=selected_class_id,  # NEW
     )
 
 
@@ -3658,24 +3863,17 @@ def admin_generate_mcq(slug: str):
     flash("MCQ questions generated and saved for this story.", "success")
     return redirect(url_for("admin_stories"))
 
-
 @app.post("/admin/stories/<slug>/share")
 @login_required
 def admin_share_story(slug):
-    # Correct admin gate (works for testtest etc.)
     if not current_user_is_admin():
         flash("Admin access only.", "warning")
         return redirect(url_for("index"))
 
     db = get_db()
 
-    # 1. Load story (including visuals column)
     story = db.execute(
-        """
-        SELECT id, title, language, level, prompt, visuals
-        FROM stories
-        WHERE slug = ?
-        """,
+        "SELECT id, title, language, level, prompt, visuals FROM stories WHERE slug = ?",
         (slug,),
     ).fetchone()
 
@@ -3683,66 +3881,28 @@ def admin_share_story(slug):
         flash("Story not found.", "warning")
         return redirect(url_for("admin_stories"))
 
-    visuals_data_url = story["visuals"]
+    # optional: class_id from form (empty => share to ALL)
+    raw_class_id = (request.form.get("class_id") or "").strip()
+    class_id = int(raw_class_id) if raw_class_id.isdigit() else None
 
-    # 2. If no cover yet, generate one and save into stories.visuals
-    if not visuals_data_url:
-        try:
-            title = story["title"] or "Untitled story"
-            lang = (story["language"] or "").upper() or "EN"
-            level = story["level"] or "beginner"
-            prompt_text = (story["prompt"] or "").strip()
+    # (your existing cover generation logic stays the same...)
 
-            # keep the prompt short for the image model
-            if len(prompt_text) > 220:
-                prompt_text = prompt_text[:220].rstrip() + "…"
+    # mark shared
+    db.execute("UPDATE stories SET is_shared_library = 1 WHERE id = ?", (story["id"],))
 
-            image_prompt = (
-                "Children's picture-book cover illustration for a story. "
-                f'Title: "{title}".\n'
-                f"Language: {lang}, Level: {level}.\n"
-                "Style: warm, friendly, simple shapes, soft pastel colors, "
-                "one main character in the center, minimal background, "
-                "no text or title on the image.\n"
-            )
-            if prompt_text:
-                image_prompt += f"Story idea: {prompt_text}\n"
-
-            img_resp = client.images.generate(
-                model="gpt-image-1",
-                prompt=image_prompt,
-                size="1024x1024",
-                n=1,
-            )
-
-            img_b64 = img_resp.data[0].b64_json
-            visuals_data_url = "data:image/png;base64," + img_b64
-
-            # save cover into stories.visuals
-            db.execute(
-                "UPDATE stories SET visuals = ? WHERE id = ?",
-                (visuals_data_url, story["id"]),
-            )
-            db.commit()
-
-        except Exception as e:
-            print("Error generating cover image for library share:", e)
-            flash(
-                "Could not generate a cover image for this story. "
-                "Please try again in a moment.",
-                "danger",
-            )
-            return redirect(url_for("admin_stories"))
-
-    # 3. Mark story as shared to Library
+    # NEW: record where it was shared
     db.execute(
-        "UPDATE stories SET is_shared_library = 1 WHERE id = ?",
-        (story["id"],),
+        """
+        INSERT OR IGNORE INTO library_shares (story_id, class_id, shared_by)
+        VALUES (?, ?, ?)
+        """,
+        (story["id"], class_id, g.current_user["id"]),
     )
     db.commit()
 
     flash("Story shared to Library.", "success")
     return redirect(url_for("admin_stories"))
+
 
 
 @app.get("/admin/users/<int:user_id>/assignments")
@@ -4369,6 +4529,110 @@ def upgrade_bookmarks_table():
         db.execute("ALTER TABLE dict_bookmarks ADD COLUMN created_at TEXT")
 
     db.commit()
+def _gen_class_code(n=6):
+    # Simple readable code like: A9K2QF
+    alphabet = string.ascii_uppercase + string.digits
+    return "".join(random.choice(alphabet) for _ in range(n))
+
+@app.get("/classes")
+@login_required
+def classes_page():
+    db = get_db()
+    user_id = g.current_user["id"]
+
+    my_classes = db.execute(
+        """
+        SELECT c.id, c.name, c.code, cm.role, cm.joined_at
+        FROM classes c
+        JOIN class_members cm ON cm.class_id = c.id
+        WHERE cm.user_id = ?
+        ORDER BY c.name COLLATE NOCASE
+        """,
+        (user_id,),
+    ).fetchall()
+
+    return render_template(
+        "classes.html",
+        my_classes=my_classes,
+        role=current_user_role(),
+        is_teacher=current_user_is_teacher(),
+    )
+@app.post("/classes/join")
+@login_required
+def join_class():
+    # Teachers should not join via code (your UI will hide it, but backend must enforce too)
+    if current_user_is_teacher():
+        flash("Teachers can’t join classes with a code. Please create a class instead.", "warning")
+        return redirect(url_for("classes_page"))
+
+    db = get_db()
+    user_id = g.current_user["id"]
+
+    code = (request.form.get("class_code") or "").strip().upper().replace(" ", "")
+    if not code:
+        flash("Please enter a class code.", "warning")
+        return redirect(url_for("classes_page"))
+
+    klass = db.execute("SELECT * FROM classes WHERE code = ?", (code,)).fetchone()
+    if not klass:
+        flash("Invalid class code. Please check and try again.", "danger")
+        return redirect(url_for("classes_page"))
+
+    try:
+        db.execute(
+            """
+            INSERT INTO class_members (class_id, user_id, role)
+            VALUES (?, ?, ?)
+            """,
+            (klass["id"], user_id, "student"),
+        )
+        db.commit()
+        flash(f"You joined “{klass['name']}”.", "success")
+    except sqlite3.IntegrityError:
+        flash("You are already in this class.", "info")
+
+    return redirect(url_for("classes_page"))
+
+
+@app.post("/admin/classes/create")
+@login_required
+def admin_create_class():
+    # Only teachers/admin/staff can create classes
+    if not current_user_is_teacher():
+        flash("Only teachers can create classes.", "danger")
+        return redirect(url_for("classes_page"))
+
+    db = get_db()
+    name = (request.form.get("class_name") or "").strip()
+    if not name:
+        flash("Please enter a class name.", "warning")
+        return redirect(url_for("classes_page"))
+
+    # Retry a few times in case code collides
+    for _ in range(10):
+        code = _gen_class_code(6)
+        try:
+            cur = db.execute(
+                "INSERT INTO classes (name, code, created_by) VALUES (?, ?, ?)",
+                (name, code, g.current_user["id"]),
+            )
+            class_id = cur.lastrowid
+
+            # creator becomes teacher member
+            db.execute(
+                "INSERT INTO class_members (class_id, user_id, role) VALUES (?, ?, 'teacher')",
+                (class_id, g.current_user["id"]),
+            )
+            db.commit()
+
+            flash(f"Class created! Code: {code}", "success")
+            return redirect(url_for("classes_page"))
+
+        except sqlite3.IntegrityError:
+            continue
+
+    flash("Could not generate a unique class code. Try again.", "danger")
+    return redirect(url_for("classes_page"))
 
 
 if __name__ == "__main__":

@@ -1,6 +1,21 @@
 {% extends "base2.html" %}
 {% block title %}AI Story Generator · LexiTale{% endblock %}
-
+<style>
+  .btn-rand{
+  border-radius: 0 1.25rem 1.25rem 0;
+  border: 0;
+  background: var(--sun-300);
+  color: #1f2937;
+  font-weight: 700;
+  padding: 0 .95rem;
+  display:flex;
+  align-items:center;
+  gap:.25rem;
+  transition: transform .15s ease, filter .15s ease;
+}
+.btn-rand:hover{ transform: translateY(-1px); filter: brightness(.98); }
+.btn-rand:active{ transform: translateY(0); }
+</style>
 {% block content %}
 
 <div class="card border-0 lp-card-modern overflow-hidden mt-4 story-shell">
@@ -59,13 +74,25 @@
             </div>
 
             <!-- Phonics / Vocabulary -->
-            <div class="mt-3">
-              <label class="form-label step-label">Phonics / Vocabulary</label>
-              <div class="input-group input-group-lg lp-input">
-                <span class="input-group-text"><i class="bi bi-mic"></i></span>
-                <input name="prompt" class="form-control" placeholder="e.g., sh, ship">
-              </div>
-            </div>
+<!-- Phonics / Vocabulary -->
+<div class="mt-3">
+  <label class="form-label step-label">Phonics / Vocabulary</label>
+
+  <div class="input-group input-group-lg lp-input">
+    <span class="input-group-text"><i class="bi bi-mic"></i></span>
+
+    <input id="phonicsInput" name="prompt" class="form-control" placeholder="e.g., sh, ship">
+
+    <button type="button" class="btn btn-rand" id="randPhonicsBtn" aria-label="Pick a random phonics or word">
+      <i class="bi bi-shuffle me-1"></i> Random
+    </button>
+  </div>
+
+  <div class="form-text text-muted story-text-body mt-1">
+    Tap Random for a quick phonics/word idea for young learners.
+  </div>
+</div>
+
           </div>
         </div>
 
@@ -98,7 +125,22 @@
                 <option value="school-life">School life</option>
               </select>
             </div>
+            <div class="mt-3">
+  <label class="form-label step-label">Share To</label>
+  <select name="share_class_id" class="form-select form-select-lg lp-input">
+    <option value="" selected>All (Library)</option>
+    {% if my_classes %}
+      {% for c in my_classes %}
+        <option value="{{ c.id }}">{{ c.name }}</option>
+      {% endfor %}
+    {% endif %}
+  </select>
+  <div class="form-text text-muted story-text-body mt-1">
+    Choose “All” to share in the public Library tab, or pick a class to share only inside that class tab.
+  </div>
+</div>
           </div>
+
         </div>
 
         <!-- STEP 3: Options (Emotion Tone + Tense) -->
@@ -452,6 +494,121 @@ body{
 
   // Old flow used ?generated=1 to show a modal; now we redirect directly to Library,
   // so this part will almost never trigger but is left for future UX changes.
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('generated') === '1') {
+    const modalEl = document.getElementById('generatedModal');
+    const showModal = () => {
+      overlay.setAttribute('aria-hidden', 'true');
+      if (window.bootstrap?.Modal) {
+        new window.bootstrap.Modal(modalEl, { backdrop: 'static' }).show();
+      }
+    };
+
+    if (document.readyState !== 'loading') showModal();
+    else document.addEventListener('DOMContentLoaded', showModal, { once: true });
+  }
+})();
+</script>
+<script>
+(function(){
+  const form = document.getElementById('storyForm');
+  const overlay = document.getElementById('genOverlay');
+  const genBtn = document.getElementById('genBtn');
+  const prevBtn = document.getElementById('wizardPrev');
+
+  const steps = Array.from(document.querySelectorAll('.wizard-step'));
+  const dots  = Array.from(document.querySelectorAll('.wizard-dot'));
+  const lines = Array.from(document.querySelectorAll('.wizard-line'));
+
+  const labelNext     = genBtn.querySelector('.label-next');
+  const labelGenerate = genBtn.querySelector('.label-generate');
+
+  let current = 0;
+
+  // --- Random Phonics/Vocab ---
+  const phonicsInput = document.getElementById('phonicsInput');
+  const randBtn = document.getElementById('randPhonicsBtn');
+
+  // Optional: level-aware picks (uses the select in Step 2)
+  const levelSelect = document.querySelector('select[name="english_level"]');
+
+  const POOL = {
+    beginner: [
+      "a, at", "i, it", "o, on", "e, me",
+      "sh, ship", "ch, chip", "th, thin", "ck, duck",
+      "at, cat", "an, fan", "in, pin", "op, top",
+      "sun", "hat", "map", "frog"
+    ],
+    intermediate: [
+      "ai, rain", "ee, sheep", "oa, boat", "igh, night",
+      "ar, star", "or, corn", "er, her", "oo, moon",
+      "blend: st, stop", "blend: tr, tree", "blend: cl, cloud",
+      "because", "together", "wonder", "secret"
+    ],
+    advanced: [
+      "tion, action", "sion, vision", "ph, phone", "kn, knight",
+      "ough, though", "eigh, eight", "prefix: un-", "prefix: re-",
+      "curious", "mysterious", "discover", "challenge"
+    ]
+  };
+
+  function pickRandom(arr){
+    return arr[Math.floor(Math.random() * arr.length)];
+  }
+
+  randBtn?.addEventListener('click', () => {
+    const lvl = (levelSelect?.value || "beginner");
+    const list = POOL[lvl] || POOL.beginner;
+    const choice = pickRandom(list);
+
+    phonicsInput.value = choice;
+    phonicsInput.focus();
+
+    // tiny feedback animation
+    randBtn.animate(
+      [{ transform: "translateY(0)" }, { transform: "translateY(-2px)" }, { transform: "translateY(0)" }],
+      { duration: 180, easing: "ease-out" }
+    );
+  });
+
+  function update(){
+    steps.forEach((step,i)=> step.classList.toggle('d-none', i!==current));
+    dots.forEach((dot,i)=>{
+      dot.classList.toggle('active', i===current);
+      dot.classList.toggle('completed', i<current);
+    });
+    lines.forEach((line,i)=> line.classList.toggle('filled', i<current));
+
+    prevBtn.disabled = current===0;
+
+    const last = current===steps.length-1;
+    labelNext.classList.toggle('d-none', last);
+    labelGenerate.classList.toggle('d-none', !last);
+  }
+
+  genBtn.addEventListener('click', ()=>{
+    if(current === steps.length-1){
+      form.requestSubmit();
+    } else {
+      current++;
+      update();
+    }
+  });
+
+  prevBtn.addEventListener('click', ()=>{
+    if(current>0){
+      current--;
+      update();
+    }
+  });
+
+  form.addEventListener('submit', ()=>{
+    genBtn.disabled = true;
+    overlay.setAttribute('aria-hidden', 'false');
+  });
+
+  update();
+
   const params = new URLSearchParams(window.location.search);
   if (params.get('generated') === '1') {
     const modalEl = document.getElementById('generatedModal');

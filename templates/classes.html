@@ -1,0 +1,323 @@
+{% extends "base2.html" %}
+{% block title %}Classes · LexiTale{% endblock %}
+{% block content %}
+
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Baloo+2:wght@700;800&display=swap" rel="stylesheet">
+
+{# Role detection (best-effort)
+   - join_class() uses g.current_user['role'] to store membership role :contentReference[oaicite:3]{index=3}
+   - admin_create_class() is protected by current_user_is_admin() :contentReference[oaicite:4]{index=4}
+#}
+{% set role = role or (current_user.role if current_user and current_user.role is defined else '') %}
+{% set role_l = (role|string)|lower %}
+{% set is_student = (role_l == 'student') or (role_l == '') %}
+{% set is_teacher = not is_student %}
+
+<div class="classes-wrap-v7 container py-3 py-md-4">
+
+  <!-- Header -->
+  <div class="d-flex align-items-start justify-content-between flex-wrap gap-2 mb-3 mb-md-4">
+    <div>
+      <h1 class="fw-bolder mb-1 page-main-title">My Classes</h1>
+      <p class="text-muted page-sub-text mb-0">
+        {% if is_teacher %}
+          Create classes, share join codes, and manage worksheets in the Admin Dashboard.
+        {% else %}
+          Join a class using the code from your teacher.
+        {% endif %}
+      </p>
+    </div>
+
+    <div class="d-flex gap-2 flex-wrap">
+      {% if is_teacher %}
+        <a href="{{ url_for('admin_stories') }}"
+           class="btn btn-action-primary-v7 rounded-pill shadow-sm page-sub-text">
+          <i class="bi bi-stars me-1"></i> Admin Dashboard
+        </a>
+      {% endif %}
+      <a href="{{ url_for('assignments_list') }}"
+         class="btn btn-outline-secondary rounded-pill page-sub-text">
+        Back to Missions
+      </a>
+    </div>
+  </div>
+
+  <!-- Top action (student OR teacher) -->
+  <div class="row g-3 mb-4">
+
+    {% if is_student %}
+      <!-- Join class (students only) -->
+      <div class="col-12">
+        <div class="card border-0 rounded-4 shadow-sm p-3 p-md-4">
+          <div class="d-flex align-items-center gap-2 mb-2">
+            <div class="pill-icon-v7">
+              <i class="bi bi-key-fill"></i>
+            </div>
+            <div>
+              <h2 class="mb-0 fw-bold admin-title-v7" style="font-size:1.35rem;">Join a Class</h2>
+              <div class="small text-muted admin-text-body">Enter the join code shared by your teacher.</div>
+            </div>
+          </div>
+
+          <form method="post" action="{{ url_for('join_class') }}" class="row g-2 align-items-end mt-2">
+            <div class="col-12 col-md-8">
+              <label class="form-label small text-uppercase text-muted admin-text-label mb-1" for="class_code_input">
+                Class Code
+              </label>
+              <input id="class_code_input"
+                     name="class_code"
+                     class="form-control rounded-3 admin-text-body"
+                     placeholder="e.g. A9K2QF"
+                     required>
+            </div>
+            <div class="col-12 col-md-4 d-grid">
+              <button class="btn btn-action-primary-v7 rounded-pill admin-text-button">
+                <i class="bi bi-door-open-fill me-1"></i> Join Class
+              </button>
+            </div>
+          </form>
+
+          <div class="small text-muted admin-text-body mt-3">
+            After joining, your class missions will appear on your Missions page.
+          </div>
+        </div>
+      </div>
+
+    {% else %}
+      <!-- Create class (teachers/admins only) -->
+      <div class="col-12">
+        <div class="card border-0 rounded-4 shadow-sm p-3 p-md-4">
+          <div class="d-flex align-items-center gap-2 mb-2">
+            <div class="pill-icon-v7"
+                 style="background: linear-gradient(135deg, var(--success-v7), #059669);
+                        box-shadow:0 .5rem 1rem rgba(16,185,129,.35);">
+              <i class="bi bi-people-fill"></i>
+            </div>
+            <div>
+              <h2 class="mb-0 fw-bold admin-title-v7" style="font-size:1.35rem;">Create a Class</h2>
+              <div class="small text-muted admin-text-body">
+                A join code will be generated automatically for students.
+              </div>
+            </div>
+          </div>
+
+          <form method="post" action="{{ url_for('admin_create_class') }}" class="row g-2 align-items-end mt-2">
+            <div class="col-12 col-md-8">
+              <label class="form-label small text-uppercase text-muted admin-text-label mb-1" for="class_name_input">
+                Class Name
+              </label>
+              <input id="class_name_input"
+                     type="text"
+                     name="class_name"
+                     class="form-control rounded-3 admin-text-body"
+                     placeholder="e.g. Grade 5 · English A"
+                     required>
+            </div>
+            <div class="col-12 col-md-4 d-grid">
+              <button class="btn btn-action-primary-v7 rounded-pill admin-text-button">
+                <i class="bi bi-plus-circle me-1"></i> Create
+              </button>
+            </div>
+          </form>
+
+          <div class="alert bg-light-soft-blue-v7 small admin-text-body mt-3 mb-0">
+            Share the join code with students. Use “Manage” below to open the Admin Dashboard filtered to a class.
+          </div>
+        </div>
+      </div>
+    {% endif %}
+  </div>
+
+  <!-- Class list -->
+  <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
+    <h2 class="fw-bold admin-title-v7 mb-0" style="font-size:1.5rem;">Your Classes</h2>
+
+    {% if is_teacher %}
+      <div class="small text-muted admin-text-body">
+        Tip: Click “Manage” to open Admin Dashboard filtered to that class.
+      </div>
+    {% endif %}
+  </div>
+
+  {% if my_classes %}
+    <div class="row g-3 mt-1">
+      {% for c in my_classes %}
+        <div class="col-12 col-md-6 col-lg-4">
+          <div class="card border-0 rounded-4 shadow-sm p-3 p-md-4 h-100 class-card-v7">
+            <div class="d-flex align-items-start justify-content-between gap-2">
+              <div class="min-w-0">
+                <div class="fw-bold admin-text-title mb-1" style="font-size:1.1rem;">
+                  {{ c.name }}
+                </div>
+                <div class="small text-muted admin-text-body">
+                  Role: <span class="fw-semibold">{{ c.role }}</span>
+                </div>
+              </div>
+
+              {% if c.code %}
+              <div class="joincode-pill">
+                <span class="joincode-label">CODE</span>
+                <span class="joincode-value">{{ c.code }}</span>
+              </div>
+              {% endif %}
+            </div>
+
+            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mt-3">
+              <div class="d-flex gap-2 flex-wrap">
+                {% if is_teacher and c.code %}
+                  <button type="button"
+                          class="btn btn-sm btn-action-outline-v7 rounded-pill admin-text-button btn-copy-code"
+                          data-copy="{{ c.code }}">
+                    <i class="bi bi-clipboard me-1"></i> Copy code
+                  </button>
+                {% endif %}
+
+                {% if is_teacher and c.id %}
+                  <a href="{{ url_for('admin_stories', class_id=c.id, tab='assign') }}"
+                     class="btn btn-sm btn-action-primary-v7 rounded-pill admin-text-button shadow-sm">
+                    <i class="bi bi-wrench-adjustable-circle me-1"></i> Manage
+                  </a>
+                {% endif %}
+              </div>
+
+              {% if is_teacher and c.id %}
+                <a href="{{ url_for('admin_stories', class_id=c.id, tab='assigned') }}"
+                   class="small text-muted admin-text-body text-decoration-none">
+                  View assigned →
+                </a>
+              {% endif %}
+            </div>
+
+            {% if is_teacher and c.code %}
+              <div class="small text-muted admin-text-body mt-3">
+                Share this code with students to let them join this class.
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="alert bg-light-soft-blue-v7 page-sub-text mt-3">
+      You haven’t joined any classes yet.
+    </div>
+  {% endif %}
+
+</div>
+
+<script>
+(function(){
+  // Copy join code buttons (teacher/admin only)
+  document.querySelectorAll('.btn-copy-code').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const txt = btn.getAttribute('data-copy') || '';
+      if (!txt) return;
+
+      try {
+        await navigator.clipboard.writeText(txt);
+        const prev = btn.innerHTML;
+        btn.innerHTML = '<i class="bi bi-check2 me-1"></i> Copied';
+        setTimeout(() => { btn.innerHTML = prev; }, 900);
+      } catch (e) {
+        const ta = document.createElement('textarea');
+        ta.value = txt;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+      }
+    });
+  });
+})();
+</script>
+
+<style>
+/* Match admin/dashboard V7 look */
+:root{
+  --coral-main:#ff6b6b;
+  --coral-light:#ffd7cc;
+  --coral-dark:#cc5555;
+  --success-v7:#10b981;
+  --light-soft-blue-v7:#ffece5;
+  --soft-yellow-v7:#fff7e5;
+}
+
+/* Typography helpers */
+.admin-title-v7, .admin-text-title, .admin-text-button{
+  font-family:'Baloo 2', cursive;
+  font-weight:700;
+}
+.admin-text-body, .admin-text-label{
+  font-family:'Fredoka','Nunito',sans-serif;
+}
+.admin-text-body{ font-weight:500; }
+
+/* Small pill icon */
+.pill-icon-v7{
+  width:44px;height:44px;border-radius:1.1rem;
+  background:linear-gradient(135deg,var(--coral-main),var(--coral-dark));
+  display:inline-flex;align-items:center;justify-content:center;
+  font-size:1.4rem;color:#fff;
+  box-shadow:0 .5rem 1rem rgba(255,107,107,.35);
+}
+
+/* Buttons */
+.btn-action-primary-v7{
+  background-color:var(--coral-main);
+  border-color:var(--coral-main);
+  color:#fff;
+  font-weight:700;
+  transition:all .2s;
+  box-shadow:0 4px 8px rgba(255,107,107,.25);
+}
+.btn-action-primary-v7:hover{
+  background-color:#e86060;
+  border-color:#e86060;
+  transform:translateY(-2px);
+  box-shadow:0 6px 12px rgba(255,107,107,.35);
+}
+.btn-action-outline-v7{
+  color:var(--coral-dark);
+  border-color:var(--coral-light);
+  background:#fff;
+  font-weight:700;
+  transition:all .2s;
+}
+.btn-action-outline-v7:hover{
+  background:#ffece5;
+  border-color:var(--coral-main);
+  color:var(--coral-dark);
+}
+
+/* Join code pill */
+.joincode-pill{
+  display:inline-flex;align-items:center;gap:.55rem;
+  background:linear-gradient(90deg,#ffece5,#fff7e5);
+  border:1px solid var(--coral-light);
+  padding:.35rem .75rem;
+  border-radius:999px;
+  flex-shrink:0;
+}
+.joincode-label{
+  font-size:.7rem;letter-spacing:.08em;
+  font-weight:900;color:var(--coral-dark);
+}
+.joincode-value{
+  font-weight:900;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
+  color:#0b1220;
+}
+
+/* Cards */
+.class-card-v7{
+  border:2px solid rgba(255,215,204,.55);
+}
+.class-card-v7:hover{
+  background:var(--soft-yellow-v7);
+}
+
+/* Page spacing wrapper */
+.classes-wrap-v7{ max-width:1200px; }
+</style>
+
+{% endblock %}

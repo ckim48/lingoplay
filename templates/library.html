@@ -5,8 +5,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Baloo+2:wght@700;800&display=swap" rel="stylesheet">
 
 <div class="container mt-4">
-  {# Modernized Header Layout (Remains Playful) #}
-  <div class="d-flex flex-wrap justify-content-between align-items-center mb-5 pb-3 border-bottom border-v6-soft">
+
+  {# --- Header --- #}
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 pb-3 border-bottom border-v6-soft">
     <div class="d-flex align-items-center gap-4">
       <i class="bi bi-book-half display-4 library-header-icon"></i>
       <div>
@@ -17,6 +18,43 @@
       </div>
     </div>
   </div>
+
+  {# --- NAV TABS: All | By Class | Create Storybook (Everyone) --- #}
+  <ul class="nav nav-tabs library-tabs mb-4" role="tablist">
+    <li class="nav-item" role="presentation">
+      <a
+        class="nav-link {% if not selected_class_id %}active{% endif %}"
+        href="{{ url_for('library') }}"
+        role="tab"
+        aria-selected="{% if not selected_class_id %}true{% else %}false{% endif %}"
+      >
+        <i class="bi bi-collection me-1"></i> All
+      </a>
+    </li>
+
+    {% if my_classes %}
+      {% for c in my_classes %}
+      <li class="nav-item" role="presentation">
+        <a
+          class="nav-link {% if selected_class_id == c.id %}active{% endif %}"
+          href="{{ url_for('library', class_id=c.id) }}"
+          role="tab"
+          aria-selected="{% if selected_class_id == c.id %}true{% else %}false{% endif %}"
+        >
+          <i class="bi bi-people me-1"></i> {{ c.name }}
+        </a>
+      </li>
+      {% endfor %}
+    {% endif %}
+
+    {# Always visible: regular users can create too #}
+    <li class="nav-item ms-auto" role="presentation">
+      <a class="nav-link library-tabs-create" href="{{ url_for('story_new') }}">
+        <i class="bi bi-magic me-1"></i> Create Storybook
+      </a>
+    </li>
+  </ul>
+  {# --- END NAV TABS --- #}
 
   {# --- Search Bar & Controls --- #}
   <div class="row mb-4 g-3 align-items-center">
@@ -43,52 +81,52 @@
 
     {# --- COLUMN 1: FILTER SIDEBAR --- #}
     <div class="col-lg-3">
-        <h5 class="fw-bold mb-3 v6-section-title-small">
-            <i class="bi bi-funnel me-2"></i>Filter Stories
-        </h5>
+      <h5 class="fw-bold mb-3 v6-section-title-small">
+        <i class="bi bi-funnel me-2"></i>Filter Stories
+      </h5>
 
-        {# --- Filter Card 1: Level --- #}
-        <div class="card library-filter-card mb-4">
-            <div class="card-body">
-                <h6 class="fw-bold v6-filter-heading">Reading Level</h6>
-                <div class="form-check">
-                    <input class="form-check-input filter-checkbox" type="checkbox" value="beginner" id="filterBeginner" data-filter-group="level">
-                    <label class="form-check-label library-text-body" for="filterBeginner">Beginner</label>
-                </div>
-                <div class="form-check">
-                    <input class="form-check-input filter-checkbox" type="checkbox" value="intermediate" id="filterIntermediate" data-filter-group="level">
-                    <label class="form-check-label library-text-body" for="filterIntermediate">Intermediate</label>
-                </div>
-                <div class="form-check">
-                    <input class="form-check-input filter-checkbox" type="checkbox" value="advanced" id="filterAdvanced" data-filter-group="level">
-                    <label class="form-check-label library-text-body" for="filterAdvanced">Advanced</label>
-                </div>
-            </div>
+      <div class="card library-filter-card mb-4">
+        <div class="card-body">
+          <h6 class="fw-bold v6-filter-heading">Reading Level</h6>
+          <div class="form-check">
+            <input class="form-check-input filter-checkbox" type="checkbox" value="beginner" id="filterBeginner" data-filter-group="level">
+            <label class="form-check-label library-text-body" for="filterBeginner">Beginner</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input filter-checkbox" type="checkbox" value="intermediate" id="filterIntermediate" data-filter-group="level">
+            <label class="form-check-label library-text-body" for="filterIntermediate">Intermediate</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input filter-checkbox" type="checkbox" value="advanced" id="filterAdvanced" data-filter-group="level">
+            <label class="form-check-label library-text-body" for="filterAdvanced">Advanced</label>
+          </div>
         </div>
+      </div>
 
-        {# --- Filter Card 2: Language --- #}
-<!--        <div class="card library-filter-card mb-4">-->
-<!--            <div class="card-body">-->
-<!--                <h6 class="fw-bold v6-filter-heading">Language</h6>-->
-<!--                <div class="form-check">-->
-<!--                    <input class="form-check-input filter-checkbox" type="checkbox" value="en" id="filterEnglish" data-filter-group="language">-->
-<!--                    <label class="form-check-label library-text-body" for="filterEnglish">English</label>-->
-<!--                </div>-->
-<!--                <div class="form-check">-->
-<!--                    <input class="form-check-input filter-checkbox" type="checkbox" value="ko" id="filterKorean" data-filter-group="language">-->
-<!--                    <label class="form-check-label library-text-body" for="filterKorean">Korean (Placeholder)</label>-->
-<!--                </div>-->
-<!--                {# Add more languages here as needed #}-->
-<!--            </div>-->
-<!--        </div>-->
+      {# optional language filters later #}
+      {#
+      <div class="card library-filter-card mb-4">
+        <div class="card-body">
+          <h6 class="fw-bold v6-filter-heading">Language</h6>
+          <div class="form-check">
+            <input class="form-check-input filter-checkbox" type="checkbox" value="en" id="filterEnglish" data-filter-group="language">
+            <label class="form-check-label library-text-body" for="filterEnglish">English</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input filter-checkbox" type="checkbox" value="ko" id="filterKorean" data-filter-group="language">
+            <label class="form-check-label library-text-body" for="filterKorean">Korean</label>
+          </div>
+        </div>
+      </div>
+      #}
 
     </div>
     {# --- END FILTER SIDEBAR --- #}
 
-
     {# --- COLUMN 2: STORY LIST --- #}
     <div class="col-lg-9">
       {% if stories %}
+
       <div class="row g-4 g-lg-5" id="storyListContainer">
         {% for s in stories %}
         <div class="col-sm-6 col-md-4 story-item"
@@ -100,7 +138,6 @@
           <div class="book-wrap-v6">
             <div class="card border-0 library-card-v6 h-100 p-0 position-relative">
 
-              {# Admin Remove Button (Positioned top-right of the whole card) #}
               {% if is_admin %}
               <form method="post" action="{{ url_for('admin_unshare_story', slug=s.slug) }}"
                     onsubmit="return confirm('Are you sure you want to remove \'{{ s.title }}\' from the Library?');"
@@ -114,39 +151,33 @@
               <a href="{{ url_for('book_view', draft_id=s.draft_id) }}"
                  class="text-decoration-none text-reset d-flex flex-column h-100">
 
-                {# Image Wrapper #}
                 <div class="library-card-img-wrap-v6"
                      style="background-image: url('{{ s.visuals or url_for('static', filename='img/fallback_cover.png') }}');">
-                  </div>
+                </div>
 
                 <div class="card-body p-4 d-flex flex-column flex-grow-1 card-details-area">
 
-                  {# Tags Refined and Grouped (Must match the image style: EN | Beginner) #}
                   <div class="d-flex align-items-center mb-3 gap-2">
                     <span class="v6-tag-level">{{ s.language|upper }}</span>
                     <span class="v6-tag-level v6-tag-level-accent">{{ s.level|title }}</span>
                   </div>
 
-                  {# Story Title (Large and Bold) #}
                   <h4 class="fw-bold mb-3 text-v6-title truncate-2-lines">
                     {{ s.title or "Box" }}
                   </h4>
 
-                  {# Author (Small and Muted) #}
                   <p class="small text-v6-muted mb-3 flex-grow-1 library-text-body">
                     By <span class="fw-semibold">{{ s.author_name or "EduWeaver AI" }}</span>
                   </p>
 
-                  {# Footer CTA and Status (Matches image CTA style) #}
                   <div class="mt-auto pt-3 d-flex justify-content-between align-items-center border-top border-v6-soft">
-                    <span class="badge tag-shared-v6">
-                      Shared
-                    </span>
+                    <span class="badge tag-shared-v6">Shared</span>
                     <span class="small text-v6-link fw-bold library-cta-text">
                       Read Now <i class="bi bi-arrow-right-circle-fill ms-1"></i>
                     </span>
                   </div>
                 </div>
+
               </a>
             </div>
           </div>
@@ -159,23 +190,11 @@
         <i class="bi bi-box-seam display-4 mt-4 d-block" style="color: var(--color-play-soft-border);"></i>
       </div>
 
-      {# --- Pagination Placeholder --- #}
-      <div class="d-flex justify-content-center mt-5">
+      <div class="d-flex justify-content-center mt-5" id="paginationWrapper">
         <nav aria-label="Library Pagination">
-          <ul class="pagination pagination-lg library-pagination-v6">
-            <li class="page-item disabled">
-              <a class="page-link" href="#" tabindex="-1" aria-disabled="true">Previous</a>
-            </li>
-            <li class="page-item active"><a class="page-link" href="#">1</a></li>
-            <li class="page-item"><a class="page-link" href="#">2</a></li>
-            <li class="page-item"><a class="page-link" href="#">3</a></li>
-            <li class="page-item">
-              <a class="page-link" href="#">Next</a>
-            </li>
-          </ul>
+          <ul class="pagination pagination-lg library-pagination-v6" id="paginationControls"></ul>
         </nav>
       </div>
-      {# --- END Pagination --- #}
 
       {% else %}
       <div class="py-5 text-center text-v6-muted">
@@ -188,401 +207,390 @@
       {% endif %}
     </div>
     {# --- END STORY LIST COLUMN --- #}
+
   </div>
 </div>
 
 <style>
-/* 🎨 FONT UPDATE: Fredoka and Baloo 2 for a bold, child-like, and rounded look. */
-
-/* FONT IMPORTS are now in the HTML head */
-body {
-    font-family: 'Fredoka', 'Nunito', sans-serif; /* Playful body font */
-    background-color: #fffaf3 !important; /* Coral Background Wash */
+body{
+  font-family:'Fredoka','Nunito',sans-serif;
+  background-color:#FCFCF5 !important;
 }
+:root{
+  --color-play-coral:#f59e0b;
+  --color-play-coral-light:#ffd7cc;
+  --color-play-sun:#ffd569;
+  --color-play-heading:#111827;
+  --color-play-muted:#6b7280;
+  --color-play-paper:#FFFFFF;
+  --color-play-soft-border:#f8e8d5;
 
-/* V6 Color Palette (Playful & Warm) */
-:root {
-    --color-play-coral: #ff6b6b; /* Primary Coral */
-    --color-play-coral-light: #ffd7cc; /* Light Coral for accents */
-    --color-play-sun: #ffd569; /* Sunshine Yellow */
-    --color-play-heading: #111827; /* Dark Ink */
-    --color-play-muted: #6b7280; /* Muted Gray Text */
-    --color-play-paper: #FFFFFF;
-    --color-play-soft-border: #f8e8d5; /* Soft, warm border color */
+  --color-tag-lang-bg:#E0EFFF;
+  --color-tag-lang-text:#1E40AF;
+  --color-tag-level-bg:#FFFFAA;
+  --color-tag-level-text:#535300;
 
-    /* Tag Colors (Matching Image Style) */
-    --color-tag-lang-bg: #E0EFFF;
-    --color-tag-lang-text: #1E40AF;
-    --color-tag-level-bg: #FFFFAA; /* Soft Yellow from image */
-    --color-tag-level-text: #535300; /* Darker text for contrast */
-
-    --color-play-shadow-light: rgba(255, 107, 107, 0.2);
-    --color-play-shadow-deep: rgba(17, 24, 39, 0.1);
+  --color-play-shadow-light:rgba(255,107,107,0.2);
+  --color-play-shadow-deep:rgba(17,24,39,0.1);
 }
+.text-v6-muted{ color: var(--color-play-muted) !important; }
+.border-v6-soft{ border-color: var(--color-play-soft-border) !important; }
+.text-v6-link{ color: var(--color-play-coral) !important; }
+.library-text-body{ font-family:'Fredoka','Nunito',sans-serif; }
 
-/* Utility Classes */
-.text-v6-heading { color: var(--color-play-heading) !important; }
-.text-v6-muted { color: var(--color-play-muted) !important; }
-.bg-v6-paper { background-color: var(--color-play-paper) !important; }
-.border-v6-soft { border-color: var(--color-play-soft-border) !important; }
-.text-v6-link { color: var(--color-play-coral) !important; }
-.library-text-body { font-family: 'Fredoka', 'Nunito', sans-serif; }
-
-.truncate-2-lines {
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    text-overflow: ellipsis;
+.truncate-2-lines{
+  display:-webkit-box;
+  -webkit-line-clamp:2;
+  -webkit-box-orient:vertical;
+  overflow:hidden;
+  text-overflow:ellipsis;
 }
 
-/* --- HEADER STYLES --- */
-.library-header-icon {
-    color: var(--color-play-coral) !important;
-    font-size: 3rem;
+/* Header */
+.library-header-icon{ color:var(--color-play-coral) !important; font-size:3rem; }
+.v6-section-title{
+  font-family:'Baloo 2',cursive;
+  font-size:2.2rem;
+  color:#f59e0b;
+  line-height:1.1;
+  font-weight:800;
 }
-.v6-section-title {
-    font-family: 'Baloo 2', cursive;
-    font-size: 2.2rem;
-    color: var(--color-play-heading);
-    line-height: 1.1;
-    font-weight: 800;
+.v6-section-title-small{
+  font-family:'Baloo 2',cursive;
+  font-size:1.4rem;
+  color:var(--color-play-heading);
+  font-weight:700;
 }
-.v6-section-title-small {
-    font-family: 'Baloo 2', cursive;
-    font-size: 1.4rem;
-    color: var(--color-play-heading);
-    font-weight: 700;
-}
-.v6-section-p {
-    font-size: 1rem;
-    color: var(--color-play-muted) !important;
-    font-family: 'Fredoka', 'Nunito', sans-serif;
+.v6-section-p{
+  font-size:1rem;
+  color:var(--color-play-muted) !important;
 }
 
-/* --- FILTER CARD STYLES --- */
-.library-filter-card {
-    border-radius: 1rem !important;
-    border: 2px solid var(--color-play-soft-border) !important;
-    background-color: #fffdfc;
+/* Tabs */
+.library-tabs.nav-tabs{
+  border-bottom:2px solid var(--color-play-soft-border);
+  gap:.35rem;
 }
-.v6-filter-heading {
-    font-family: 'Baloo 2', cursive;
-    color: var(--color-play-coral);
-    font-size: 1.1rem;
+.library-tabs .nav-link{
+  border:2px solid transparent;
+  border-top-left-radius:1.1rem;
+  border-top-right-radius:1.1rem;
+  font-family:'Fredoka',sans-serif;
+  font-weight:700;
+  color:var(--color-play-muted);
+  background:#fffdfc;
 }
-.form-check-input:checked {
-    background-color: var(--color-play-coral);
-    border-color: var(--color-play-coral);
+.library-tabs .nav-link:hover{ color: var(--color-play-heading); }
+.library-tabs .nav-link.active{
+  color:var(--color-play-heading);
+  border-color:var(--color-play-soft-border);
+  border-bottom-color:#fffdfc;
+  box-shadow:0 -6px 16px rgba(17,24,39,0.06);
 }
-.form-check-input {
-    border-radius: 0.25rem;
+.library-tabs-create{
+  color:var(--color-play-heading) !important;
+  background:var(--color-play-sun) !important;
+  border-color:rgba(0,0,0,.06) !important;
 }
+.library-tabs-create:hover{ filter:brightness(0.98); }
 
-/* --- SEARCH & SORT STYLES --- */
+/* Filter card */
+.library-filter-card{
+  border-radius:1rem !important;
+  border:2px solid var(--color-play-soft-border) !important;
+  background-color:#fffdfc;
+}
+.v6-filter-heading{
+  font-family:'Baloo 2',cursive;
+  color:var(--color-play-coral);
+  font-size:1.1rem;
+}
+.form-check-input:checked{
+  background-color:var(--color-play-coral);
+  border-color:var(--color-play-coral);
+}
+.form-check-input{ border-radius:0.25rem; }
+
+/* Search & sort */
 .library-search-input .input-group-text,
-.library-search-input .form-control {
-    border-radius: 1.25rem;
-    font-family: 'Fredoka', sans-serif;
-    padding: 0.6rem 1rem;
-    font-size: 1.1rem;
-    transition: all 0.2s;
+.library-search-input .form-control{
+  border-radius:1.25rem;
+  font-family:'Fredoka',sans-serif;
+  padding:0.6rem 1rem;
+  font-size:1.1rem;
+  transition:all 0.2s;
 }
-.library-search-input .input-group-text {
-    border-radius: 1.25rem 0 0 1.25rem;
-    background: #f1f5f9;
-    color: var(--color-play-coral);
-    border-right: none;
+.library-search-input .input-group-text{
+  border-radius:1.25rem 0 0 1.25rem;
+  background:#f1f5f9;
+  color:var(--color-play-coral);
+  border-right:none;
 }
-.library-search-input .form-control {
-    border-radius: 0 1.25rem 1.25rem 0;
-    border-left: none;
+.library-search-input .form-control{
+  border-radius:0 1.25rem 1.25rem 0;
+  border-left:none;
 }
-.library-search-input .form-control:focus {
-    border-color: var(--color-play-coral);
-    box-shadow: 0 0 0 0.1rem var(--color-play-coral-light);
+.library-search-input .form-control:focus{
+  border-color:var(--color-play-coral);
+  box-shadow:0 0 0 0.1rem var(--color-play-coral-light);
 }
-
-.library-sort-label {
-    background: #f1f5f9;
-    color: var(--color-play-muted);
-    font-family: 'Fredoka', sans-serif;
-    border-radius: 1.25rem 0 0 1.25rem;
-    font-size: 1.1rem;
+.library-sort-label{
+  background:#f1f5f9;
+  color:var(--color-play-muted);
+  font-family:'Fredoka',sans-serif;
+  border-radius:1.25rem 0 0 1.25rem;
+  font-size:1.1rem;
 }
-.form-select-lg {
-    border-radius: 0 1.25rem 1.25rem 0;
-}
-.form-select-lg:focus {
-    border-color: var(--color-play-coral);
-    box-shadow: 0 0 0 0.1rem var(--color-play-coral-light);
+.form-select-lg{ border-radius:0 1.25rem 1.25rem 0; }
+.form-select-lg:focus{
+  border-color:var(--color-play-coral);
+  box-shadow:0 0 0 0.1rem var(--color-play-coral-light);
 }
 
-
-/* --- BOOK CARD STYLES (MATCHING IMAGE) --- */
-.book-wrap-v6 {
-    perspective: 1200px;
-    transform-style: preserve-3d;
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease;
+/* Cards */
+.book-wrap-v6{
+  perspective:1200px;
+  transform-style:preserve-3d;
+  transition:transform 0.3s cubic-bezier(0.4,0,0.2,1), box-shadow 0.3s ease;
 }
-.book-wrap-v6:hover {
-    transform: translateY(-10px) rotateZ(-0.5deg);
-    box-shadow: 0 18px 40px -10px rgba(255, 107, 107, 0.35);
+.book-wrap-v6:hover{
+  transform:translateY(-10px) rotateZ(-0.5deg);
+  box-shadow:0 18px 40px -10px rgba(255,107,107,0.35);
 }
-
-/* Library Card Styles (Softer, Bolder Look) */
-.library-card-v6 {
-    background: var(--color-play-paper);
-    border-radius: 25px !important;
-    border: 3px solid var(--color-play-soft-border) !important;
-    box-shadow: 0 6px 15px var(--color-play-shadow-light);
-    transition: all 0.3s ease;
-    transform: translateZ(10px);
+.library-card-v6{
+  background:var(--color-play-paper);
+  border-radius:25px !important;
+  border:3px solid var(--color-play-soft-border) !important;
+  box-shadow:0 6px 15px var(--color-play-shadow-light);
+  transition:all 0.3s ease;
+  transform:translateZ(10px);
 }
-
-
-/* Cover Image Wrapper (Aspect ratio remains 1:1, radius matches image style) */
-.library-card-img-wrap-v6 {
-    width: 100%;
-    padding-top: 100%;
-    background-size: cover;
-    background-position: center;
-    background-color: var(--color-play-soft-border);
-    border-radius: 22px 22px 0 0 !important;
-    border-bottom: none; /* No visible border for image */
-    position: relative;
-    /* Ensure the image container has a shadow glow for that 'illustration' look */
-    box-shadow: 0 6px 15px rgba(0,0,0,0.1);
+.library-card-img-wrap-v6{
+  width:100%;
+  padding-top:100%;
+  background-size:cover;
+  background-position:center;
+  background-color:var(--color-play-soft-border);
+  border-radius:22px 22px 0 0 !important;
+  border-bottom:none;
+  position:relative;
+  box-shadow:0 6px 15px rgba(0,0,0,0.1);
 }
+.card-details-area{ padding:1.5rem !important; }
 
-
-/* Card Details Area (Increased Padding to match image) */
-.card-details-area {
-    padding: 1.5rem 1.5rem 1.5rem 1.5rem !important;
+.v6-tag-level{
+  padding:0.2rem 0.8rem;
+  border-radius:8px;
+  font-size:0.9rem;
+  font-weight:700;
+  background-color:var(--color-tag-lang-bg);
+  color:var(--color-tag-lang-text);
 }
-
-/* Tags (Matching Image Style) */
-.v6-tag-level {
-    padding: 0.2rem 0.8rem;
-    border-radius: 8px; /* Slightly squarer, subtle corners */
-    font-size: 0.9rem; /* Larger font size to match image */
-    font-weight: 700;
-    letter-spacing: 0;
-    background-color: var(--color-tag-lang-bg);
-    color: var(--color-tag-lang-text);
-}
-.v6-tag-level-accent {
-    background-color: var(--color-tag-level-bg); /* Soft Yellow */
-    color: var(--color-tag-level-text); /* Darker Text */
+.v6-tag-level-accent{
+  background-color:var(--color-tag-level-bg);
+  color:var(--color-tag-level-text);
 }
 
-/* Story Title (Fixed Height for 2 lines) */
-.text-v6-title {
-    font-family: 'Baloo 2', cursive;
-    font-size: 2rem;
-    line-height: 1.1;
-    color: var(--color-play-heading);
-    font-weight: 800;
+.text-v6-title{
+  font-family:'Baloo 2',cursive;
+  font-size:2rem;
+  line-height:1.1;
+  color:var(--color-play-heading);
+  font-weight:800;
+  height:4.4rem;
+}
+.tag-shared-v6{
+  background-color:var(--color-play-coral);
+  font-size:0.9rem;
+  padding:0.4rem 0.8rem;
+  border-radius:12px;
+}
+.library-cta-text{ font-size:1rem !important; }
 
-    /* === FIX: Fixed Height for exactly 2 lines (2rem * 1.1 * 2 = 4.4rem) === */
-    height: 4.4rem;
-    /* ====================================================================== */
+/* Admin remove */
+.library-remove-btn-v6{
+  position:absolute;
+  top:15px;
+  right:15px;
+  z-index:20;
+  width:36px;
+  height:36px;
+  font-size:1rem;
+  background-color:#f59e0b !important;
+  color:black;
+  border:none;
+  box-shadow:0 3px 6px rgba(0,0,0,0.25);
+  border-radius:50% !important;
+  transition:transform 0.2s, background-color 0.2s;
 }
-
-/* Author Text (Muted) */
-.text-v6-muted {
-    font-family: 'Fredoka', sans-serif;
-    font-size: 1rem !important;
-    color: var(--color-play-muted) !important;
-}
-
-/* Footer CTA and Status */
-.tag-shared-v6 {
-    background-color: var(--color-play-coral);
-    font-size: 0.9rem;
-    padding: 0.4rem 0.8rem;
-    border-radius: 12px;
-}
-.library-cta-text {
-    font-size: 1rem !important; /* Larger CTA text */
-}
-
-/* --- Admin Remove Button (Top Right of Card, Red Circle) --- */
-.library-remove-btn-v6 {
-    position: absolute;
-    top: 15px;
-    right: 15px;
-    z-index: 20;
-    width: 36px;
-    height: 36px;
-    font-size: 1rem;
-    background-color: #ff8585 !important; /* Lighter red, matching image 'X' button */
-    color: white;
-    border: none;
-    box-shadow: 0 3px 6px rgba(0,0,0,0.25);
-    border-radius: 50% !important;
-    opacity: 1;
-    transition: opacity 0.2s, transform 0.2s, background-color 0.2s;
-}
-.library-remove-btn-v6:hover {
-    transform: scale(1.1);
-    background-color: #ff6b6b !important;
+.library-remove-btn-v6:hover{
+  transform:scale(1.1);
+  background-color:#ff6b6b !important;
 }
 
-/* --- Pagination Styles --- */
-.library-pagination-v6 .page-link {
-    font-family: 'Fredoka', sans-serif;
-    font-weight: 500;
-    border-radius: 1.25rem !important;
-    margin: 0 0.25rem;
-    padding: 0.6rem 1rem;
-    color: var(--color-play-muted);
-    border: 2px solid var(--color-play-soft-border);
-    transition: all 0.2s ease;
+/* Pagination */
+.library-pagination-v6 .page-link{
+  font-family:'Fredoka',sans-serif;
+  font-weight:500;
+  border-radius:1.25rem !important;
+  margin:0 0.25rem;
+  padding:0.6rem 1rem;
+  color:var(--color-play-muted);
+  border:2px solid var(--color-play-soft-border);
+  transition:all 0.2s ease;
 }
-.library-pagination-v6 .page-item.active .page-link {
-    background-color: var(--color-play-coral);
-    border-color: var(--color-play-coral);
-    color: white;
-    box-shadow: 0 4px 8px rgba(255, 107, 107, 0.3);
+.library-pagination-v6 .page-item.active .page-link{
+  background-color:var(--color-play-coral);
+  border-color:var(--color-play-coral);
+  color:white;
+  box-shadow:0 4px 8px rgba(255,107,107,0.3);
 }
-.library-pagination-v6 .page-item:not(.active):not(.disabled) .page-link:hover {
-    color: var(--color-play-coral);
-    border-color: var(--color-play-coral-light);
+.library-pagination-v6 .page-item:not(.active):not(.disabled) .page-link:hover{
+  color:var(--color-play-coral);
+  border-color:var(--color-play-coral-light);
 }
-
-/* Empty State Icon Color */
-.bi-box-seam {
-    color: var(--color-play-soft-border) !important;
-}
+.bi-box-seam{ color: var(--color-play-soft-border) !important; }
 </style>
 
 <script>
-// Placeholder JavaScript for basic search/sort functionality (actual filtering requires backend/AJAX)
 (function() {
-    const searchInput = document.getElementById('storySearch');
-    const sortSelect = document.getElementById('storySort');
-    const storyListContainer = document.getElementById('storyListContainer');
-    const storyItems = Array.from(document.querySelectorAll('.story-item'));
-    const filterCheckboxes = document.querySelectorAll('.filter-checkbox');
-    const noResultsMessage = document.getElementById('noResultsMessage');
+  const searchInput = document.getElementById('storySearch');
+  const sortSelect = document.getElementById('storySort');
+  const storyListContainer = document.getElementById('storyListContainer');
+  const storyItems = Array.from(document.querySelectorAll('.story-item'));
+  const filterCheckboxes = document.querySelectorAll('.filter-checkbox');
+  const noResultsMessage = document.getElementById('noResultsMessage');
+  const paginationControls = document.getElementById('paginationControls');
 
-    // --- Data mapping and comparison functions ---
+  const STORIES_PER_PAGE = 3;
+  let currentPage = 1;
 
-    const levelRankMap = {
-        'beginner': 1,
-        'intermediate': 2,
-        'advanced': 3
-    };
+  const levelRankMap = { beginner: 1, intermediate: 2, advanced: 3 };
 
-    function getSortValue(item, sortKey) {
-        switch (sortKey) {
-            case 'title_asc':
-                return item.dataset.title; // String comparison
-            case 'level_asc':
-                // Get numeric rank for proper sorting
-                return levelRankMap[item.dataset.levelRank] || 99;
-            case 'newest':
-            default:
-                // Sort by date (timestamp is large integer)
-                return parseInt(item.dataset.date) * -1; // Use negative for DESC (Newest first)
-        }
+  function getSortValue(item, sortKey) {
+    switch (sortKey) {
+      case 'title_asc': return item.dataset.title;
+      case 'level_asc': return levelRankMap[item.dataset.levelRank] || 99;
+      case 'newest':
+      default: return (parseInt(item.dataset.date || '0', 10) || 0) * -1;
+    }
+  }
+
+  function isStoryVisible(item, lowerQuery, activeFilters) {
+    const title = item.dataset.title || '';
+    const author = item.dataset.author || '';
+    const level = item.dataset.levelRank || '';
+    const language = item.dataset.language || '';
+
+    const passesSearch = lowerQuery === '' || title.includes(lowerQuery) || author.includes(lowerQuery);
+    if (!passesSearch) return false;
+
+    const passesLevel = activeFilters.level.length === 0 || activeFilters.level.includes(level);
+    const passesLanguage = activeFilters.language.length === 0 || activeFilters.language.includes(language);
+
+    return passesLevel && passesLanguage;
+  }
+
+  function setupPagination(visibleItems) {
+    const wrapper = document.getElementById('paginationWrapper');
+    const totalPages = Math.ceil(visibleItems.length / STORIES_PER_PAGE);
+    if (!paginationControls || !wrapper) return;
+
+    paginationControls.innerHTML = '';
+
+    if (totalPages <= 1) {
+      wrapper.style.display = 'none';
+      return;
+    }
+    wrapper.style.display = 'flex';
+
+    if (currentPage > totalPages) currentPage = totalPages;
+    if (currentPage < 1) currentPage = 1;
+
+    paginationControls.innerHTML += `
+      <li class="page-item ${currentPage === 1 ? 'disabled' : ''}" data-page="${currentPage - 1}">
+        <a class="page-link" href="#" tabindex="-1">Previous</a>
+      </li>
+    `;
+
+    for (let i = 1; i <= totalPages; i++) {
+      paginationControls.innerHTML += `
+        <li class="page-item ${i === currentPage ? 'active' : ''}" data-page="${i}">
+          <a class="page-link" href="#">${i}</a>
+        </li>
+      `;
     }
 
-    // --- Core Filtering Logic ---
-    function isStoryVisible(item, lowerQuery, activeFilters) {
-        const title = item.dataset.title;
-        const author = item.dataset.author;
-        const level = item.dataset.levelRank;
-        const language = item.dataset.language;
+    paginationControls.innerHTML += `
+      <li class="page-item ${currentPage === totalPages ? 'disabled' : ''}" data-page="${currentPage + 1}">
+        <a class="page-link" href="#">Next</a>
+      </li>
+    `;
 
-        // 1. Search Query Check (Must pass OR be empty)
-        const passesSearch = lowerQuery === '' || title.includes(lowerQuery) || author.includes(lowerQuery);
-
-        if (!passesSearch) return false;
-
-        // 2. Checkbox Filtering (AND logic between groups, OR logic within groups)
-        const passesLevel = activeFilters.level.length === 0 || activeFilters.level.includes(level);
-        const passesLanguage = activeFilters.language.length === 0 || activeFilters.language.includes(language);
-
-        // Combined filter check
-        return passesLevel && passesLanguage;
-    }
-
-
-    // --- Combined Update Logic ---
-    function updateView() {
-        const lowerQuery = searchInput.value.trim().toLowerCase();
-        const sortKey = sortSelect.value;
-        let visibleCount = 0;
-
-        // 1. Collect active filters
-        const activeFilters = {
-            level: [],
-            language: []
-        };
-        filterCheckboxes.forEach(checkbox => {
-            if (checkbox.checked) {
-                const group = checkbox.dataset.filterGroup;
-                if (activeFilters[group]) {
-                    activeFilters[group].push(checkbox.value);
-                }
-            }
+    paginationControls.querySelectorAll('.page-item').forEach(item => {
+      if (!item.classList.contains('disabled')) {
+        item.addEventListener('click', (e) => {
+          e.preventDefault();
+          const newPage = parseInt(item.dataset.page, 10);
+          if (newPage) {
+            currentPage = newPage;
+            updateView(false);
+          }
         });
+      }
+    });
+  }
 
-        // 2. Filter and collect visible items
-        const currentVisibleItems = [];
+  function displayPage(visibleItems) {
+    const start = (currentPage - 1) * STORIES_PER_PAGE;
+    const end = start + STORIES_PER_PAGE;
 
-        storyItems.forEach(item => {
-            if (isStoryVisible(item, lowerQuery, activeFilters)) {
-                item.style.display = 'block';
-                currentVisibleItems.push(item);
-                visibleCount++;
-            } else {
-                item.style.display = 'none';
-            }
-        });
+    storyItems.forEach(item => item.style.display = 'none');
+    visibleItems.slice(start, end).forEach(item => { item.style.display = 'block'; });
+  }
 
-        // 3. Sort visible items
-        currentVisibleItems.sort((a, b) => {
-            const valA = getSortValue(a, sortKey);
-            const valB = getSortValue(b, sortKey);
+  function updateView(resetPage = true) {
+    if (!storyListContainer || storyItems.length === 0) return;
+    if (resetPage) currentPage = 1;
 
-            if (typeof valA === 'string' && typeof valB === 'string') {
-                return valA.localeCompare(valB);
-            }
-            // Numeric comparison (for newest and level_asc)
-            return valA - valB;
-        });
+    const lowerQuery = (searchInput?.value || '').trim().toLowerCase();
+    const sortKey = sortSelect?.value || 'newest';
 
-        // 4. Re-append items to update order
-        currentVisibleItems.forEach(item => {
-            storyListContainer.appendChild(item);
-        });
-
-        // 5. Show/Hide No Results Message
-        noResultsMessage.style.display = visibleCount === 0 ? 'block' : 'none';
-    }
-
-
-    // --- Event Listeners ---
-
-    // Search (Debounced)
-    let searchTimeout;
-    searchInput.addEventListener('input', function() {
-        clearTimeout(searchTimeout);
-        searchTimeout = setTimeout(updateView, 300);
+    const activeFilters = { level: [], language: [] };
+    filterCheckboxes.forEach(cb => {
+      if (cb.checked) {
+        const group = cb.dataset.filterGroup;
+        if (activeFilters[group]) activeFilters[group].push(cb.value);
+      }
     });
 
-    // Sort/Filter Checkboxes (Immediate)
-    sortSelect.addEventListener('change', updateView);
-    filterCheckboxes.forEach(checkbox => {
-        checkbox.addEventListener('change', updateView);
+    const filteredItems = storyItems.filter(item => isStoryVisible(item, lowerQuery, activeFilters));
+
+    filteredItems.sort((a, b) => {
+      const valA = getSortValue(a, sortKey);
+      const valB = getSortValue(b, sortKey);
+      if (typeof valA === 'string' && typeof valB === 'string') return valA.localeCompare(valB);
+      return valA - valB;
     });
 
-    // Initial load: Apply default sort and filters
-    updateView();
+    filteredItems.forEach(item => storyListContainer.appendChild(item));
 
+    setupPagination(filteredItems);
+    displayPage(filteredItems);
+
+    if (noResultsMessage) noResultsMessage.style.display = filteredItems.length === 0 ? 'block' : 'none';
+  }
+
+  let searchTimeout;
+  searchInput?.addEventListener('input', function() {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => updateView(true), 300);
+  });
+
+  sortSelect?.addEventListener('change', () => updateView(true));
+  filterCheckboxes.forEach(cb => cb.addEventListener('change', () => updateView(true)));
+
+  updateView(true);
 })();
 </script>
 

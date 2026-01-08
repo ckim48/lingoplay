@@ -6,13 +6,41 @@
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Baloo+2:wght@700;800&display=swap" rel="stylesheet">
 
 <div class="assignments-page py-3 py-md-4 container">
-  <div class="d-flex align-items-center justify-content-between mb-4 pb-2">
+  <div class="d-flex align-items-center justify-content-between mb-3 pb-2">
     <div>
       <h1 class="fw-bolder mb-1 page-main-title">My Missions!</h1>
       <p class="text-muted small mb-0 page-sub-text">
         Tap a card to start or review your work.
       </p>
     </div>
+  </div>
+
+  {# =========================
+     NEW: Class Filter + Manage Classes button
+     Assumes backend passes:
+       - my_classes (list of {id, name})
+       - selected_class_id (int or None)
+     ========================= #}
+  <div class="d-flex flex-column flex-md-row gap-2 align-items-md-center justify-content-between mb-4">
+    <form method="get" action="{{ url_for('assignments_list') }}" class="d-flex gap-2 align-items-center">
+      <span class="small text-muted page-sub-text mb-0">Class:</span>
+      <select name="class_id" class="form-select form-select-sm class-filter" onchange="this.form.submit()">
+        <option value="" {% if not selected_class_id %}selected{% endif %}>All Classes</option>
+        {% for c in (my_classes or []) %}
+          <option value="{{ c.id }}" {% if selected_class_id == c.id %}selected{% endif %}>
+            {{ c.name }}
+          </option>
+        {% endfor %}
+      </select>
+      <noscript>
+        <button class="btn btn-sm btn-outline-secondary rounded-pill page-sub-text">Apply</button>
+      </noscript>
+    </form>
+
+    <a class="btn btn-sm btn-outline-success rounded-pill page-sub-text"
+       href="{{ url_for('classes_page') }}">
+      <i class="bi bi-people-fill me-1"></i> Manage Classes
+    </a>
   </div>
 
   {% if not assignments %}
@@ -28,165 +56,181 @@
   {% else %}
 
     <ul class="nav nav-pills mb-4" id="assignmentTabs" role="tablist">
-        <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="todo-tab" data-bs-toggle="pill" data-bs-target="#todo-missions" type="button" role="tab" aria-controls="todo-missions" aria-selected="true">
-                <i class="bi bi-flag-fill me-1"></i> To Do Missions
-            </button>
-        </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link" id="completed-tab" data-bs-toggle="pill" data-bs-target="#completed-missions" type="button" role="tab" aria-controls="completed-missions" aria-selected="false">
-                <i class="bi bi-check-circle-fill me-1"></i> Completed Missions
-            </button>
-        </li>
+      <li class="nav-item me-2" role="presentation">
+        <button class="nav-link active" id="todo-tab" data-bs-toggle="pill" data-bs-target="#todo-missions" type="button" role="tab" aria-controls="todo-missions" aria-selected="true">
+          <i class="bi bi-flag-fill me-1"></i> To Do Missions
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="completed-tab" data-bs-toggle="pill" data-bs-target="#completed-missions" type="button" role="tab" aria-controls="completed-missions" aria-selected="false">
+          <i class="bi bi-check-circle-fill me-1"></i> Completed Missions
+        </button>
+      </li>
     </ul>
 
     <div class="tab-content">
 
-        <div class="tab-pane fade show active" id="todo-missions" role="tabpanel" aria-labelledby="todo-tab">
-            {# Filter for To Do: status is NOT submitted or graded #}
-            {% set todo_assignments = assignments | rejectattr('status', 'in', ['submitted', 'graded']) | list %}
+      <div class="tab-pane fade show active" id="todo-missions" role="tabpanel" aria-labelledby="todo-tab">
+        {# Filter for To Do: status is NOT submitted or graded #}
+        {% set todo_assignments = assignments | rejectattr('status', 'in', ['submitted', 'graded']) | list %}
 
-            {% if todo_assignments %}
-                <div class="row g-3 g-md-4">
-                {% for a in todo_assignments %}
-                    {% set attempts = a.attempt_count or 0 %}
-                    {% set is_mcq = (a.assignment_type == 'mcq') %}
-                    {% set is_finish = (a.assignment_type == 'finish') %}
-                    {% set status = (a.status or '') %}
-                    {% set score = a.score %}
-                    {% set title = a.assignment_title or a.story_title %}
+        {% if todo_assignments %}
+          <div class="row g-3 g-md-4">
+            {% for a in todo_assignments %}
+              {% set attempts = a.attempt_count or 0 %}
+              {% set is_mcq = (a.assignment_type == 'mcq') %}
+              {% set is_finish = (a.assignment_type == 'finish') %}
+              {% set status = (a.status or '') %}
+              {% set score = a.score %}
+              {% set title = a.assignment_title or a.story_title %}
 
-                    <div class="col-12 col-sm-6 col-lg-4">
-                      {# Card link always goes to the detailed assignment page #}
-                      <a href="{{ url_for('assignment_detail', assignment_id=a.id) }}"
-                         class="text-decoration-none">
-                        <div class="assignment-card h-100 d-flex flex-column">
+              <div class="col-12 col-sm-6 col-lg-4">
+                <a href="{{ url_for('assignment_detail', assignment_id=a.id) }}" class="text-decoration-none">
+                  <div class="assignment-card h-100 d-flex flex-column">
 
-                          <div class="d-flex align-items-center justify-content-between mb-3">
-                            <span class="badge rounded-pill assignment-pill page-sub-text">
-                              {% if is_mcq %}Reading MCQ{% elif is_finish %}Finish Writing{% else %}Assignment{% endif %}
-                            </span>
+                    <div class="d-flex align-items-center justify-content-between mb-3">
+                      <span class="badge rounded-pill assignment-pill page-sub-text">
+                        {% if is_mcq %}Reading MCQ{% elif is_finish %}Finish Writing{% else %}Assignment{% endif %}
+                      </span>
 
-                            <span class="status-dot status-todo page-sub-text">
-                              <span class="dot"></span><span class="label">To do</span>
-                            </span>
-                          </div>
-
-                          <div class="mb-1 flex-grow-1">
-                            <h5 class="assignment-title mb-1 page-main-title">
-                              {{ title }}
-                            </h5>
-                            <div class="small text-muted page-sub-text">
-                              Story: {{ a.story_title }}
-                            </div>
-                          </div>
-
-                          <div class="mt-auto pt-3 d-flex justify-content-between align-items-center small assignment-footer-text">
-                            <div class="text-muted">
-                              {{ a.created_at|dt("%Y-%m-%d") }}
-                            </div>
-                            <div class="d-flex flex-column align-items-end">
-                              <div>
-                                Attempts:
-                                <span class="fw-semibold">{{ attempts }}</span>
-                              </div>
-                            </div>
-                          </div>
-
-                        </div>
-                      </a>
+                      <span class="status-dot status-todo page-sub-text">
+                        <span class="dot"></span><span class="label">To do</span>
+                      </span>
                     </div>
-                {% endfor %}
-                </div>
-            {% else %}
-                <div class="alert alert-success mt-3 p-3 text-center page-sub-text">
-                    <i class="bi bi-hand-thumbs-up-fill"></i> You have no pending missions! Great job!
-                </div>
-            {% endif %}
-        </div>
 
-        <div class="tab-pane fade" id="completed-missions" role="tabpanel" aria-labelledby="completed-tab">
-            {# Filter for Completed: status IS submitted or graded #}
-            {% set completed_assignments = assignments | selectattr('status', 'in', ['submitted', 'graded']) | list %}
+                    <div class="mb-1 flex-grow-1">
+                      <h5 class="assignment-title mb-1 page-main-title">
+                        {{ title }}
+                      </h5>
 
-            {% if completed_assignments %}
-                <div class="row g-3 g-md-4">
-                {% for a in completed_assignments %}
-                    {% set attempts = a.attempt_count or 0 %}
-                    {% set is_mcq = (a.assignment_type == 'mcq') %}
-                    {% set is_finish = (a.assignment_type == 'finish') %}
-                    {% set status = (a.status or '') %}
-                    {% set score = a.score %}
-                    {% set title = a.assignment_title or a.story_title %}
+                      <div class="small text-muted page-sub-text">
+                        Story: {{ a.story_title }}
+                      </div>
 
-                    {% set trigger_modal = (status == 'graded') %}
-                    {% set link_url = url_for('assignment_detail', assignment_id=a.id) %}
-
-                    <div class="col-12 col-sm-6 col-lg-4">
-                      {# If graded, the card itself might open the modal via JS/data attributes #}
-                      <a {% if not trigger_modal %}href="{{ link_url }}"{% endif %}
-                         class="text-decoration-none">
-                        <div class="assignment-card h-100 d-flex flex-column"
-                             {% if trigger_modal %}
-                               data-bs-toggle="modal"
-                               data-bs-target="#reviewModal"
-                               data-assignment-id="{{ a.id }}"
-                               data-assignment-title="{{ title }}"
-                               data-score="{{ '%.1f'|format(score) }}"
-                               data-link-url="{{ link_url }}"
-                               class="assignment-review-trigger"
-                               style="cursor: pointer;"
-                             {% endif %}>
-
-                          <div class="d-flex align-items-center justify-content-between mb-3">
-                            <span class="badge rounded-pill assignment-pill page-sub-text">
-                              {% if is_mcq %}Reading MCQ{% elif is_finish %}Finish Writing{% else %}Assignment{% endif %}
-                            </span>
-
-                            <span class="status-dot status-done page-sub-text">
-                              <span class="dot"></span><span class="label">Done</span>
-                            </span>
-                          </div>
-
-                          <div class="mb-1 flex-grow-1">
-                            <h5 class="assignment-title mb-1 page-main-title">
-                              {{ title }}
-                            </h5>
-                            <div class="small text-muted page-sub-text">
-                              Story: {{ a.story_title }}
-                            </div>
-                          </div>
-
-                          <div class="mt-auto pt-3 d-flex justify-content-between align-items-center small assignment-footer-text">
-                            <div class="text-muted">
-                              {{ a.created_at|dt("%Y-%m-%d") }}
-                            </div>
-                            <div class="d-flex flex-column align-items-end">
-                              <div>
-                                Attempts:
-                                <span class="fw-semibold">{{ attempts }}</span>
-                              </div>
-                              {% if score is not none %}
-                                {% set score_display = '%.1f'|format(score) %}
-                                <div class="{% if status == 'graded' %}text-success-v7 fw-bold{% endif %}">
-                                  Score:
-                                  <span class="fw-semibold">{{ score_display }}%</span>
-                                  {% if status == 'graded' %}<i class="bi bi-chat-dots ms-1"></i>{% endif %}
-                                </div>
-                              {% endif %}
-                            </div>
-                          </div>
+                      {# NEW: show class name if present #}
+                      {% if a.class_name %}
+                        <div class="small mt-1">
+                          <span class="badge rounded-pill class-badge page-sub-text">
+                            <i class="bi bi-people-fill me-1"></i> {{ a.class_name }}
+                          </span>
                         </div>
-                      </a>
+                      {% endif %}
                     </div>
-                {% endfor %}
-                </div>
-            {% else %}
-                <div class="alert alert-info mt-3 p-3 text-center page-sub-text">
-                    No completed missions yet. Go start one!
-                </div>
-            {% endif %}
-        </div>
+
+                    <div class="mt-auto pt-3 d-flex justify-content-between align-items-center small assignment-footer-text">
+                      <div class="text-muted">
+                        {{ a.created_at|dt("%Y-%m-%d") }}
+                      </div>
+                      <div class="d-flex flex-column align-items-end">
+                        <div>
+                          Attempts:
+                          <span class="fw-semibold">{{ attempts }}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                  </div>
+                </a>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="alert alert-success mt-3 p-3 text-center page-sub-text">
+            <i class="bi bi-hand-thumbs-up-fill"></i> You have no pending missions! Great job!
+          </div>
+        {% endif %}
+      </div>
+
+      <div class="tab-pane fade" id="completed-missions" role="tabpanel" aria-labelledby="completed-tab">
+        {# Filter for Completed: status IS submitted or graded #}
+        {% set completed_assignments = assignments | selectattr('status', 'in', ['submitted', 'graded']) | list %}
+
+        {% if completed_assignments %}
+          <div class="row g-3 g-md-4">
+            {% for a in completed_assignments %}
+              {% set attempts = a.attempt_count or 0 %}
+              {% set is_mcq = (a.assignment_type == 'mcq') %}
+              {% set is_finish = (a.assignment_type == 'finish') %}
+              {% set status = (a.status or '') %}
+              {% set score = a.score %}
+              {% set title = a.assignment_title or a.story_title %}
+
+              {% set trigger_modal = (status == 'graded') %}
+              {% set link_url = url_for('assignment_detail', assignment_id=a.id) %}
+
+              <div class="col-12 col-sm-6 col-lg-4">
+                <a {% if not trigger_modal %}href="{{ link_url }}"{% endif %} class="text-decoration-none">
+                  <div class="assignment-card h-100 d-flex flex-column"
+                    {% if trigger_modal %}
+                      data-bs-toggle="modal"
+                      data-bs-target="#reviewModal"
+                      data-assignment-id="{{ a.id }}"
+                      data-assignment-title="{{ title }}"
+                      data-score="{{ '%.1f'|format(score) }}"
+                      data-link-url="{{ link_url }}"
+                      style="cursor: pointer;"
+                    {% endif %}>
+
+                    <div class="d-flex align-items-center justify-content-between mb-3">
+                      <span class="badge rounded-pill assignment-pill page-sub-text">
+                        {% if is_mcq %}Reading MCQ{% elif is_finish %}Finish Writing{% else %}Assignment{% endif %}
+                      </span>
+
+                      <span class="status-dot status-done page-sub-text">
+                        <span class="dot"></span><span class="label">Done</span>
+                      </span>
+                    </div>
+
+                    <div class="mb-1 flex-grow-1">
+                      <h5 class="assignment-title mb-1 page-main-title">
+                        {{ title }}
+                      </h5>
+
+                      <div class="small text-muted page-sub-text">
+                        Story: {{ a.story_title }}
+                      </div>
+
+                      {# NEW: show class name if present #}
+                      {% if a.class_name %}
+                        <div class="small mt-1">
+                          <span class="badge rounded-pill class-badge page-sub-text">
+                            <i class="bi bi-people-fill me-1"></i> {{ a.class_name }}
+                          </span>
+                        </div>
+                      {% endif %}
+                    </div>
+
+                    <div class="mt-auto pt-3 d-flex justify-content-between align-items-center small assignment-footer-text">
+                      <div class="text-muted">
+                        {{ a.created_at|dt("%Y-%m-%d") }}
+                      </div>
+                      <div class="d-flex flex-column align-items-end">
+                        <div>
+                          Attempts:
+                          <span class="fw-semibold">{{ attempts }}</span>
+                        </div>
+                        {% if score is not none %}
+                          {% set score_display = '%.1f'|format(score) %}
+                          <div class="{% if status == 'graded' %}text-success-v7 fw-bold{% endif %}">
+                            Score:
+                            <span class="fw-semibold">{{ score_display }}%</span>
+                            {% if status == 'graded' %}<i class="bi bi-chat-dots ms-1"></i>{% endif %}
+                          </div>
+                        {% endif %}
+                      </div>
+                    </div>
+
+                  </div>
+                </a>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="alert alert-info mt-3 p-3 text-center page-sub-text">
+            No completed missions yet. Go start one!
+          </div>
+        {% endif %}
+      </div>
 
     </div>
 
@@ -206,148 +250,155 @@
         <p class="mb-2 small text-muted">Mission: <span class="fw-bold" id="modalAssignmentTitle"></span></p>
 
         <div class="bg-success-v7 text-white p-3 rounded-3 mb-3 d-flex justify-content-between align-items-center" id="modalScoreSection">
-            <span class="fw-bold fs-5">Final Score:</span>
-            <span class="fw-bold fs-4" id="modalScore">--</span>
+          <span class="fw-bold fs-5">Final Score:</span>
+          <span class="fw-bold fs-4" id="modalScore">--</span>
         </div>
 
         <p class="fw-bold mb-2 text-coral-dark">Teacher Comments:</p>
         <div class="border rounded-3 p-3 bg-light-soft-blue-v7" id="modalComment">
-             <i class="bi bi-chat-left-text me-1"></i> Loading comments...
+          <i class="bi bi-chat-left-text me-1"></i> Loading comments...
         </div>
 
         <p class="fw-bold mb-0 mt-3 text-coral-dark small">
-            <i class="bi bi-info-circle me-1"></i> Note: Full submission details are available on the assignment page.
+          <i class="bi bi-info-circle me-1"></i> Note: Full submission details are available on the assignment page.
         </p>
       </div>
       <div class="modal-footer border-0 pt-0">
         <a href="#" id="modalGoToAssignment" class="btn btn-action-primary-v7 rounded-pill shadow-sm page-sub-text">
-            Go to Assignment Page <i class="bi bi-arrow-right"></i>
+          Go to Assignment Page <i class="bi bi-arrow-right"></i>
         </a>
       </div>
     </div>
   </div>
 </div>
 
-
 <script>
 // V7 Color constants for JavaScript
 const V7_COLORS = {
-    coralMain: '#ff6b6b',
-    coralDark: '#cc5555',
-    successV7: '#10b981',
-    lightSoftBlueV7: '#ffece5',
+  coralMain: '#34d399',
+  coralDark: '#10b981',
+  successV7: '#10b981',
+  lightSoftBlueV7: '#ffece5',
 };
 
 document.addEventListener("DOMContentLoaded", function() {
+  const reviewModal = document.getElementById('reviewModal');
+  if (reviewModal) {
+    const modalTitle = document.getElementById('modalAssignmentTitle');
+    const modalScore = document.getElementById('modalScore');
+    const modalComment = document.getElementById('modalComment');
+    const modalGoToAssignment = document.getElementById('modalGoToAssignment');
+    const scoreSection = document.getElementById('modalScoreSection');
 
-    // --- Modal Logic ---
-    const reviewModal = document.getElementById('reviewModal');
-    if (reviewModal) {
-        const modalTitle = document.getElementById('modalAssignmentTitle');
-        const modalScore = document.getElementById('modalScore');
-        const modalComment = document.getElementById('modalComment');
-        const modalGoToAssignment = document.getElementById('modalGoToAssignment');
-        const scoreSection = document.getElementById('modalScoreSection');
+    reviewModal.addEventListener('show.bs.modal', function (event) {
+      const trigger = event.relatedTarget;
+      const assignmentId = trigger.getAttribute('data-assignment-id');
+      const assignmentTitle = trigger.getAttribute('data-assignment-title');
+      const scoreDisplay = trigger.getAttribute('data-score');
+      const linkUrl = trigger.getAttribute('data-link-url');
 
+      modalTitle.textContent = assignmentTitle;
+      modalScore.textContent = scoreDisplay + '%';
+      modalGoToAssignment.href = linkUrl;
 
-        reviewModal.addEventListener('show.bs.modal', function (event) {
-            const trigger = event.relatedTarget;
-            const assignmentId = trigger.getAttribute('data-assignment-id');
-            const assignmentTitle = trigger.getAttribute('data-assignment-title');
-            const scoreDisplay = trigger.getAttribute('data-score');
-            const linkUrl = trigger.getAttribute('data-link-url');
+      scoreSection.classList.remove('bg-success-v7', 'bg-danger');
+      scoreSection.style.backgroundColor = V7_COLORS.coralDark;
 
-            // Set initial UI state
-            modalTitle.textContent = assignmentTitle;
-            modalScore.textContent = scoreDisplay + '%';
-            modalGoToAssignment.href = linkUrl;
-            scoreSection.classList.remove('bg-success-v7', 'bg-danger');
-            scoreSection.style.backgroundColor = V7_COLORS.coralDark; // Use dark coral as initial neutral/loading color
-            modalComment.innerHTML = '<i class="bi bi-hourglass-split me-1"></i> Fetching comments...';
+      modalComment.innerHTML = '<i class="bi bi-hourglass-split me-1"></i> Fetching comments...';
 
-            // --- Fetch comments via AJAX ---
-            // NOTE: This assumes you have created a new endpoint in app.py, e.g., /api/assignment_review/<assignmentId>
-            // Since the API endpoint is missing, we use a simulation here.
-            fetchSubmissionReview(assignmentId)
-                .then(data => {
-                    const parsedScore = parseFloat(data.score);
+      fetchSubmissionReview(assignmentId)
+        .then(data => {
+          const parsedScore = parseFloat(data.score);
 
-                    // Update score color logic: > 80% is great (green), < 50% is danger (red)
-                    if (parsedScore >= 80) {
-                        scoreSection.classList.add('bg-success-v7');
-                        scoreSection.style.backgroundColor = '';
-                    } else if (parsedScore < 50) {
-                        scoreSection.classList.add('bg-danger');
-                        scoreSection.style.backgroundColor = '';
-                    } else {
-                        scoreSection.style.backgroundColor = V7_COLORS.coralDark; // Use default
-                    }
+          if (parsedScore >= 80) {
+            scoreSection.classList.add('bg-success-v7');
+            scoreSection.style.backgroundColor = '';
+          } else if (parsedScore < 50) {
+            scoreSection.classList.add('bg-danger');
+            scoreSection.style.backgroundColor = '';
+          } else {
+            scoreSection.style.backgroundColor = V7_COLORS.coralDark;
+          }
 
-                    modalComment.innerHTML = data.comment ? data.comment.replace(/\n/g, '<br>') : "No specific comments provided by the teacher.";
-                })
-                .catch(error => {
-                    modalComment.innerHTML = '<i class="bi bi-exclamation-triangle-fill me-1"></i> Failed to load feedback. Try refreshing the page.';
-                    scoreSection.style.backgroundColor = V7_COLORS.coralDark;
-                    console.error('Error fetching review:', error);
-                });
+          modalComment.innerHTML = data.comment
+            ? data.comment.replace(/\n/g, '<br>')
+            : "No specific comments provided by the teacher.";
+        })
+        .catch(error => {
+          modalComment.innerHTML = '<i class="bi bi-exclamation-triangle-fill me-1"></i> Failed to load feedback. Try refreshing the page.';
+          scoreSection.style.backgroundColor = V7_COLORS.coralDark;
+          console.error('Error fetching review:', error);
         });
-    }
+    });
+  }
 
-    // --- Mock/Simulated Fetch Function (Replace with actual Flask API call) ---
-    function fetchSubmissionReview(assignmentId) {
-        // You would replace this with:
-        // return fetch(`/api/assignment_review/${assignmentId}`).then(res => res.json());
+  function fetchSubmissionReview(assignmentId) {
+    // Replace with real endpoint later:
+    // return fetch(`/api/assignment_review/${assignmentId}`).then(res => res.json());
 
-        return new Promise(resolve => {
-            setTimeout(() => {
-                const mockComments = {
-                    '1': { score: 92.5, comment: "Excellent narrative flow! Your vocabulary choice was particularly strong in the climax.", status: 'graded' },
-                    '2': { score: 65, comment: "Good effort, but watch your verb tenses. Try to describe the setting in more detail.", status: 'graded' },
-                    '3': { score: 100, comment: "Perfect! A delightful read that clearly incorporates the target words.", status: 'graded' },
-                    '4': { score: 45, comment: "Needs significant work on sentence structure and using the target words.", status: 'graded' },
-                };
-                // Get the mock data based on the ID, or a default
-                resolve(mockComments[assignmentId] || { score: 75, comment: "Teacher review pending or general good standing.", status: 'graded' });
-            }, 500); // Simulate API delay
-        });
-    }
-
+    return new Promise(resolve => {
+      setTimeout(() => {
+        const mockComments = {
+          '1': { score: 92.5, comment: "Excellent narrative flow! Your vocabulary choice was particularly strong in the climax.", status: 'graded' },
+          '2': { score: 65, comment: "Good effort, but watch your verb tenses. Try to describe the setting in more detail.", status: 'graded' },
+          '3': { score: 100, comment: "Perfect! A delightful read that clearly incorporates the target words.", status: 'graded' },
+          '4': { score: 45, comment: "Needs significant work on sentence structure and using the target words.", status: 'graded' },
+        };
+        resolve(mockComments[assignmentId] || { score: 75, comment: "Teacher review pending or general good standing.", status: 'graded' });
+      }, 500);
+    });
+  }
 });
 </script>
 
 <style>
-/* Define Child-Like Theme Variables */
 :root {
-    --coral-main: #ff6b6b;
-    --coral-light: #ffd7cc;
-    --coral-dark: #cc5555; /* Used for middle scores / titles */
-    --ink: #111827;
-    --muted: #6b7280;
-    --paper: #ffffff;
-    --shadow-card: 0 8px 20px rgba(255, 107, 107, 0.1), 0 4px 8px rgba(0, 0, 0, 0.05);
-    --success-v7: #10b981; /* Green */
-    --light-soft-blue-v7: #ffece5; /* Soft peach background */
+  --coral-main: #34d399;
+  --coral-light: #D1F0E0;
+  --coral-dark: #10b981;
+  --ink: #111827;
+  --muted: #6b7280;
+  --paper: #ffffff;
+  --shadow-card: 0 8px 20px rgba(255, 107, 107, 0.1), 0 4px 8px rgba(0, 0, 0, 0.05);
+  --success-v7: #10b981;
+  --light-soft-blue-v7: #ffece5;
 }
-/* New style for success message background */
+
+body{
+  background-color: #F5FCFB;
+}
+
+/* Helpers */
 .text-success-v7 { color: var(--success-v7) !important; }
 .bg-success-v7 { background-color: var(--success-v7) !important; }
 .text-coral-dark { color: var(--coral-dark) !important; }
 .bg-light-soft-blue-v7 { background-color: var(--light-soft-blue-v7) !important; }
 
-/* --- Font Application --- */
+/* Fonts */
 .page-main-title {
-    font-family: 'Baloo 2', cursive;
-    font-weight: 800;
-    color: var(--ink);
+  font-family: 'Baloo 2', cursive;
+  font-weight: 800;
+  color: #10b981;
 }
 .page-sub-text, .assignment-footer-text, .nav-link {
-    font-family: 'Fredoka', 'Nunito', sans-serif;
+  font-family: 'Fredoka', 'Nunito', sans-serif;
 }
-.page-sub-text {
-    font-weight: 500;
+.page-sub-text { font-weight: 500; }
+
+.assignments-page { min-height: calc(100vh - 80px); }
+
+/* NEW: class filter UI */
+.class-filter{
+  max-width: 280px;
+  border-radius: 999px;
+  border: 2px solid var(--coral-light);
 }
-.assignments-page {
-  min-height: calc(100vh - 80px);
+.class-badge{
+  background: #E9FBF2;
+  color: var(--coral-dark);
+  border: 1px solid var(--coral-light);
+  font-weight: 700;
+  letter-spacing: .01em;
 }
 
 /* Empty state */
@@ -391,9 +442,9 @@ document.addEventListener("DOMContentLoaded", function() {
   background: #fffdf8;
 }
 
-/* Pill (Assignment Type) */
+/* Pill */
 .assignment-pill {
-  background: #ffede6;
+  background: #D8F2E4;
   color: var(--coral-main);
   font-size: 0.8rem;
   font-weight: 700;
@@ -410,24 +461,13 @@ document.addEventListener("DOMContentLoaded", function() {
   border-radius: 999px;
   font-weight: 600;
 }
-.status-dot .dot {
-  width: 0.5rem;
-  height: 0.5rem;
-}
-.status-done {
-  background: #dcfce7;
-  color: #166534;
-}
-.status-done .dot {
-  background: var(--success-v7);
-}
-.status-todo {
-  background: #fef9c3;
-  color: #a16207;
-}
-.status-todo .dot {
-  background: #facc15;
-}
+.status-dot .dot { width: 0.5rem; height: 0.5rem; }
+
+.status-done { background: #dcfce7; color: #166534; }
+.status-done .dot { background: var(--success-v7); }
+
+.status-todo { background: #fef9c3; color: #a16207; }
+.status-todo .dot { background: #facc15; }
 
 /* Title */
 .assignment-title {
@@ -437,67 +477,63 @@ document.addEventListener("DOMContentLoaded", function() {
   color: var(--ink);
 }
 
-/* Footer Text */
+/* Footer */
 .assignment-footer-text {
-    font-size: 0.9rem;
-    color: var(--muted) !important;
+  font-size: 0.9rem;
+  color: var(--muted) !important;
 }
 .assignment-footer-text span.fw-semibold {
-    font-weight: 700 !important;
-    color: var(--ink);
+  font-weight: 700 !important;
+  color: var(--ink);
 }
 
-/* --- Nav Tab Styling (Child-like) --- */
+/* Tabs */
 .nav-pills .nav-link {
-    font-size: 1.1rem;
-    font-weight: 700;
-    color: var(--coral-dark);
-    background: transparent;
-    border-radius: 1rem;
-    border: 2px solid transparent;
-    transition: all 0.2s;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--coral-dark);
+  background: transparent;
+  border-radius: 1rem;
+  border: 2px solid transparent;
+  transition: all 0.2s;
 }
 .nav-pills .nav-link:hover:not(.active) {
-    color: var(--coral-main);
-    background: var(--coral-light);
+  color: var(--coral-main);
+  background: var(--coral-light);
 }
 .nav-pills .nav-link.active {
-    color: var(--ink);
-    background: var(--coral-light);
-    border-color: var(--coral-main);
-    box-shadow: 0 4px 8px rgba(255, 107, 107, 0.2);
+  color: var(--ink);
+  background: var(--coral-light);
+  border-color: var(--coral-main);
+  box-shadow: 0 4px 8px rgba(255, 107, 107, 0.2);
 }
 
-/* --- Modal Styling --- */
+/* Modal */
 .modal-content-v7 {
-    border-radius: 1.5rem !important;
-    background-color: var(--paper);
-    box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.2);
+  border-radius: 1.5rem !important;
+  background-color: var(--paper);
+  box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.2);
 }
 .btn-action-primary-v7 {
-    background-color: var(--coral-main);
-    color: #fff;
-    border: none;
-    font-weight: 700;
-    padding: 0.5rem 1.5rem;
-    border-radius: 999px;
-    box-shadow: 0 4px 8px rgba(255, 107, 107, 0.3);
-    transition: background-color 0.2s, transform 0.2s;
+  background-color: var(--coral-main);
+  color: #fff;
+  border: none;
+  font-weight: 700;
+  padding: 0.5rem 1.5rem;
+  border-radius: 999px;
+  box-shadow: 0 4px 8px rgba(255, 107, 107, 0.3);
+  transition: background-color 0.2s, transform 0.2s;
 }
 .btn-action-primary-v7:hover {
-    background-color: var(--coral-dark);
-    transform: translateY(-2px);
+  background-color: var(--coral-dark);
+  transform: translateY(-2px);
 }
 
-
-/* Mobile tweaks */
+/* Mobile */
 @media (max-width: 576px) {
-  .assignment-card {
-    padding: 1rem;
-  }
-  .assignment-title {
-    font-size: 1.3rem;
-  }
+  .assignment-card { padding: 1rem; }
+  .assignment-title { font-size: 1.3rem; }
+  .class-filter{ max-width: 100%; }
 }
 </style>
 

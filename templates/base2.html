@@ -236,6 +236,21 @@
       font-style:italic;
       margin-top:.3rem;
     }
+    nav{
+      font-family: 'Fredoka', 'Nunito', sans-serif;
+      font-weight: 700;
+    }
+   /* ---- Active underline for current page (exclude dropdown toggle) ---- */
+.navbar .nav-link:not(.dropdown-toggle){
+  position: relative;
+  padding-bottom: .5rem;
+}
+
+/* Optional: when Admin dropdown is "active", just tint the text (no underline) */
+.navbar .nav-link.active{
+  color:#ff6b6b !important;
+}
+
   </style>
 
   {% block head %}{% endblock %}
@@ -261,26 +276,29 @@
   {# ADMIN DROPDOWN (only for testtest) #}
 
   <li class="nav-item">
-    <a class="nav-link" href="{{ url_for('library') }}">Library</a>
+<a class="nav-link {% if request.endpoint == 'library' %}active{% endif %}"
+   href="{{ url_for('library') }}">Library</a>
   </li>
 
   {% if current_user and current_user.username != "testtest" %}
   <li class="nav-item">
-    <a class="nav-link" href="{{ url_for('assignments_list') }}">Assignments</a>
+<a class="nav-link {% if request.endpoint == 'assignments_list' %}active{% endif %}"
+   href="{{ url_for('assignments_list') }}">Assignments</a>
   </li>
   {% endif %}
 
   {% if current_user %}
   <li class="nav-item">
-    <a class="nav-link" href="{{ url_for('word_scramble') }}">Word Scramble</a>
+<a class="nav-link {% if request.endpoint == 'word_scramble' %}active{% endif %}"
+   href="{{ url_for('word_scramble') }}">Word Scramble</a>
   </li>
   {% endif %}
 {% if current_user and current_user.username == "testtest" %}
   <li class="nav-item dropdown">
-    <a class="nav-link dropdown-toggle" href="#" id="adminDropdown"
-       role="button" data-bs-toggle="dropdown" aria-expanded="false">
-      Admin
-    </a>
+<a class="nav-link dropdown-toggle {% if request.endpoint in ['story_new','admin_students','admin_stories','admin_analytics'] %}active{% endif %}"
+   href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+  Admin
+</a>
     <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="adminDropdown">
       <li>
         <a class="dropdown-item" href="{{ url_for('story_new') }}">
@@ -292,6 +310,7 @@
           Student Management
         </a>
       </li>
+
       <li>
         <a class="dropdown-item" href="{{ url_for('admin_stories') }}">
           Class Management
@@ -306,7 +325,8 @@
   </li>
       {% else %}
   <li class="nav-item">
-    <a class="nav-link" href="{{ url_for('profile') }}">Profile</a>
+<a class="nav-link {% if request.endpoint == 'profile' %}active{% endif %}"
+   href="{{ url_for('profile') }}">Profile</a>
   </li>
   {% endif %}
 
