@@ -176,6 +176,31 @@
       display:block;
       opacity:1;
     }
+
+    /* Role toggle chip style (matches theme) */
+    .role-box{
+      border:1px solid #ffd7cc;
+      background:#fff7f3;
+      border-radius:14px;
+      padding:.75rem .85rem;
+    }
+    .role-pill{
+      display:flex;
+      gap:14px;
+      flex-wrap:wrap;
+      align-items:center;
+    }
+    .role-pill .form-check{
+      margin:0;
+      padding-left:1.6rem;
+    }
+    .role-pill .form-check-input{
+      border-color:#ffd7cc;
+    }
+    .role-pill .form-check-input:checked{
+      background-color:#ff6b6b;
+      border-color:#ff6b6b;
+    }
   </style>
 </head>
 <body>
@@ -202,6 +227,30 @@
       <div>
         <div class="section-heading">Step 1 · Account</div>
         <hr class="section-divider">
+
+        <!-- ROLE (NEW) -->
+        <div class="mb-2">
+          <label class="form-label">Role</label>
+          <div class="role-box">
+            <div class="role-pill">
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="role" id="role_student" value="student" checked>
+                <label class="form-check-label" for="role_student" style="font-weight:700; color:#6b6464;">
+                  Student
+                </label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="role" id="role_teacher" value="teacher">
+                <label class="form-check-label" for="role_teacher" style="font-weight:700; color:#6b6464;">
+                  Teacher
+                </label>
+              </div>
+            </div>
+            <div class="help mt-1">
+              Students take the level test (Step 2). Teachers can skip the test.
+            </div>
+          </div>
+        </div>
 
         <div class="mb-2">
           <label class="form-label">Username</label>
@@ -298,16 +347,51 @@
         <div class="help mt-2">
           We use this information only to choose reading level and guidance.
         </div>
+
+        <!-- OPTIONAL EXTRAS (NEW) -->
+        <div id="studentExtras" class="mt-3">
+          <div class="section-heading">Student (optional)</div>
+          <hr class="section-divider">
+          <label class="form-label">Grade</label>
+          <select class="form-select" id="grade" name="grade">
+            <option value="" selected>Select grade (optional)</option>
+            <option value="elementary">Elementary</option>
+            <option value="middle">Middle</option>
+            <option value="high">High</option>
+            <option value="college">College</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+
+        <div id="teacherExtras" class="mt-3" style="display:none;">
+          <div class="section-heading">Teacher (recommended)</div>
+          <hr class="section-divider">
+
+          <div class="mb-2">
+            <label class="form-label">School / Organization</label>
+            <input type="text" class="form-control" id="school" name="school"
+                   placeholder="e.g., ABC High School"
+                   style="border-left: 1px solid #ffd7cc !important; border-radius: 12px !important;">
+          </div>
+
+          <div>
+            <label class="form-label">Subject</label>
+            <input type="text" class="form-control" id="subject" name="subject"
+                   placeholder="e.g., English, CS, Science"
+                   style="border-left: 1px solid #ffd7cc !important; border-radius: 12px !important;">
+          </div>
+        </div>
       </div>
 
       <div id="step1Warning" class="text-danger small mt-2" style="display:none;"></div>
 
+      <!-- Button text changes depending on role -->
       <button type="button" class="btn-soft mt-3" id="toLevelBtn">
         Next: Level Test
       </button>
     </div>
 
-    <!-- STEP 2 -->
+    <!-- STEP 2 (students only) -->
     <div id="stepLevel" class="fade-panel">
       <div class="level-section">
         <div class="section-heading mb-1">Step 2 · Quick English Level Test</div>
@@ -422,6 +506,38 @@
       target.classList.add('active');
     }
   }
+
+  // Role helpers
+  function getRole(){
+    const r = document.querySelector('input[name="role"]:checked');
+    return r ? r.value : "student";
+  }
+
+  function applyRoleUI(){
+    const role = getRole();
+    const toLevelBtn = document.getElementById("toLevelBtn");
+    const studentExtras = document.getElementById("studentExtras");
+    const teacherExtras = document.getElementById("teacherExtras");
+
+    if(role === "teacher"){
+      // teachers skip step2
+      toLevelBtn.textContent = "Create Account";
+      studentExtras.style.display = "none";
+      teacherExtras.style.display = "block";
+
+      // clear level fields so backend doesn't see stale values
+      document.getElementById("levelScore").value = "";
+      document.getElementById("levelName").value  = "";
+    }else{
+      toLevelBtn.textContent = "Next: Level Test";
+      studentExtras.style.display = "block";
+      teacherExtras.style.display = "none";
+    }
+  }
+
+  document.querySelectorAll('input[name="role"]').forEach(el => {
+    el.addEventListener("change", applyRoleUI);
+  });
 
   // Level test questions
   const levelQuestions = [
@@ -562,8 +678,11 @@
     const genderEl    = document.getElementById("gender");
 
     renderLevelQuestions();
+    applyRoleUI();
 
-    // Step 1 → Step 2 with server-side duplicate check
+    // Step 1 action:
+    // - Student: validate -> go to Step 2
+    // - Teacher: validate -> submit directly (skip Step 2)
     toLevelBtn.addEventListener("click", function () {
       step1Warn.style.display = "none";
       step1Warn.textContent = "";
@@ -596,7 +715,6 @@
         return;
       }
 
-      // Build payload for backend check (including duplicates)
       const payload = {
         username: usernameEl.value.trim(),
         email:    emailEl.value.trim(),
@@ -618,11 +736,7 @@
       })
       .then(async (res) => {
         let data = {};
-        try {
-          data = await res.json();
-        } catch {
-          data = {};
-        }
+        try { data = await res.json(); } catch { data = {}; }
 
         if (!res.ok || !data.ok) {
           const errors = data.errors || ["Could not validate your info. Please try again."];
@@ -631,7 +745,17 @@
           return;
         }
 
-        // All good → move to level test
+        const role = getRole();
+
+        if (role === "teacher") {
+          // Skip Step 2: submit form immediately
+          scoreInput.value = "";
+          nameInput.value  = "";
+          form.submit();
+          return;
+        }
+
+        // Student: go to Step 2
         showStep("stepLevel");
       })
       .catch(() => {
@@ -640,7 +764,7 @@
       })
       .finally(() => {
         toLevelBtn.disabled = false;
-        toLevelBtn.textContent = "Next: Level Test";
+        applyRoleUI(); // restores correct label
       });
     });
 
@@ -648,8 +772,12 @@
       showStep("stepAccount");
     });
 
-    // Submit: compute level test score; block if missing answers
+    // Submit:
+    // - Student: compute score and require all answers
+    // - Teacher: allow submit without test (Step 2 isn't shown anyway)
     form.addEventListener("submit", function(e){
+      const role = getRole();
+
       if(pw.value !== pw2.value){
         e.preventDefault();
         showStep("stepAccount");
@@ -661,6 +789,16 @@
         return;
       }
 
+      if(role === "teacher"){
+        // ensure level is empty
+        scoreInput.value = "";
+        nameInput.value  = "";
+        levelWarn.style.display = 'none';
+        levelWarn.textContent = "";
+        return; // allow normal submit
+      }
+
+      // student: must do the test
       let score = 0;
       let unanswered = 0;
 
