@@ -44,7 +44,7 @@
               </div>
 
               <div class="d-flex flex-column gap-3 mb-4">
-                <div class="profile-stat-pill">
+                <div class="profile-stat-pill d-none">
                   <span class="stat-label profile-text">Books Read:</span>
                   <span class="stat-value profile-title-sm">
                     {{ (stats.books_read or 0)|int }}
@@ -61,17 +61,34 @@
                     {% endif %}
                   </span>
                 </div>
-
                 <div class="profile-stat-pill">
-                  <span class="stat-label profile-text">Average Score:</span>
+                  <span class="stat-label profile-text">Age:</span>
                   <span class="stat-value profile-title-sm">
-                    {% if stats.avg_score is not none %}
-                      {{ stats.avg_score|round(1) }}%
-                    {% else %}
-                      -
-                    {% endif %}
+{{profile_user.age}}
                   </span>
                 </div>
+                                <div class="profile-stat-pill">
+                  <span class="stat-label profile-text">L1:</span>
+                  <span class="stat-value profile-title-sm">
+{{profile_user.l1_language}}
+                  </span>
+                </div>
+                                <div class="profile-stat-pill">
+                  <span class="stat-label profile-text">L2:</span>
+                  <span class="stat-value profile-title-sm">
+{{profile_user.l2_language}}
+                  </span>
+                </div>
+<!--                <div class="profile-stat-pill">-->
+<!--                  <span class="stat-label profile-text">Average Score:</span>-->
+<!--                  <span class="stat-value profile-title-sm">-->
+<!--                    {% if stats.avg_score is not none %}-->
+<!--                      {{ stats.avg_score|round(1) }}%-->
+<!--                    {% else %}-->
+<!--                      - -->
+<!--                    {% endif %}-->
+<!--                  </span>-->
+<!--                </div>-->
               </div>
 
               <div class="d-grid mb-4">

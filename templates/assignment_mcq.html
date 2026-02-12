@@ -1,283 +1,480 @@
 {% extends "base2.html" %}
 {% block title %}Reading Assignment · {{ assignment.assignment_title }}{% endblock %}
 
-{# NOTE: Requires 'from_json' and 'nl2br' filters in app.py #}
-
 {% block content %}
-<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Baloo+2:wght@700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Baloo+2:wght@600;700;800&display=swap" rel="stylesheet">
 
-<div class="container mt-4 mb-5">
-    <div class="row justify-content-center">
-        <div class="col-12">
-            <div class="card border-0 finish-card-v8 p-4 p-md-5">
+{# --- DATA PREPARATION --- #}
+{% set payload = assignment.questions_json | from_json if assignment and assignment.questions_json else {} %}
+{% set mcq_list = payload.get('mcq') or [] %}
+{% set short_list = payload.get('short_answer') or [] %}
+{% set fill_list = payload.get('fill_in_blank') or [] %}
+{% set legacy_questions = payload.get('questions') or [] %}
+{% set passage = payload.get('story_text') or payload.get('passage') or payload.get('story', {}).get('text') or '' %}
 
-                <h1 class="mb-2 finish-main-title">Reading Mission</h1>
-                <p class="mb-4 finish-sub-text">
-                    Mission: <strong class="text-deep-blue">{{ assignment.assignment_title or story.title }}</strong>
-                </p>
+{# Submission State #}
+{% set submission_data = (submission.answers_json | from_json) if submission and submission.answers_json else {} %}
+{% set saved_mcq = submission_data.get('mcq_answers') or [] %}
+{% set saved_short = submission_data.get('short_answer_responses') or [] %}
+{% set saved_fill = submission_data.get('fill_in_blank_responses') or [] %}
+{% set saved_custom = submission_data.get('custom_answers') or {} %}
 
-                {# --- Story Preview --- #}
-                <h5 class="fw-semibold mb-3 finish-section-title">The Reading Passage</h5>
-                <div class="border rounded-4 p-4 bg-story-preview finish-text-body mb-4 story-preview-box">
-                    {# Use the completion_text from the draft, or fall back to the story content #}
-                    {% set story_text = draft.completion_text if draft and draft.completion_text else story.content %}
-                    {{ story_text | nl2br }}
-                </div>
+{# Status Check #}
+{% set is_submitted = (assignment.status == 'submitted' or assignment.status == 'graded') %}
 
-                {# Check if any question list is populated #}
-                {% if not mcq_questions and not fill_in_blank_questions and not short_answer_questions %}
-                    <div class="alert alert-warning finish-alert-v8 finish-text-body">
-                        <strong class="fw-bold">No Questions:</strong>
-                        This reading assignment is incomplete or has no questions available.
-                    </div>
-                {% else %}
-                    <form method="post" action="{{ url_for('assignment_detail', assignment_id=assignment.id) }}">
+<div class="container mt-4 mb-5" style="max-width: 900px;">
 
-                        {# Try to load previous answers for display #}
-                        {% set submission_data = submission.answers_json | from_json if submission and submission.answers_json else {} %}
+  {# --- HEADER SECTION --- #}
+  <div class="text-center mb-5 fade-in-up">
+    <span class="badge rounded-pill bg-light-coral text-coral-dark mb-2 px-3 py-2 fw-bold text-uppercase" style="letter-spacing: 1px;">
+      Reading Mission
+    </span>
+    <h1 class="page-title display-5">{{ assignment.assignment_title or 'Reading Assignment' }}</h1>
+  </div>
 
-                        {% set is_submitted = assignment.user_status == 'submitted' or assignment.user_status == 'graded' %}
+  <div class="row justify-content-center">
+    <div class="col-12">
 
-                        {# --- MCQ QUESTIONS --- #}
-                        {% if mcq_questions %}
-                            <h5 class="mt-5 mb-3 fw-semibold finish-section-title">Reading Comprehension: Multiple Choice</h5>
-                            {% set mcq_labels = ['A', 'B', 'C', 'D'] %}
-
-                            {% for q in mcq_questions %}
-                                {% set q_index = loop.index0 %}
-                                {% set saved_answer_index = submission_data.mcq_answers[q_index] if submission_data.mcq_answers and submission_data.mcq_answers[q_index] is defined else -1 %}
-
-                                <div class="card mb-4 p-4 rounded-3 border-mcq-question bg-light-orange">
-                                    <p class="mb-3 fw-bold finish-text-body">Q{{ q_index + 1 }}. {{ q.question }}</p>
-
-                                    {% for option in q.options %}
-                                        {% set option_index = loop.index0 %}
-                                        {% set is_checked = saved_answer_index == option_index %}
-
-                                        <div class="form-check mb-2">
-                                            <input
-                                                class="form-check-input checklist-checkbox"
-                                                type="radio"
-                                                name="q{{ q_index }}"
-                                                id="q{{ q_index }}_opt{{ option_index }}"
-                                                value="{{ option_index }}"
-                                                {% if is_checked %}checked{% endif %}
-                                                {% if is_submitted %}disabled{% endif %}
-                                                required
-                                            >
-                                            <label class="form-check-label small finish-text-body" for="q{{ q_index }}_opt{{ option_index }}">
-                                                {# FIX for jinja2.exceptions.TemplateAssertionError: No filter named 'chr'. #}
-                                                {% if option_index < 4 %}{{ mcq_labels[option_index] }}{% endif %}. {{ option }}
-                                            </label>
-                                        </div>
-                                    {% endfor %}
-                                </div>
-                            {% endfor %}
-                        {% endif %}
-
-                        {# --- FILL-IN-THE-BLANK QUESTIONS --- #}
-                        {% if fill_in_blank_questions %}
-                            <h5 class="mt-5 mb-3 fw-semibold finish-section-title">Reading Comprehension: Fill in the Blank</h5>
-
-                            {% for q in fill_in_blank_questions %}
-                                {% set q_index = loop.index0 %}
-                                {% set saved_answer = submission_data.fill_in_blank_responses[q_index] if submission_data.fill_in_blank_responses and submission_data.fill_in_blank_responses[q_index] is defined else '' %}
-
-                                <div class="card mb-4 p-4 rounded-3 border-fib-question bg-light-yellow">
-                                    <label for="fill{{ q_index }}" class="form-label fw-bold finish-text-body">
-                                        F{{ q_index + 1 }}. Complete the sentence:
-                                    </label>
-                                    <div class="input-group">
-                                        {% set sentence_parts = q.sentence.split('___') %}
-
-                                        {# Part 1 (before the blank) #}
-                                        <span class="input-group-text finish-text-body bg-white border-end-0">{{ sentence_parts[0] }}</span>
-
-                                        {# Input field for the answer #}
-                                        <input type="text"
-                                               class="form-control finish-textarea"
-                                               name="fill{{ q_index }}"
-                                               value="{{ saved_answer }}"
-                                               placeholder="Your missing word"
-                                               {% if is_submitted %}disabled{% endif %}
-                                               required>
-
-                                        {# Part 2 (after the blank, if exists) #}
-                                        {% if sentence_parts[1] is defined and sentence_parts[1] is not none and sentence_parts[1] != '' %}
-                                            <span class="input-group-text finish-text-body bg-white border-start-0">{{ sentence_parts[1] }}</span>
-                                        {% endif %}
-                                    </div>
-                                </div>
-                            {% endfor %}
-                        {% endif %}
-
-                        {# --- SHORT ANSWER QUESTIONS --- #}
-                        {% if short_answer_questions %}
-                            <h5 class="mt-5 mb-3 fw-semibold finish-section-title">Reading Comprehension: Short Answer</h5>
-
-                            {% for q in short_answer_questions %}
-                                {% set q_index = loop.index0 %}
-                                {% set saved_answer = submission_data.short_answer_responses[q_index] if submission_data.short_answer_responses and submission_data.short_answer_responses[q_index] is defined else '' %}
-
-                                <div class="card mb-4 p-4 rounded-3 border-sa-question bg-light-blue">
-                                    <label for="short{{ q_index }}" class="form-label fw-bold finish-text-body">S{{ q_index + 1 }}. {{ q.question }}</label>
-                                    <textarea
-                                        name="short{{ q_index }}"
-                                        id="short{{ q_index }}"
-                                        rows="4"
-                                        class="form-control finish-textarea"
-                                        placeholder="Write your answer here (1-3 sentences is best)..."
-                                        {% if is_submitted %}disabled{% endif %}
-                                    >{{ saved_answer }}</textarea>
-                                </div>
-                            {% endfor %}
-                        {% endif %}
-
-                        {# Display warning if viewing a submitted version #}
-                        {% if is_submitted %}
-                            <p class="small text-muted finish-text-body mt-3">
-                                <i class="bi bi-info-circle me-1"></i> You have already submitted this assignment. View your score on the missions list.
-                            </p>
-                        {% endif %}
-
-
-                        <div class="d-flex justify-content-between mt-4 pt-3 border-top-soft">
-                            <a href="{{ url_for('assignments_list') }}" class="btn btn-lg btn-outline-secondary finish-text-button rounded-pill">
-                                Back to missions
-                            </a>
-                            <button type="submit"
-                                    class="btn btn-lg btn-action-primary finish-text-button rounded-pill shadow-lg"
-                                    {% if is_submitted %}disabled{% endif %}
-                                    id="submitButton">
-                                Submit Answers <i class="bi bi-send-fill ms-1"></i>
-                            </button>
-                        </div>
-                    </form>
-                {% endif %}
-
-            </div>
+      {# --- STORY CARD --- #}
+      <div class="card border-0 shadow-sm rounded-5 mb-5 overflow-hidden fade-in-up" style="animation-delay: 0.1s;">
+        <div class="card-body p-4 p-md-5 bg-white position-relative story-card-body">
+          <div class="story-decorator"></div>
+          <h5 class="fw-bold mb-4 story-heading text-deep-blue">
+            <i class="bi bi-book-half me-2 text-coral-main"></i>The Story
+          </h5>
+          <div class="story-content">
+            {{ (passage or 'No passage found for this worksheet.') | nl2br }}
+          </div>
         </div>
+      </div>
+
+      {# --- QUESTIONS SECTION --- #}
+      {% if not mcq_list and not short_list and not fill_list and not legacy_questions %}
+        <div class="alert alert-warning rounded-4 border-0 shadow-sm p-4 text-center">
+          <i class="bi bi-exclamation-circle fs-1 text-warning mb-3 d-block"></i>
+          <strong class="fs-5">No Questions Found</strong>
+          <p class="text-muted mb-0">This assignment appears to be empty.</p>
+        </div>
+      {% else %}
+
+        <form id="assignmentForm" method="post" action="{{ url_for('assignment_detail', assignment_id=assignment.id) }}">
+          {% set mcq_labels = ['A', 'B', 'C', 'D', 'E', 'F'] %}
+
+          {# --- SECTION A: MCQ --- #}
+          {% if mcq_list %}
+            <div class="section-header mb-4 mt-5 fade-in-up" style="animation-delay: 0.2s;">
+              <h4 class="fw-bold text-deep-blue">Question Time!</h4>
+              <p class="text-muted small">Choose the best answer for each question.</p>
+            </div>
+
+            {% for q in mcq_list %}
+              {% set q_index = loop.index0 %}
+              {% set q_text = q.get('question') or q.get('prompt') %}
+              {% set options = q.get('options') or [] %}
+
+              {# --- CRITICAL FIX: Safe index access for saved answers --- #}
+              {% set saved_val = -1 %}
+              {% if saved_mcq and q_index < saved_mcq|length %}
+                 {% set saved_val = saved_mcq[q_index] %}
+              {% endif %}
+
+              <div class="question-card card border-0 shadow-sm rounded-4 mb-4 fade-in-up">
+                <div class="card-body p-4">
+                   <div class="d-flex align-items-center mb-3">
+                      <span class="badge bg-soft-blue text-deep-blue rounded-pill me-2 px-3">Q{{ loop.index }}</span>
+                      <span class="badge bg-light text-muted border rounded-pill">Factual</span>
+                   </div>
+
+                   <p class="question-text mb-4">{{ q_text }}</p>
+
+                   <div class="options-grid">
+                   {% for option in options %}
+                      {% set opt_idx = loop.index0 %}
+                      {# Compare as strings to avoid type mismatches #}
+                      {% set is_checked = (saved_val is not none) and (saved_val|string == opt_idx|string) %}
+
+                      <div class="option-wrapper">
+                        <input class="btn-check" type="radio"
+                               name="q{{ q_index }}" id="mcq_{{ q_index }}_{{ opt_idx }}" value="{{ opt_idx }}"
+                               {% if is_checked %}checked{% endif %}
+                               {% if is_submitted %}disabled{% endif %}
+                               required>
+
+                        {# Add 'selected-answer' class so CSS can style it even if disabled #}
+                        <label class="option-card d-flex align-items-center {% if is_checked %}selected-answer{% endif %}"
+                               for="mcq_{{ q_index }}_{{ opt_idx }}">
+                          <div class="option-marker">{{ mcq_labels[opt_idx] }}</div>
+                          <div class="option-text">{{ option }}</div>
+
+                          {% if is_checked %}
+                            <i class="bi bi-check-circle-fill text-coral-main ms-auto fs-5 animate-pop"></i>
+                          {% endif %}
+                        </label>
+                      </div>
+                   {% endfor %}
+                   </div>
+                </div>
+              </div>
+            {% endfor %}
+          {% endif %}
+
+          {# --- SECTION B: SHORT ANSWER --- #}
+          {% if short_list %}
+            <div class="section-header mb-4 mt-5 fade-in-up">
+              <h4 class="fw-bold text-deep-blue">Write Your Thoughts</h4>
+              <p class="text-muted small">Answer in full sentences.</p>
+            </div>
+
+            {% for q in short_list %}
+              {% set q_index = loop.index0 %}
+              {% set q_text = q.get('question') or q.get('prompt') %}
+
+              {# --- Safe index access for short answers --- #}
+              {% set saved_text = '' %}
+              {% if saved_short and q_index < saved_short|length %}
+                 {% set saved_text = saved_short[q_index] %}
+              {% endif %}
+
+              {% set category = q.get('category') or 'Critical/Inferential' %}
+
+              <div class="question-card card border-0 shadow-sm rounded-4 mb-4 fade-in-up">
+                 <div class="card-body p-4">
+                    <div class="d-flex align-items-center mb-3">
+                       <span class="badge bg-soft-blue text-deep-blue rounded-pill me-2 px-3">Q{{ loop.index }}</span>
+                       <span class="badge bg-light-orange text-orange-dark border border-orange-light rounded-pill">{{ category }}</span>
+                    </div>
+                    <p class="question-text mb-3">{{ q_text }}</p>
+
+                    <div class="form-floating">
+                      <textarea name="short{{ q_index }}"
+                                class="form-control custom-textarea"
+                                placeholder="Type your answer here..."
+                                id="shortInput{{ q_index }}"
+                                style="height: 120px"
+                                {% if is_submitted %}disabled{% endif %}
+                                required>{{ saved_text }}</textarea>
+                      <label for="shortInput{{ q_index }}" class="text-muted">Type your answer here...</label>
+                    </div>
+                 </div>
+              </div>
+            {% endfor %}
+          {% endif %}
+
+          {# --- SECTION C: LEGACY/CUSTOM --- #}
+          {% if legacy_questions and not mcq_list %}
+            {% for q in legacy_questions %}
+               {% set q_index = loop.index0 %}
+               {% set saved_custom_val = saved_custom.get(q_index|string, '') %}
+               <div class="question-card card border-0 shadow-sm rounded-4 mb-4 fade-in-up">
+                  <div class="card-body p-4">
+                    <p class="question-text mb-3"><span class="text-coral-main fw-bold me-2">Q{{ loop.index }}.</span> {{ q.get('question') }}</p>
+                    <textarea name="custom_answer_{{ q_index }}" class="form-control custom-textarea" rows="3"
+                              {% if is_submitted %}disabled{% endif %}>{{ saved_custom_val }}</textarea>
+                  </div>
+               </div>
+            {% endfor %}
+          {% endif %}
+
+          {# --- FOOTER / SUBMIT --- #}
+          <div class="sticky-bottom-bar pb-4 pt-3 mt-5">
+            {% if is_submitted %}
+              <div class="card border-success-subtle bg-success-subtle rounded-pill shadow-sm mx-auto animate-fade-in" style="max-width: 500px;">
+                <div class="card-body py-2 px-4 d-flex align-items-center justify-content-center text-success-dark">
+                  <i class="bi bi-check-circle-fill fs-4 me-3"></i>
+                  <div class="text-start">
+                    <div class="fw-bold fs-5 lh-1">Mission Completed</div>
+                    {% if assignment.score is not none %}
+                      <div class="small opacity-75">Score: <strong>{{ '%.0f'|format(assignment.score) }}%</strong></div>
+                    {% else %}
+                      <div class="small opacity-75">Great job!</div>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+              <div class="text-center mt-3">
+                 <a href="{{ url_for('assignments_list') }}" class="btn btn-link text-muted text-decoration-none fw-bold">
+                   <i class="bi bi-arrow-left me-1"></i> Back to Missions
+                 </a>
+              </div>
+            {% else %}
+              <div class="d-flex justify-content-center" id="submitActionArea">
+                <button type="submit" class="btn btn-action-primary btn-lg rounded-pill shadow px-5 py-3 fs-5" id="submitButton">
+                  <i class="bi bi-send-fill me-2"></i> Submit Mission
+                </button>
+              </div>
+            {% endif %}
+          </div>
+
+        </form>
+      {% endif %}
+
     </div>
+  </div>
 </div>
 
-{# Submission Success Modal #}
-{% if just_submitted %}
-<div class="modal fade" id="submissionSuccessModal" tabindex="-1" aria-labelledby="submissionSuccessLabel" aria-hidden="true">
+{# --- MODAL: CONGRATULATIONS --- #}
+<div class="modal fade" id="congratsModal" tabindex="-1" aria-labelledby="congratsLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
   <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content rounded-4 modal-success-v8">
-      <div class="modal-header border-0 pb-0">
-        <h5 class="modal-title finish-main-title text-success-color" id="submissionSuccessLabel">Mission Accomplished!</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body finish-text-body text-center">
-        <p class="fs-4 text-deep-blue"><i class="bi bi-check-circle-fill me-2"></i>Submission Successful!</p>
-        <p>Your answers have been saved. Check the missions list to see your automated score!</p>
-      </div>
-      <div class="modal-footer border-0 pt-0">
-        <a href="{{ url_for('assignments_list') }}" class="btn btn-action-primary rounded-pill finish-text-button">
-          Go to Missions List
-        </a>
+    <div class="modal-content rounded-5 border-0 shadow-lg overflow-hidden">
+      <div class="modal-header border-0 bg-coral-light p-0" style="height: 10px;"></div>
+      <div class="modal-body text-center p-5">
+        <div class="mb-4 animate-bounce">
+            <div style="width: 100px; height: 100px; background: #dcfce7; color: #10b981; font-size: 50px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; box-shadow: 0 10px 25px rgba(16, 185, 129, 0.2);">
+                <i class="bi bi-trophy-fill"></i>
+            </div>
+        </div>
+        <h2 class="mb-2 finish-main-title" style="color: var(--deep-blue);">Mission Complete!</h2>
+        <p class="text-muted mb-4 fs-5" style="font-family: 'Fredoka', sans-serif;">
+            You did it! Your answers have been saved.<br>Great effort!
+        </p>
+        <div class="d-grid gap-3 col-10 mx-auto">
+          <button type="button" class="btn btn-action-primary btn-lg rounded-pill shadow-sm" data-bs-dismiss="modal" onclick="disableFormView()">
+            Review My Answers
+          </button>
+          <a href="{{ url_for('assignments_list') }}" class="btn btn-outline-secondary btn-lg rounded-pill border-2 fw-bold">
+            Back to Missions
+          </a>
+        </div>
       </div>
     </div>
   </div>
 </div>
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-  const successModal = new bootstrap.Modal(document.getElementById('submissionSuccessModal'));
-  successModal.show();
-});
-</script>
-{% endif %}
 
+<script>
+// --- AJAX SUBMISSION LOGIC ---
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('assignmentForm');
+
+    // Check if backend flagged this as just submitted (if redirected)
+    {% if just_submitted %}
+        var myModal = new bootstrap.Modal(document.getElementById('congratsModal'));
+        myModal.show();
+    {% endif %}
+
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const submitBtn = document.getElementById('submitButton');
+            const originalBtnText = submitBtn.innerHTML;
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Sending...';
+
+            const formData = new FormData(form);
+
+            fetch(form.action, {
+                method: 'POST',
+                body: formData,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const myModal = new bootstrap.Modal(document.getElementById('congratsModal'));
+                    myModal.show();
+                    disableFormView();
+                } else {
+                    alert('Error submitting assignment. Please try again.');
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalBtnText;
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                window.location.reload();
+            });
+        });
+    }
+});
+
+function disableFormView() {
+    // 1. Disable inputs
+    const inputs = document.querySelectorAll('#assignmentForm input, #assignmentForm textarea, #assignmentForm button');
+    inputs.forEach(el => el.disabled = true);
+
+    // 2. Add visual styling to checked answers
+    const checkedInputs = document.querySelectorAll('.btn-check:checked');
+    checkedInputs.forEach(input => {
+        const label = document.querySelector(`label[for="${input.id}"]`);
+        if(label) {
+            label.classList.add('selected-answer');
+            if(!label.querySelector('.bi-check-circle-fill')) {
+                const icon = document.createElement('i');
+                icon.className = 'bi bi-check-circle-fill text-coral-main ms-auto fs-5 animate-pop';
+                label.appendChild(icon);
+            }
+        }
+    });
+
+    // 3. Swap Footer
+    const actionArea = document.getElementById('submitActionArea');
+    if (actionArea) {
+        actionArea.innerHTML = `
+            <div class="card border-success-subtle bg-success-subtle rounded-pill shadow-sm mx-auto animate-fade-in" style="max-width: 500px;">
+                <div class="card-body py-2 px-4 d-flex align-items-center justify-content-center text-success-dark">
+                  <i class="bi bi-check-circle-fill fs-4 me-3"></i>
+                  <div class="text-start">
+                    <div class="fw-bold fs-5 lh-1">Mission Completed</div>
+                    <div class="small opacity-75">Great job!</div>
+                  </div>
+                </div>
+            </div>`;
+    }
+}
+</script>
 
 <style>
-/* Define Theme Variables */
 :root {
-    --coral-main: #ff6b6b;
-    --coral-light: #ffd7cc;
-    --ink: #111827;
-    --muted: #6b7280;
-    --deep-blue: #0A3D62;
-    --light-orange: #fff6ed; /* Soft background for MCQ */
-    --light-yellow: #fffdf7; /* Soft background for FIB */
-    --light-blue: #e6f0ff; /* Soft background for SA */
-    --success-color: #10b981;
-}
-.finish-card-v8 {
-    background: #fffcf8;
-}
-.finish-main-title {
-    font-family: 'Baloo 2', cursive;
-    font-weight: 800;
-    color: var(--deep-blue); /* Changed title color for reading */
-    font-size: 2.2rem;
-    line-height: 1.1;
-}
-.finish-section-title {
-    font-family: 'Baloo 2', cursive;
-    font-weight: 700 !important;
-    color: var(--coral-main); /* Changed section titles to coral */
-    font-size: 1.4rem;
-}
-.finish-textarea {
-    min-height: 50px; /* Smaller textarea for answers */
-    font-size: 1rem;
-}
-.finish-textarea[disabled] {
-    background-color: #f7f7f7;
-    cursor: not-allowed;
+  --coral-main: #ff6b6b;
+  --coral-dark: #e85050;
+  --coral-light: #fff0f0;
+  --deep-blue: #0A3D62;
+  --soft-blue: #eef2f6;
+  --light-orange: #fff9f4;
+  --orange-dark: #d97706;
+  --orange-light: #fed7aa;
+  --success-color: #10b981;
+  --success-dark: #065f46;
 }
 
-.bg-light-orange { background-color: var(--light-orange); border: 1px solid var(--coral-light); }
-.bg-light-yellow { background-color: var(--light-yellow); border: 1px solid #ffcc7f; }
-.bg-light-blue { background-color: var(--light-blue); border: 1px solid #c9e0ff; }
-.story-preview-box {
-    background: #fefefe !important;
-    border: 2px solid rgba(135, 206, 250, 0.2) !important;
-    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
-    color: #475569;
+/* Animations */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translate3d(0, 20px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
 }
-.text-success-color {
-    color: var(--success-color) !important;
+.fade-in-up { animation: fadeInUp 0.6s ease-out forwards; opacity: 0; }
+
+@keyframes popIn {
+  0% { transform: scale(0.5); opacity: 0; }
+  80% { transform: scale(1.2); opacity: 1; }
+  100% { transform: scale(1); }
 }
-/* Button Styling */
+.animate-pop { animation: popIn 0.3s ease-out forwards; }
+
+.animate-bounce { animation: bounce 2s infinite; }
+@keyframes bounce {
+  0%, 20%, 50%, 80%, 100% {transform: translateY(0);}
+  40% {transform: translateY(-20px);}
+  60% {transform: translateY(-10px);}
+}
+
+.animate-fade-in { animation: fadeIn 0.5s ease-out; }
+@keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+
+body { background-color: #f8fafc; }
+
+/* Typography */
+.page-title { font-family: 'Baloo 2', cursive; font-weight: 800; color: var(--deep-blue); }
+.finish-main-title { font-family: 'Baloo 2', cursive; font-weight: 800; }
+.story-heading { font-family: 'Baloo 2', cursive; font-weight: 700; font-size: 1.5rem; }
+.story-content { font-family: 'Fredoka', sans-serif; font-size: 1.15rem; line-height: 1.8; color: #334155; }
+.question-text { font-family: 'Fredoka', sans-serif; font-weight: 500; font-size: 1.25rem; color: #1e293b; }
+
+/* Story Card */
+.story-card-body { border-left: 6px solid var(--coral-main); }
+.bg-story-preview { background-color: white !important; }
+
+/* Buttons & Badges */
+.bg-light-coral { background-color: var(--coral-light); }
+.text-coral-dark { color: var(--coral-dark); }
+.bg-soft-blue { background-color: var(--soft-blue); }
+.text-deep-blue { color: var(--deep-blue); }
+
 .btn-action-primary {
-    background-color: var(--coral-main);
-    border-color: var(--coral-main);
-    color: white;
-    box-shadow: 0 6px 14px rgba(255, 107, 107, 0.35);
+  background-color: var(--coral-main);
+  border-color: var(--coral-main);
+  color: #fff;
+  font-family: 'Baloo 2', cursive;
+  font-weight: 700;
+  transition: all 0.3s ease;
 }
 .btn-action-primary:hover:not(:disabled) {
-    background-color: #e86060;
-    border-color: #e86060;
-    transform: translateY(-2px);
-    box-shadow: 0 8px 16px rgba(255, 107, 107, 0.5);
-}
-.btn-action-primary:disabled {
-    background-color: #ccc;
-    border-color: #ccc;
-    box-shadow: none;
-    cursor: not-allowed;
+  background-color: var(--coral-dark);
+  transform: translateY(-3px);
+  box-shadow: 0 10px 20px rgba(255, 107, 107, 0.4);
 }
 
-/* Modal Theming (Shared Styles) */
-.modal-success-v8 {
-    background-color: #e6fff4;
-    border: 3px solid var(--success-color);
-    box-shadow: 0 0 0 0.5rem rgba(16, 185, 129, 0.1);
+/* Custom MCQ Option Cards */
+.options-grid { display: grid; gap: 12px; }
+.option-wrapper { position: relative; }
+.option-card {
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 12px 16px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: 100%;
 }
-.modal-success-v8 .finish-main-title {
-    color: var(--success-color);
+
+/* Hover Effect: ONLY when not disabled */
+input:not(:disabled) + .option-card:hover {
+  border-color: var(--coral-main);
+  background-color: #fffdfd;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 6px rgba(0,0,0,0.05);
 }
-.modal-footer .btn-action-primary {
-    background-color: var(--deep-blue);
-    border-color: var(--deep-blue);
-    box-shadow: 0 4px 8px rgba(10, 61, 98, 0.3);
+
+/* Selected State - Applied via CSS class or Checked state */
+.selected-answer,
+.btn-check:checked + .option-card {
+  border-color: var(--coral-main);
+  background-color: var(--coral-light);
+  box-shadow: 0 4px 12px rgba(255, 107, 107, 0.15);
+  font-weight: 600;
+  opacity: 1 !important; /* Ensure opacity is full even if input is disabled */
 }
-.modal-footer .btn-action-primary:hover {
-    background-color: #082a45;
-    border-color: #082a45;
-    transform: translateY(-1px);
+
+.selected-answer .option-marker,
+.btn-check:checked + .option-card .option-marker {
+  background-color: var(--coral-main);
+  color: white;
+}
+
+/* Option Markers */
+.option-marker {
+  width: 32px; height: 32px;
+  background: #f1f5f9;
+  color: #64748b;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; margin-right: 12px;
+  font-family: 'Baloo 2', cursive;
+  transition: all 0.2s;
+}
+.option-text { font-family: 'Fredoka', sans-serif; font-weight: 500; color: #334155; }
+
+/* Custom Textarea */
+.custom-textarea {
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px;
+  resize: none;
+  font-family: 'Fredoka', sans-serif;
+  transition: border-color 0.2s;
+}
+.custom-textarea:focus {
+  border-color: var(--coral-main);
+  box-shadow: 0 0 0 4px rgba(255, 107, 107, 0.1);
+  outline: none;
+}
+
+/* Disabled State adjustments */
+:disabled + .option-card {
+  cursor: default;
+  opacity: 0.8; /* Slight fade for non-selected items */
+}
+
+.custom-textarea:disabled {
+  background-color: #f8fafc;
+  color: #475569;
+  border-color: #cbd5e1;
+}
+.badge{
+    color: black!important;
+}
+@media (min-width: 768px) {
+  .options-grid { grid-template-columns: 1fr 1fr; }
 }
 </style>
 {% endblock %}

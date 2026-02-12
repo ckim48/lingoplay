@@ -8,6 +8,7 @@ from functools import wraps
 from urllib.parse import urlparse, urljoin
 from typing import Optional
 import string
+import uuid
 from flask import (
     Flask, render_template, request, redirect, url_for,
     flash, g, session, jsonify, abort
@@ -141,68 +142,149 @@ def close_db(exc):
         db.close()
 
 
+@app.template_filter('chr')
+def char_filter(value):
+    try:
+        return chr(value)
+    except:
+        return ''
+
+
+@app.template_filter('from_json')
+def from_json_filter(s):
+    if s:
+        try:
+            if isinstance(s, str): return json.loads(s)
+            if isinstance(s, dict): return s
+        except:
+            return None
+    return None
+
+
+@app.template_filter("nl2br")
+def nl2br(value: str) -> Markup:
+    if not value: return Markup("")
+    return Markup(escape(value).replace("\n", Markup("<br>\n")))
+
+
+@app.teardown_appcontext
+def close_db(exc):
+    db = g.pop("db", None)
+    if db is not None:
+        db.close()
+
+
+# -------------------------------------------------------------------
+# INIT DB (UPDATED for page_images_json)
+# -------------------------------------------------------------------
 def init_db():
     """Create the tables used by the app and run light migrations."""
     db = get_db()
 
+    # ... (Keep existing CREATE TABLE statements) ...
     db.executescript(
         """
         PRAGMA foreign_keys = ON;
+        CREATE TABLE IF NOT EXISTS users (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          username TEXT NOT NULL UNIQUE,
+          email TEXT NOT NULL UNIQUE,
+          password_hash TEXT NOT NULL,
+          role TEXT DEFAULT 'student',
+          grade TEXT, school TEXT, subject TEXT,
+          l1_language TEXT, l2_language TEXT, age INTEGER, gender TEXT,
+          is_english_native INTEGER DEFAULT 0,
+          english_exposure_years REAL, english_start_age INTEGER,
+          english_learned_where TEXT, english_use_frequency TEXT, english_self_level TEXT,
+          created_at TEXT DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS stories (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            slug TEXT UNIQUE,
+            title TEXT,
+            prompt TEXT,
+            language TEXT DEFAULT 'en',
+            level TEXT DEFAULT 'beginner',
+            content TEXT,
+            visuals TEXT,
+            mcq_questions_json TEXT,
+            author_name TEXT,
+            is_shared_library INTEGER DEFAULT 0,
+            shared_class_id INTEGER,
+            page_images_json TEXT, -- NEW COLUMN
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS finish_drafts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            story_id INTEGER,
+            seed_prompt TEXT,
+            partial_text TEXT,
+            completion_text TEXT,
+            learner_name TEXT,
+            language TEXT DEFAULT 'en',
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+        -- ... (Ensure assignment_submissions, assignments, vocab_items, classes, etc. exist) ...
+        CREATE TABLE IF NOT EXISTS vocab_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            story_id INTEGER,
+            word TEXT,
+            definition TEXT, example TEXT,
+            definition_ko TEXT, example_ko TEXT,
+            picture_url TEXT
+        );
+        CREATE TABLE IF NOT EXISTS classes (
+             id INTEGER PRIMARY KEY AUTOINCREMENT,
+             name TEXT, code TEXT UNIQUE, created_by INTEGER,
+             created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS class_members (
+             class_id INTEGER, user_id INTEGER, role TEXT,
+             joined_at TEXT DEFAULT CURRENT_TIMESTAMP,
+             PRIMARY KEY(class_id, user_id)
+        );
+        CREATE TABLE IF NOT EXISTS assignments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            story_id INTEGER, draft_id INTEGER, assignee_id INTEGER,
+            assignment_type TEXT, assignment_title TEXT,
+            questions_json TEXT, status TEXT DEFAULT 'assigned',
+            score REAL, attempt_count INTEGER DEFAULT 0,
+            assigned_by INTEGER, class_id INTEGER,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS assignment_submissions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            assignment_id INTEGER, user_id INTEGER, story_id INTEGER, draft_id INTEGER,
+            completion_text TEXT, answers_json TEXT,
+            score REAL, comment TEXT,
+            story_grammar_json TEXT, story_grammar_total REAL, story_grammar_updated_at TEXT,
+            reviewed_at TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP, updated_at TEXT
+        );
+        CREATE TABLE IF NOT EXISTS library_shares (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          story_id INTEGER NOT NULL,
+          class_id INTEGER,
+          shared_by INTEGER,
+          created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(story_id, class_id)
+        );
         """
     )
 
-    # MIGRATIONS FOR CONFIRMED TABLES: stories, assignment_submissions, assignments
-
-    # 1. Stories migrations
+    # Migrations for existing tables
     try:
-        db.execute(
-            "ALTER TABLE stories ADD COLUMN mcq_questions_json TEXT"
-        )
+        db.execute("ALTER TABLE stories ADD COLUMN page_images_json TEXT")
     except sqlite3.OperationalError:
         pass
 
-    # 2. assignment_submissions migrations
+    # ... (Keep existing migrations for other columns) ...
     try:
-        db.execute(
-            "ALTER TABLE assignment_submissions ADD COLUMN comment TEXT"
-        )
-    except sqlite3.OperationalError:
+        db.execute("ALTER TABLE stories ADD COLUMN is_shared_library INTEGER DEFAULT 0")
+    except:
         pass
-
     try:
-        db.execute(
-            "ALTER TABLE assignment_submissions ADD COLUMN reviewed_at TEXT"
-        )
-    except sqlite3.OperationalError:
-        pass
-
-    # 3. assignments migrations (Needed for assignment title, JSON, attempts, score)
-    try:
-        db.execute(
-            "ALTER TABLE assignments ADD COLUMN assignment_title TEXT"
-        )
-    except sqlite3.OperationalError:
-        pass
-
-    try:
-        db.execute(
-            "ALTER TABLE assignments ADD COLUMN questions_json TEXT"
-        )
-    except sqlite3.OperationalError:
-        pass
-
-    try:
-        db.execute(
-            "ALTER TABLE assignments ADD COLUMN attempt_count INTEGER DEFAULT 0"
-        )
-    except sqlite3.OperationalError:
-        pass
-
-    try:
-        db.execute(
-            "ALTER TABLE assignments ADD COLUMN score REAL"
-        )
-    except sqlite3.OperationalError:
+        db.execute("ALTER TABLE stories ADD COLUMN shared_class_id INTEGER")
+    except:
         pass
 
     db.commit()
@@ -212,7 +294,6 @@ with app.app_context():
     init_db()
 
 
-# -------------------------------------------------------------------
 # Template filters
 # -------------------------------------------------------------------
 @app.template_filter("dt")
@@ -324,18 +405,35 @@ def register_check_step1():
     email = (data.get("email") or "").strip().lower()
     password = data.get("password") or ""
     confirm = data.get("confirm") or ""
+    role = (data.get("role") or "student").strip().lower()
+
     l1 = (data.get("l1_language") or "").strip().lower()
     l2 = (data.get("l2_language") or "").strip().lower()
     age_raw = (data.get("age") or "").strip()
     gender = (data.get("gender") or "").strip().lower()
 
+    # Screening (student background)
+    exposure_years_raw = (data.get("english_exposure_years") or "").strip()
+    learned_where = (data.get("english_learned_where") or "").strip().lower()
+    use_freq = (data.get("english_use_frequency") or "").strip().lower()
+    self_level = (data.get("english_self_level") or "").strip().lower()
+    start_age_raw = (data.get("english_start_age") or "").strip()
+
     errors = []
 
     # Required fields
+    if role not in {"student", "teacher"}:
+        errors.append("Please choose a valid role (Student or Teacher).")
+
     if not username or not email or not password or not confirm:
         errors.append("Please fill in username, email, and password.")
     if not l1 or not l2 or not age_raw or not gender:
         errors.append("Please fill in L1, L2, age, and gender.")
+
+    # Screening required for students (helps estimate level before the test)
+    if role == "student":
+        if not exposure_years_raw or not learned_where or not use_freq or not self_level:
+            errors.append("Please complete the English background questions (exposure, where you learned, usage, self-level).")
 
     # Password checks
     if password != confirm:
@@ -373,6 +471,37 @@ def register_check_step1():
     if gender and gender not in allowed_genders:
         errors.append("Please choose a valid gender option.")
 
+    # Screening validation (students only)
+    if role == "student":
+        # exposure years
+        try:
+            exposure_years = float(exposure_years_raw)
+        except Exception:
+            exposure_years = None
+        if exposure_years is None or exposure_years < 0 or exposure_years > 60:
+            errors.append("English exposure years must be a number between 0 and 60.")
+
+        # start age (optional)
+        if start_age_raw:
+            if not start_age_raw.isdigit():
+                errors.append("English start age must be a number.")
+            else:
+                start_age = int(start_age_raw)
+                if start_age < 0 or start_age > 80:
+                    errors.append("English start age must be between 0 and 80.")
+
+        allowed_where = {"school", "academy", "home", "abroad", "online", "other"}
+        if learned_where and learned_where not in allowed_where:
+            errors.append("Please choose a valid option for where you learned English.")
+
+        allowed_freq = {"never", "rarely", "sometimes", "often", "daily"}
+        if use_freq and use_freq not in allowed_freq:
+            errors.append("Please choose a valid option for how often you use English.")
+
+        allowed_self = {"beginner", "intermediate", "advanced"}
+        if self_level and self_level not in allowed_self:
+            errors.append("Please choose a valid self-assessed level.")
+
     # If format errors already, no need to hit DB
     if errors:
         return jsonify({"ok": False, "errors": errors}), 400
@@ -396,7 +525,6 @@ def register_check_step1():
         return jsonify({"ok": False, "errors": errors}), 400
 
     return jsonify({"ok": True})
-
 @app.route("/register", methods=["GET", "POST"])
 def register():
     db = get_db()
@@ -414,11 +542,7 @@ def register():
         # -----------------------------
         # Step 1 fields (shared)
         # -----------------------------
-        role = (request.form.get("role") or "").strip().lower()
-        if not role:
-            # Backward-compatible default if your current HTML doesn't have role yet.
-            # Once you add role UI, this will be overridden.
-            role = "student"
+        role = (request.form.get("role") or "").strip().lower() or "student"
 
         username = (request.form.get("username") or "").strip()
         email = (request.form.get("email") or "").strip().lower()
@@ -430,16 +554,40 @@ def register():
         age_raw = (request.form.get("age") or "").strip()
         gender = (request.form.get("gender") or "").strip().lower()
 
-        # Optional role-specific extras (add these inputs in HTML when ready)
-        grade = (request.form.get("grade") or "").strip().lower()       # student optional / recommended
-        school = (request.form.get("school") or "").strip()            # teacher recommended
-        subject = (request.form.get("subject") or "").strip()          # teacher recommended
+        # Optional role-specific extras
+        grade = (request.form.get("grade") or "").strip().lower()
+        school = (request.form.get("school") or "").strip()
+        subject = (request.form.get("subject") or "").strip()
+
+        # -----------------------------
+        # Screening (student background)
+        # -----------------------------
+        english_exposure_years_raw = (request.form.get("english_exposure_years") or "").strip()
+        english_start_age_raw      = (request.form.get("english_start_age") or "").strip()
+        english_learned_where      = (request.form.get("english_learned_where") or "").strip().lower()
+        english_use_frequency      = (request.form.get("english_use_frequency") or "").strip().lower()
+        english_self_level         = (request.form.get("english_self_level") or "").strip().lower()
+
+        def _to_float_or_none(x: str):
+            try:
+                return float(x) if x != "" else None
+            except ValueError:
+                return None
+
+        def _to_int_or_none(x: str):
+            try:
+                return int(x) if x != "" else None
+            except ValueError:
+                return None
+
+        english_exposure_years = _to_float_or_none(english_exposure_years_raw)
+        english_start_age = _to_int_or_none(english_start_age_raw)
 
         # -----------------------------
         # Step 2 fields (student only)
         # -----------------------------
-        level_score_raw = request.form.get("level_score")  # hidden
-        level_name = (request.form.get("level_name") or "").strip()    # hidden
+        level_score_raw = request.form.get("level_score")
+        level_name = (request.form.get("level_name") or "").strip()
 
         # -----------------------------
         # Validate role
@@ -456,21 +604,16 @@ def register():
         if not l1_language or not l2_language or not age_raw or not gender:
             return render_fail("Please fill in all language and profile fields (L1, L2, age, gender).")
 
-        # Password checks
         if password != confirm:
             return render_fail("Passwords do not match.")
         if len(password) < 8:
             return render_fail("Password must be at least 8 characters.")
 
-        # Username format
         if not re.match(r"^[A-Za-z0-9_.-]{3,32}$", username):
             return render_fail("Username must be 3–32 characters and use only letters, numbers, _, ., -.")
-
-        # Email format
         if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
             return render_fail("Please enter a valid email address.")
 
-        # Languages
         allowed_l1 = {"korean", "english", "chinese", "japanese", "spanish", "other"}
         allowed_l2 = {"none", "korean", "english", "chinese", "japanese", "spanish", "other"}
         if l1_language not in allowed_l1:
@@ -478,7 +621,6 @@ def register():
         if l2_language not in allowed_l2:
             return render_fail("Please choose a valid L2 language.")
 
-        # Age
         try:
             age = int(age_raw)
         except ValueError:
@@ -486,7 +628,6 @@ def register():
         if age < 5 or age > 120:
             return render_fail("Please enter an age between 5 and 120.")
 
-        # Gender
         allowed_genders = {"female", "male", "nonbinary", "prefer_not"}
         if gender not in allowed_genders:
             return render_fail("Please choose a valid gender option.")
@@ -497,6 +638,24 @@ def register():
         level_score = None
 
         if role == "student":
+            # Screening required for students
+            if english_exposure_years is None:
+                return render_fail("Please enter your English exposure years (number).")
+            if english_exposure_years < 0 or english_exposure_years > 60:
+                return render_fail("English exposure years must be between 0 and 60.")
+
+            allowed_where = {"school", "academy", "home", "online", "abroad", "other"}
+            if english_learned_where not in allowed_where:
+                return render_fail("Please choose where you learned English mostly.")
+
+            allowed_freq = {"never", "rarely", "sometimes", "often", "daily"}
+            if english_use_frequency not in allowed_freq:
+                return render_fail("Please choose how often you use English.")
+
+            allowed_self = {"beginner", "intermediate", "advanced"}
+            if english_self_level not in allowed_self:
+                return render_fail("Please choose your self-assessed English level.")
+
             # Level test REQUIRED for students
             if not level_score_raw or not level_name:
                 return render_fail("Please complete the level test before creating your account.")
@@ -511,21 +670,15 @@ def register():
             valid_levels = {"Beginner", "Intermediate", "Advanced"}
             if level_name not in valid_levels:
                 return render_fail("Level test result is invalid. Please try the test again.")
-
-            # (Optional) If you want grade required, enforce here:
-            # allowed_grades = {"elementary", "middle", "high", "college", "other"}
-            # if grade not in allowed_grades:
-            #     return render_fail("Please select your grade.")
         else:
-            # Teacher: NO level test
+            # Teacher: no screening + no level test
             level_score = None
             level_name = None
-
-            # If you want these required for teachers, uncomment:
-            # if not school:
-            #     return render_fail("Please enter your school / organization.")
-            # if not subject:
-            #     return render_fail("Please enter your subject.")
+            english_exposure_years = None
+            english_start_age = None
+            english_learned_where = None
+            english_use_frequency = None
+            english_self_level = None
 
         # -----------------------------
         # Duplicate checks
@@ -555,8 +708,10 @@ def register():
                 INSERT INTO users
                   (username, email, password_hash,
                    l1_language, l2_language, age, gender,
-                   role, grade, school, subject)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   role, grade, school, subject,
+                   english_exposure_years, english_start_age,
+                   english_learned_where, english_use_frequency, english_self_level)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     username,
@@ -570,6 +725,11 @@ def register():
                     grade if role == "student" else None,
                     school if role == "teacher" else None,
                     subject if role == "teacher" else None,
+                    english_exposure_years,
+                    english_start_age,
+                    english_learned_where,
+                    english_use_frequency,
+                    english_self_level,
                 ),
             )
             user_id = cur.lastrowid
@@ -586,7 +746,6 @@ def register():
 
             db.commit()
 
-            # Show success modal
             return render_template(
                 "register.html",
                 registered=True,
@@ -610,6 +769,7 @@ def register():
         registered_level_name=None,
         registered_level_score=None,
     )
+
 
 
 
@@ -825,6 +985,240 @@ the student's level. Follow the JSON schema exactly.
     return cleaned
 
 
+
+
+# -------------------------------------------------------------------
+# Writing worksheet generator (MAIN story grammar)
+# -------------------------------------------------------------------
+def generate_main_writing_worksheet(
+    story_title: str,
+    story_partial_text: str,
+    learner_level_hint: str | None = None,
+):
+    """
+    Generate a writing worksheet aligned to MAIN story grammar:
+    Character, Setting, Problem/Initiating Event, Actions/Attempts, Resolution.
+
+    Returns a dict (to be JSON-serialized) with:
+      {
+        "type": "writing_main",
+        "sections": [...],
+        "checklist": [...],
+        "teacher_rubric": {...}
+      }
+
+    Notes:
+    - This worksheet is used on writing assignments (assignment_type='writing').
+    - Output is intentionally UI-friendly: short prompts + sentence starters.
+    """
+    story_title = (story_title or "").strip() or "Story"
+    story_partial_text = (story_partial_text or "").strip()
+
+    # Fallback (no LLM)
+    if client is None:
+        return {
+            "type": "writing_main",
+            "version": 1,
+            "sections": [
+                {
+                    "key": "character",
+                    "title": "Character",
+                    "goal": "Introduce the main character and what they want.",
+                    "questions": [
+                        "Who is the main character?",
+                        "What do they want or care about?",
+                        "What is their personality (kind, brave, shy, etc.)?",
+                    ],
+                    "sentence_starters": [
+                        "The main character is ...",
+                        "They want to ...",
+                        "They feel ... because ...",
+                    ],
+                },
+                {
+                    "key": "setting",
+                    "title": "Setting",
+                    "goal": "Describe where and when the story happens.",
+                    "questions": [
+                        "Where does the story happen?",
+                        "When does it happen (day/night/season)?",
+                        "What do you see, hear, or feel in this place?",
+                    ],
+                    "sentence_starters": [
+                        "The story takes place in ...",
+                        "It is ... (morning/night/winter).",
+                        "The place looks/sounds like ...",
+                    ],
+                },
+                {
+                    "key": "problem",
+                    "title": "Problem / Initiating Event",
+                    "goal": "Explain what goes wrong or what challenge starts the story.",
+                    "questions": [
+                        "What problem happens?",
+                        "Why is it a problem for the character?",
+                        "What do they decide to do first?",
+                    ],
+                    "sentence_starters": [
+                        "Suddenly, ...",
+                        "This is a problem because ...",
+                        "So, the character decides to ...",
+                    ],
+                },
+                {
+                    "key": "actions",
+                    "title": "Actions / Attempts",
+                    "goal": "Write 2–4 attempts the character makes to solve the problem.",
+                    "questions": [
+                        "What is the first attempt?",
+                        "What happens after that?",
+                        "Do they try again in a new way?",
+                    ],
+                    "sentence_starters": [
+                        "First, ...",
+                        "Then, ...",
+                        "After that, ...",
+                    ],
+                },
+                {
+                    "key": "resolution",
+                    "title": "Resolution",
+                    "goal": "Show how the problem ends and what the character learns/feels.",
+                    "questions": [
+                        "How is the problem solved (or not solved)?",
+                        "How does the character feel at the end?",
+                        "What did they learn or change?",
+                    ],
+                    "sentence_starters": [
+                        "In the end, ...",
+                        "Finally, ...",
+                        "The character learned that ...",
+                    ],
+                },
+            ],
+            "checklist": [
+                "I clearly introduced my main character.",
+                "I described where and when the story happens.",
+                "I explained the main problem or initiating event.",
+                "I wrote several actions/attempts in a clear order (first/then/after).",
+                "My ending resolves the problem (or explains why it cannot be solved).",
+                "My story is easy to follow and has complete sentences.",
+            ],
+            "teacher_rubric": {
+                "scale": "0–2",
+                "character": {"0": "missing", "1": "basic", "2": "clear + detailed"},
+                "setting": {"0": "missing", "1": "basic", "2": "clear + sensory details"},
+                "problem": {"0": "missing", "1": "basic", "2": "clear cause + stakes"},
+                "actions": {"0": "missing", "1": "some attempts", "2": "logical sequence + effort"},
+                "resolution": {"0": "missing", "1": "basic", "2": "clear outcome + reflection"},
+            },
+        }
+
+    level_hint = (learner_level_hint or "").strip() or "elementary/ESL"
+    instructions = """
+You are an English writing teacher assistant.
+Create a short writing worksheet aligned with MAIN story grammar:
+Character, Setting, Problem/Initiating Event, Actions/Attempts, Resolution.
+
+Output ONLY valid JSON using this exact top-level schema:
+{
+  "type": "writing_main",
+  "version": 1,
+  "sections": [
+    {
+      "key": "character|setting|problem|actions|resolution",
+      "title": "string",
+      "goal": "string (1 sentence)",
+      "questions": ["string", "..."],
+      "sentence_starters": ["string", "..."]
+    }
+  ],
+  "checklist": ["string", "..."],
+  "teacher_rubric": {
+    "scale": "0–2",
+    "character": {"0":"...", "1":"...", "2":"..."},
+    "setting": {"0":"...", "1":"...", "2":"..."},
+    "problem": {"0":"...", "1":"...", "2":"..."},
+    "actions": {"0":"...", "1":"...", "2":"..."},
+    "resolution": {"0":"...", "1":"...", "2":"..."}
+  }
+}
+
+Rules:
+- EXACTLY 5 sections, in the order: character, setting, problem, actions, resolution.
+- Each section: 3–5 questions and 2–3 sentence starters.
+- Keep student language simple and short (A2–B1). Avoid jargon.
+- Make prompts fit the specific story context provided.
+- Do NOT include markdown, commentary, or extra keys.
+"""
+    user_prompt = f"""
+Story title: {story_title}
+Student level hint: {level_hint}
+
+Story excerpt (what the student saw so far):
+\"\"\"{story_partial_text}\"\"\"
+
+Task:
+Create the worksheet JSON that helps the student write the rest of the story.
+"""
+
+    try:
+        resp = client.responses.create(
+            model=DEFAULT_MODEL,
+            max_output_tokens=900,
+            temperature=0.4,
+            instructions=instructions.strip(),
+            input=[{
+                "role": "user",
+                "content": [{"type": "input_text", "text": user_prompt.strip()}],
+            }],
+        )
+        raw = (getattr(resp, "output_text", "") or "").strip()
+        if not raw:
+            return generate_main_writing_worksheet(story_title, story_partial_text, learner_level_hint=None)
+
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            match = re.search(r"\{.*\}", raw, re.DOTALL)
+            if not match:
+                return generate_main_writing_worksheet(story_title, story_partial_text, learner_level_hint=None)
+            data = json.loads(match.group(0))
+
+        # Minimal validation / normalization
+        if not isinstance(data, dict):
+            return generate_main_writing_worksheet(story_title, story_partial_text, learner_level_hint=None)
+
+        if data.get("type") != "writing_main":
+            data["type"] = "writing_main"
+        if data.get("version") is None:
+            data["version"] = 1
+
+        sections = data.get("sections") or []
+        if not (isinstance(sections, list) and len(sections) == 5):
+            return generate_main_writing_worksheet(story_title, story_partial_text, learner_level_hint=None)
+
+        # Ensure keys order
+        wanted = ["character", "setting", "problem", "actions", "resolution"]
+        fixed = []
+        by_key = {str(s.get("key")).strip().lower(): s for s in sections if isinstance(s, dict)}
+        for k in wanted:
+            s = by_key.get(k) or {"key": k, "title": k.title(), "goal": "", "questions": [], "sentence_starters": []}
+            # coerce lists
+            s["questions"] = [str(x).strip() for x in (s.get("questions") or []) if str(x).strip()]
+            s["sentence_starters"] = [str(x).strip() for x in (s.get("sentence_starters") or []) if str(x).strip()]
+            fixed.append(s)
+        data["sections"] = fixed
+
+        checklist = data.get("checklist") or []
+        data["checklist"] = [str(x).strip() for x in checklist if str(x).strip()][:14]
+
+        return data
+
+    except Exception as e:
+        log_input("writing_worksheet_llm_error", {"error": str(e), "title": story_title})
+        return generate_main_writing_worksheet(story_title, story_partial_text, learner_level_hint=None)
+
 # -------------------------------------------------------------------
 # ADMIN: assignment creation page (per story)
 # -------------------------------------------------------------------
@@ -875,6 +1269,7 @@ def admin_assign_story(slug: str):
     ).fetchall()
 
     if request.method == "POST":
+        class_id = request.form.get("class_id")
         assignment_title = (request.form.get("assignment_title") or "").strip()
         assignment_type = (request.form.get("worksheet_type") or "").strip()
         raw_user_ids = request.form.getlist("user_ids") or []
@@ -900,10 +1295,27 @@ def admin_assign_story(slug: str):
             return redirect(url_for("admin_story_detail", slug=slug))
 
         # -------------------------------------------------
-        # For READING: require pre-generated questions on the story
+        # Prepare questions_json per assignment type
+        # - writing: generate MAIN story-grammar worksheet via GPT
+        # - reading: require pre-generated MCQ/worksheet JSON on the story
         # -------------------------------------------------
         questions_json = None
-        if assignment_type == "reading":
+
+        if assignment_type == "writing":
+            partial_text = ""
+            try:
+                partial_text = (draft.get("partial_text") or "").strip()
+            except Exception:
+                partial_text = ""
+
+            worksheet_payload = generate_main_writing_worksheet(
+                story_title=story.get("title") or "Story",
+                story_partial_text=partial_text,
+                learner_level_hint=None,
+            )
+            questions_json = json.dumps(worksheet_payload, ensure_ascii=False)
+
+        elif assignment_type == "reading":
             base_q_json = None
             try:
                 base_q_json = story["mcq_questions_json"]
@@ -918,10 +1330,7 @@ def admin_assign_story(slug: str):
                     "Use the 'Generate MCQ' button first.",
                     "warning",
                 )
-                return redirect(url_for("admin_story_detail", slug=slug))
-
-        # -------------------------------------------------
-        # Prevent duplicate assignments for same story+type+student
+                return redirect(url_for("admin_story_detail", slug=slug))# Prevent duplicate assignments for same story+type+student
         # FIX: Query assignments table using assignee_id
         # -------------------------------------------------
         placeholders = ",".join("?" for _ in user_ids)
@@ -956,7 +1365,7 @@ def admin_assign_story(slug: str):
                 """
                 INSERT INTO assignments
                 (story_id, draft_id, assignee_id, assignment_type,
-                 questions_json, assigned_by, assignment_title)
+                 questions_json, assigned_by, assignment_title,class_id)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
@@ -967,6 +1376,7 @@ def admin_assign_story(slug: str):
                     questions_json,  # None for finish-writing, JSON for MCQ
                     g.current_user["id"] if getattr(g, "current_user", None) else None,
                     assignment_title,
+                    class_id
                 ),
             )
             created += 1
@@ -1067,10 +1477,41 @@ def admin_analytics():
 
         current_level = (current_level_row["level"] or "Beginner") if current_level_row else "Beginner"
 
+        # MAIN story grammar analytics (from writing submissions)
+        grammar_rows = db.execute(
+            """
+            SELECT story_grammar_json
+            FROM assignment_submissions
+            WHERE user_id = ? AND story_grammar_json IS NOT NULL
+            ORDER BY datetime(updated_at) DESC
+            """,
+            (selected_user_id,),
+        ).fetchall()
+
+        grammar_scores_sum = {"character": 0, "setting": 0, "problem": 0, "actions": 0, "resolution": 0}
+        grammar_n = 0
+        for r in grammar_rows:
+            try:
+                payload = json.loads(r["story_grammar_json"]) if r["story_grammar_json"] else None
+                scores = (payload or {}).get("scores") or {}
+                if not isinstance(scores, dict):
+                    continue
+                for k in grammar_scores_sum.keys():
+                    grammar_scores_sum[k] += int(scores.get(k, 0) or 0)
+                grammar_n += 1
+            except Exception:
+                continue
+
+        grammar_avg = None
+        if grammar_n > 0:
+            grammar_avg = {k: round(v / float(grammar_n), 2) for k, v in grammar_scores_sum.items()}
+
         user_data = {
             "user": selected_user,
             "stats": user_stats,
             "current_level": current_level,
+            "story_grammar_avg": grammar_avg,
+            "story_grammar_count": grammar_n,
         }
 
         # Package the single user's mock data into the structure expected by the charts
@@ -1237,30 +1678,21 @@ def assignment_detail(assignment_id: int):
     db = get_db()
     user_id = g.current_user["id"]
 
-    # FIX: Query the 'assignments' table using 'id' and 'assignee_id'
+    # 1. Fetch Assignment & Story
     assignment = db.execute(
-        """
-        SELECT * from assignments
-        WHERE id = ? AND assignee_id = ?
-        """,
+        "SELECT * from assignments WHERE id = ? AND assignee_id = ?",
         (assignment_id, user_id),
     ).fetchone()
 
     if not assignment:
-        flash("Assignment not found or not assigned to you.", "warning")
+        flash("Assignment not found.", "warning")
         return redirect(url_for("assignments_list"))
 
-    # Story linked to this assignment
     story = db.execute(
         "SELECT * FROM stories WHERE id = ?",
         (assignment["story_id"],),
     ).fetchone()
 
-    if not story:
-        flash("Story for this assignment could not be found.", "warning")
-        return redirect(url_for("assignments_list"))
-
-    # Draft, if any
     draft = None
     if assignment.get("draft_id"):
         draft = db.execute(
@@ -1268,34 +1700,24 @@ def assignment_detail(assignment_id: int):
             (assignment["draft_id"],),
         ).fetchone()
 
-    # FIX: Query the 'assignment_submissions' table
     submission = db.execute(
-        """
-        SELECT *
-        from assignment_submissions
-        WHERE assignment_id = ? AND user_id = ?
-        ORDER BY datetime(updated_at) DESC
-        LIMIT 1
-        """,
+        "SELECT * from assignment_submissions WHERE assignment_id = ? AND user_id = ? ORDER BY datetime(updated_at) DESC LIMIT 1",
         (assignment_id, user_id),
     ).fetchone()
 
     # ------------------------------------------------------------------
-    # WRITING ASSIGNMENT (Type: writing)
+    # TYPE A: WRITING ASSIGNMENT
     # ------------------------------------------------------------------
     if assignment["assignment_type"] == "writing":
-
-        # --- 1. Load Writing Worksheet Data ---
         writing_sections = []
         writing_checklist = []
         if assignment.get("questions_json"):
             try:
-                # The payload for writing worksheets is structured with 'sections' and 'checklist'
-                worksheet_data = json.loads(assignment["questions_json"])
-                writing_sections = worksheet_data.get("sections") or []
-                writing_checklist = worksheet_data.get("checklist") or []
-            except Exception as e:
-                log_input("writing_questions_parse_error", {"error": str(e), "assignment_id": assignment_id})
+                wd = json.loads(assignment["questions_json"])
+                writing_sections = wd.get("sections") or []
+                writing_checklist = wd.get("checklist") or []
+            except Exception:
+                pass
 
         if request.method == "POST":
             completion_text = (request.form.get("completion_text") or "").strip()
@@ -1303,213 +1725,195 @@ def assignment_detail(assignment_id: int):
                 flash("Please write your ending before submitting.", "warning")
                 return redirect(request.url)
 
+            # Basic grammar check placeholder
+            grammar = analyze_main_story_grammar(completion_text)
+            grammar_json = json.dumps(grammar, ensure_ascii=False) if grammar else None
+
+            grammar_total = None
+            if grammar and isinstance(grammar.get("scores"), dict):
+                try:
+                    grammar_total = float(sum(int(v) for v in grammar["scores"].values()))
+                except Exception:
+                    grammar_total = None
+
             now = datetime.utcnow().isoformat(timespec="seconds")
 
             if submission:
                 db.execute(
                     """
                     UPDATE assignment_submissions
-                    SET completion_text = ?, updated_at = ?
+                    SET completion_text = ?, story_grammar_json = ?, story_grammar_total = ?, updated_at = ?
                     WHERE id = ?
                     """,
-                    (completion_text, now, submission["id"]),
+                    (completion_text, grammar_json, grammar_total, now, submission["id"]),
                 )
             else:
                 db.execute(
                     """
                     INSERT INTO assignment_submissions
-                    (assignment_id, user_id, story_id, draft_id,
-                     completion_text, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    (assignment_id, user_id, story_id, draft_id, completion_text, story_grammar_json, story_grammar_total, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
-                    (
-                        assignment_id,
-                        user_id,
-                        assignment["story_id"],
-                        assignment["draft_id"],
-                        completion_text,
-                        now,
-                        now,
-                    ),
+                    (assignment_id, user_id, assignment["story_id"], assignment["draft_id"], completion_text,
+                     grammar_json, grammar_total, now, now),
                 )
 
-            # Update 'assignments' table status and attempt count
             db.execute(
-                """
-                UPDATE assignments
-                SET status = 'submitted',
-                    attempt_count = COALESCE(attempt_count, 0) + 1
-                WHERE id = ?
-                """,
-                (assignment_id,),
-            )
+                "UPDATE assignments SET status='submitted', attempt_count=COALESCE(attempt_count, 0)+1 WHERE id=?",
+                (assignment_id,))
             db.commit()
 
-            flash("Your story ending has been submitted.", "success")
+            flash("Story submitted successfully!", "success")
             return redirect(url_for("assignments_list"))
 
-        # GET: render finish-writing page
         return render_template(
             "assignment_finish.html",
-            assignment=assignment,
-            story=story,
-            draft=draft,
-            submission=submission,
-            writing_sections=writing_sections,  # Pass writing structure sections
-            writing_checklist=writing_checklist,  # Pass writing checklist
+            assignment=assignment, story=story, draft=draft, submission=submission,
+            writing_sections=writing_sections, writing_checklist=writing_checklist
         )
 
     # ------------------------------------------------------------------
-    # READING ASSIGNMENT (Type: reading - handles MCQ, Fill-in-the-Blank, Short Answer)
+    # TYPE B: READING ASSIGNMENT (FIXED FOR V3)
     # ------------------------------------------------------------------
     elif assignment["assignment_type"] == "reading":
         mcq_questions = []
         fill_in_blank_questions = []
         short_answer_questions = []
 
-        questions_payload = {}
-
-        # Attempt to load questions from the assignment JSON data
+        # 1. Parse Questions
         if assignment.get("questions_json"):
             try:
-                questions_payload = json.loads(assignment["questions_json"])
+                payload = json.loads(assignment["questions_json"])
+                q_type = payload.get("type")
 
-                # 1. Structured Worksheet JSON
-                if questions_payload.get("type") == "reading":
-                    mcq_questions = questions_payload.get("mcq") or []
-                    fill_in_blank_questions = questions_payload.get("fill_in_blank") or []
-                    short_answer_questions = questions_payload.get("short_answer") or []
+                # Strategy A: V3 Structure (comprehension list)
+                if q_type == "reading_v3" or "comprehension" in payload:
+                    comp_list = payload.get("comprehension") or []
+                    # Sort V3 questions into buckets
+                    for q in comp_list:
+                        fmt = q.get("format", "").lower()
+                        if fmt == "mcq":
+                            mcq_questions.append(q)
+                        elif fmt == "fill_in_blank":
+                            fill_in_blank_questions.append(q)
+                        else:
+                            short_answer_questions.append(q)
 
-                # 2. Fallback: If payload is a flat list of MCQs (legacy structure)
-                elif isinstance(questions_payload, list) and all('correct_index' in q for q in questions_payload):
-                    mcq_questions = questions_payload
+                    # Add expression questions to Short Answer list
+                    expr_list = payload.get("expression") or []
+                    short_answer_questions.extend(expr_list)
+
+                # Strategy B: Direct Lists (Standard Reading Generator)
+                elif "mcq" in payload or "short_answer" in payload:
+                    mcq_questions = payload.get("mcq") or []
+                    fill_in_blank_questions = payload.get("fill_in_blank") or []
+                    short_answer_questions = payload.get("short_answer") or []
+
+                # Strategy C: Legacy Flat List
+                elif isinstance(payload, list):
+                    mcq_questions = payload
 
             except Exception as e:
-                # Log parsing errors if the JSON is malformed
-                log_input("reading_questions_parse_error", {"error": str(e), "assignment_id": assignment_id})
+                print(f"Reading parse error: {e}")
 
-        # 3. Legacy Fallback: Check story's mcq_questions_json
-        if not mcq_questions and story.get("mcq_questions_json"):
-            try:
-                # Assume legacy JSON is a flat list of MCQs
-                mcq_questions = json.loads(story["mcq_questions_json"])
-            except Exception as e:
-                log_input("story_mcq_questions_parse_error", {"error": str(e), "story_id": story["id"]})
-
+        # 2. Handle Submission
         if request.method == "POST":
-            # --- POST LOGIC FOR READING WORKSHEET ---
             answers = []
             correct_count = 0
+            mcq_breakdown = {"factual": {"correct": 0, "total": 0}, "inference": {"correct": 0, "total": 0},
+                             "other": {"correct": 0, "total": 0}}
 
-            # --- Scoring Logic (Only MCQs are auto-scored) ---
+            # A. Process MCQ Answers
             if mcq_questions:
                 for idx, q in enumerate(mcq_questions):
-                    key = f"q{idx}"
-                    ans_raw = request.form.get(key)
+                    ans_raw = request.form.get(f"q{idx}")
+
+                    # Score Categorization
+                    q_cat = (q.get("question_type") or q.get("category") or "other").lower()
+                    bucket = "other"
+                    if "fact" in q_cat:
+                        bucket = "factual"
+                    elif "infer" in q_cat:
+                        bucket = "inference"
+                    mcq_breakdown[bucket]["total"] += 1
+
                     try:
                         ans_idx = int(ans_raw)
                     except (TypeError, ValueError):
                         ans_idx = None
 
+                    # SAVE ANSWER INDEX
                     answers.append(ans_idx)
 
-                    # Check correctness
-                    correct_index = int(q.get("correct_index", -1))
-                    if ans_idx is not None and 0 <= ans_idx < len(q.get("options", [])):
-                        if ans_idx == correct_index:
-                            correct_count += 1
+                    # Grading
+                    try:
+                        correct_index = int(q.get("correct_index", -1))
+                    except (ValueError, TypeError):
+                        correct_index = -1
 
-                total_questions = len(mcq_questions)
-                score = (correct_count / total_questions) * 100.0
+                    if ans_idx is not None and ans_idx == correct_index:
+                        correct_count += 1
+                        mcq_breakdown[bucket]["correct"] += 1
+
+                total_mcqs = len(mcq_questions)
+                score = (correct_count / total_mcqs) * 100.0 if total_mcqs > 0 else 0.0
             else:
-                # If there are no MCQs, score is 0.0
-                score = 0.0
+                score = 0.0  # Score is 0 if only short answers exist (pending grading)
 
-            # Gather all non-MCQ answers for storage (Fill-in-the-Blank and Short Answer)
+            # B. Process Text Answers
+            short_responses = []
+            for i in range(len(short_answer_questions)):
+                short_responses.append(request.form.get(f"short{i}", ""))
+
+            fill_responses = []
+            for i in range(len(fill_in_blank_questions)):
+                fill_responses.append(request.form.get(f"fill{i}", ""))
+
+            # C. Capture Legacy/Custom Answers
+            custom_answers = {}
+            for key, val in request.form.items():
+                if key.startswith("custom_answer_"):
+                    # key like "custom_answer_0" -> store "0": "value"
+                    idx_str = key.replace("custom_answer_", "")
+                    custom_answers[idx_str] = val
+
             all_answers = {
                 "mcq_answers": answers,
-                "fill_in_blank_responses": [request.form.get(f"fill{i}") for i in range(len(fill_in_blank_questions))],
-                "short_answer_responses": [request.form.get(f"short{i}") for i in range(len(short_answer_questions))],
+                "mcq_breakdown": mcq_breakdown,
+                "fill_in_blank_responses": fill_responses,
+                "short_answer_responses": short_responses,
+                "custom_answers": custom_answers
             }
 
             now = datetime.utcnow().isoformat(timespec="seconds")
 
-            # Store the submission
+            # Update or Insert Submission
             if submission:
                 db.execute(
-                    """
-                    UPDATE assignment_submissions
-                    SET answers_json = ?, score = ?, updated_at = ?
-                    WHERE id = ?
-                    """,
+                    "UPDATE assignment_submissions SET answers_json=?, score=?, updated_at=? WHERE id=?",
                     (json.dumps(all_answers), score, now, submission["id"]),
                 )
             else:
                 db.execute(
-                    """
-                    INSERT INTO assignment_submissions
-                    (assignment_id, user_id, story_id, draft_id,
-                     answers_json, score, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        assignment_id,
-                        user_id,
-                        assignment["story_id"],
-                        assignment["draft_id"],
-                        json.dumps(all_answers),
-                        score,
-                        now,
-                        now,
-                    ),
+                    "INSERT INTO assignment_submissions (assignment_id, user_id, story_id, draft_id, answers_json, score, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (assignment_id, user_id, assignment["story_id"], assignment["draft_id"], json.dumps(all_answers),
+                     score, now, now),
                 )
 
-            # Update 'assignments' table status, score, and attempt count
+            # Mark assignment as submitted
             db.execute(
-                """
-                UPDATE assignments
-                SET status = 'submitted',
-                    score = ?,
-                    attempt_count = COALESCE(attempt_count, 0) + 1
-                WHERE id = ?
-                """,
-                (score, assignment_id),
+                "UPDATE assignments SET status='submitted', score=?, attempt_count=COALESCE(attempt_count, 0)+1 WHERE id=?",
+                (score, assignment_id)
             )
             db.commit()
 
-            # Reload updated assignment & latest submission
-            assignment = db.execute(
-                """
-                SELECT * from assignments
-                WHERE id = ? AND assignee_id = ?
-                """,
-                (assignment_id, user_id),
-            ).fetchone()
+            # AJAX Response
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                return jsonify({"success": True, "score": score})
 
-            submission = db.execute(
-                """
-                SELECT *
-                from assignment_submissions
-                WHERE assignment_id = ? AND user_id = ?
-                ORDER BY datetime(updated_at) DESC
-                LIMIT 1
-                """,
-                (assignment_id, user_id),
-            ).fetchone()
+            return redirect(url_for('assignment_detail', assignment_id=assignment_id))
 
-            # Stay on MCQ page and show "Well done" modal
-            return render_template(
-                "assignment_mcq.html",
-                assignment=assignment,
-                story=story,
-                mcq_questions=mcq_questions,
-                fill_in_blank_questions=fill_in_blank_questions,
-                short_answer_questions=short_answer_questions,
-                submission=submission,
-                just_submitted=True,
-            )
-
-        # GET: first load / coming back from list
+        # GET Request
         return render_template(
             "assignment_mcq.html",
             assignment=assignment,
@@ -1518,16 +1922,10 @@ def assignment_detail(assignment_id: int):
             fill_in_blank_questions=fill_in_blank_questions,
             short_answer_questions=short_answer_questions,
             submission=submission,
-            just_submitted=False,
+            just_submitted=False
         )
 
-    # ------------------------------------------------------------------
-    # Fallback: unknown type
-    # ------------------------------------------------------------------
-    flash("Unknown assignment type.", "warning")
     return redirect(url_for("assignments_list"))
-
-
 # -------------------------------------------------------------------
 # Story generation helpers (no changes)
 # -------------------------------------------------------------------
@@ -1736,230 +2134,128 @@ def index():
     ).fetchall()
     return render_template("index.html", stories=stories, finishes=finishes)
 
+
+@app.get("/api/assignment_review/<int:assignment_id>")
+@login_required
+def api_get_assignment_review(assignment_id):
+    """Fetch the score and teacher comment for a specific assignment."""
+    db = get_db()
+    user_id = g.current_user["id"]
+
+    # We look for the latest submission for this assignment and user
+    row = db.execute(
+        """
+        SELECT score, comment 
+        FROM assignment_submissions 
+        WHERE assignment_id = ? AND user_id = ?
+        ORDER BY created_at DESC LIMIT 1
+        """,
+        (assignment_id, user_id),
+    ).fetchone()
+
+    if not row:
+        return jsonify({"error": "No submission found"}), 404
+
+    return jsonify({
+        "score": row["score"] if row["score"] is not None else 0,
+        "comment": row["comment"] or "The teacher hasn't left a comment yet, but you've been graded!"
+    })
+
 @app.route("/story/new", methods=["GET", "POST"])
 @login_required
 def story_new():
     db = get_db()
     user_id = g.current_user["id"]
 
-    # classes user belongs to (for the dropdown in the form)
     my_classes = db.execute(
-        """
-        SELECT c.id, c.name
-        FROM classes c
-        JOIN class_members cm ON cm.class_id = c.id
-        WHERE cm.user_id = ?
-        ORDER BY c.name COLLATE NOCASE
-        """,
+        "SELECT c.id, c.name FROM classes c JOIN class_members cm ON cm.class_id = c.id WHERE cm.user_id = ?",
         (user_id,),
     ).fetchall()
 
     if request.method == "POST":
         title = (request.form.get("title") or "").strip() or "My Story"
         prompt = (request.form.get("prompt") or "").strip()
-        language = "en"
-
-        english_level = (request.form.get("english_level") or "beginner").strip().lower()
         base_author = (request.form.get("author_name") or "").strip()
+        english_level = (request.form.get("english_level") or "beginner").strip().lower()
+        share_class_id = request.form.get("share_class_id")
 
-        story_type = (request.form.get("story_type") or "").strip()
-        emotion_tone = (request.form.get("emotion_tone") or "").strip()
-        tense = (request.form.get("tense") or "").strip()
+        # NEW: Capture the multi-image generation mode
+        gen_images_mode = request.form.get("gen_images_mode") == "all"
 
-        # NEW: share target
-        raw_share_class_id = (request.form.get("share_class_id") or "").strip()
-        share_class_id = int(raw_share_class_id) if raw_share_class_id.isdigit() else None
+        # ... (keep your existing meta_bits and gen_prompt logic) ...
+        meta_bits = [f"Level: {english_level}", f"Title: {title}"]
+        gen_prompt = prompt + "\n\n" + " ".join(meta_bits)
 
-        # We always require a prompt
-        if not prompt:
-            flash("Please provide phonics letters or vocabulary.", "warning")
-            return redirect(url_for("story_new"))
-
-        # If class is selected, ensure membership (students can only share to their own classes)
-        if share_class_id is not None:
-            ok = db.execute(
-                "SELECT 1 FROM class_members WHERE user_id=? AND class_id=?",
-                (user_id, share_class_id),
-            ).fetchone()
-            if not ok:
-                flash("You don’t have access to that class.", "warning")
-                return redirect(url_for("story_new"))
-
-        # ---- Build meta prompt bits ----
-        meta_bits = []
-
-        if english_level:
-            meta_bits.append(
-                f"English level: {english_level} for young learners. "
-                f"Use vocabulary and sentence patterns that match a {english_level} elementary student."
-            )
-
-        if story_type:
-            meta_bits.append(
-                f"Story type: {story_type}. Make the overall plot and events match this type."
-            )
-
-        if emotion_tone:
-            meta_bits.append(
-                f"Emotional tone: {emotion_tone}. The story should feel like this overall."
-            )
-
-        if tense:
-            meta_bits.append(
-                f"Tense: {tense}. Keep the narration consistently in this tense as much as possible."
-            )
-
-        meta_bits.append(
-            "Remember this is for young students learning English, so keep sentences clear, short, and supportive."
-        )
-        meta_bits.append(
-            f"The title of the story is '{title}', and the content should strongly relate to this title and the target phonics/vocabulary."
-        )
-
-        gen_prompt = prompt if not meta_bits else (prompt + "\n\n" + " ".join(meta_bits))
-        reading_level_for_llm = ""
-
-        # ---- Generate story text ----
         try:
             profile = get_learner_profile()
-            content = llm_story_from_prompt(
-                gen_prompt,
-                language,
-                reading_level_for_llm,
-                base_author,
-                learner_profile=profile,
-            )
+            content = llm_story_from_prompt(gen_prompt, "en", "", base_author, learner_profile=profile)
         except Exception as e:
-            content = naive_story_from_prompt(prompt, language)
-            flash("AI generator had an issue; used a fallback story.", "warning")
-            log_input("generate_story_error", {"error": str(e)})
+            content = naive_story_from_prompt(prompt, "en")
 
-        # ---- Always try to generate cover image (if client is available) ----
-        visuals_data_url = None
+        # --- IMAGE GENERATION LOGIC ---
+        visuals_data_url = None  # Cover
+        page_images_list = []  # Per-page images
+
         if client is not None:
+            # 1. Generate Cover Image (Visuals)
             try:
-                img_prompt = (
-                    "Kid-friendly, text-free cover illustration for a children's story. "
-                    "Soft colors, simple shapes, clear subject, warm tone. "
-                    "No words or letters in the image.\n\n"
-                    f"Story excerpt:\n{content[:1200]}"
-                )
-                img = client.images.generate(
-                    model="gpt-image-1",
-                    prompt=img_prompt,
-                    size="1024x1024",
-                    n=1,
-                )
-                b64 = img.data[0].b64_json
-                visuals_data_url = f"data:image/png;base64,{b64}"
-            except Exception as e:
-                print("generate_image_error", {"error": str(e)})
-                flash("Story created, but image generation had an issue.", "warning")
+                cover_prompt = f"Children's book cover illustration, {title}. High quality, no text."
+                img_resp = client.images.generate(model="gpt-image-1", prompt=cover_prompt, n=1)
+                visuals_data_url = img_resp.data[0].url
+            except Exception:
+                pass
 
-        story_author = base_author or "EduWeaver AI"
+            # 2. Generate Multi-Page Images (if requested)
+            if gen_images_mode:
+                paragraphs = [p.strip() for p in content.split("\n\n") if p.strip()]
+                # Limit to 5 pages to manage API costs/time
+                for para in paragraphs[:5]:
+                    try:
+                        page_resp = client.images.generate(
+                            model="dall-e-2",
+                            prompt=f"Children's book illustration for: {para[:300]}",
+                            size="512x512", n=1
+                        )
+                        page_images_list.append(page_resp.data[0].url)
+                    except Exception:
+                        page_images_list.append(None)  # Keep list indices aligned
 
-        slug_base = slugify(title) or "story"
-        ts = datetime.utcnow().strftime("%Y%m%d%H%M%S")
-        slug = f"{slug_base}-{ts}"
-
-        db_level = english_level or "beginner"
-
-        # ---- Insert story (UPDATED: shared_class_id) ----
-        db.execute(
-            """
-            INSERT INTO stories
-              (title, slug, prompt, language, level, content, visuals, author_name, is_shared_library, shared_class_id)
-            VALUES
-              (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
+        # Save to DB
+        # Save to DB
+        cur = db.execute(
+            """INSERT INTO stories (title, slug, prompt, language,english_level , content, visuals, page_images_json, author_name, shared_class_id, is_shared_library)
+               VALUES (?, ?, ?, ?,?, ?, ?, ?, ?, ?, 1)""",
             (
                 title,
-                slug,
+                f"{slugify(title)}-{uuid.uuid4().hex[:6]}",
                 prompt,
-                language,
-                db_level,
+                "en",
+                english_level,
                 content,
                 visuals_data_url,
-                story_author,
-                1,              # keep shared in library system
-                share_class_id,  # NULL = All, class_id = by class
-            ),
-        )
-        story_id = db.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
-        db.commit()
-
-        # ---- Insert vocab items ----
-        vocab_words = parse_vocab_from_prompt(prompt)
-        vocab_defs = simple_bilingual_defs(vocab_words)
-        for item in vocab_defs:
-            db.execute(
-                """
-                INSERT INTO vocab_items (story_id, word, definition, example, definition_ko, example_ko, picture_url)
-                VALUES (?, ?, ?, ?, ?, ?, NULL)
-                """,
-                (
-                    story_id,
-                    item["word"].lower(),
-                    item.get("definition_en") or "",
-                    item.get("example_en") or "",
-                    item.get("definition_ko") or "",
-                    item.get("example_ko") or "",
-                ),
+                json.dumps(page_images_list),
+                base_author,
+                share_class_id
             )
-        db.commit()
-
-        # ---- Log story generation ----
-        log_input(
-            "generate_story",
-            {
-                "prompt": prompt,
-                "language": language,
-                "english_level": english_level,
-                "request_user": base_author,
-                "db_author": story_author,
-                "model": DEFAULT_MODEL,
-                "vocab_count": len(vocab_defs),
-                "with_image": bool(visuals_data_url),
-                "story_type": story_type,
-                "emotion_tone": emotion_tone,
-                "tense": tense,
-                "shared_class_id": share_class_id,
-            },
         )
-
-        # ---- Always create a finish_drafts row WITH completion_text ----
-        partial = make_partial_from_story(content)
+        story_id = cur.lastrowid  # Get the ID of the story we just made
         db.execute(
             """
-            INSERT INTO finish_drafts
-            (story_id, seed_prompt, partial_text, learner_name, language, completion_text)
+            INSERT INTO finish_drafts (story_id, seed_prompt, partial_text, completion_text, learner_name, language)
             VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (story_id, prompt, partial, story_author, language, content),
+            (
+                story_id,
+                prompt,
+                content[:200] + "...",  # A preview
+                content,  # The full text
+                base_author or "AI",
+                "en"
+            )
         )
-        draft_id = db.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
         db.commit()
-
-        log_input(
-            "finish_seed_auto_from_story_new_full_ai",
-            {
-                "story_id": story_id,
-                "slug": slug,
-                "draft_id": draft_id,
-                "auto_completed": True,
-                "db_author": story_author,
-                "shared_class_id": share_class_id,
-            },
-        )
-
-        flash("Story generated and added to the Library.", "success")
-
-        # Optional: redirect to the tab you chose
-        if share_class_id is not None:
-            return redirect(url_for("library", class_id=share_class_id))
         return redirect(url_for("library"))
 
-    # GET
     return render_template("story_new.html", my_classes=my_classes)
 
 
@@ -2243,52 +2539,31 @@ def library():
 # --- app2.py addition ---
 
 # --- app2.py addition  ---
-
 @app.get("/book/<int:draft_id>")
 @login_required
 def book_view(draft_id: int):
-    """
-    Reader view for a fully completed story draft,
-    displayed with a book-like interface.
-    """
     db = get_db()
-
-    draft = db.execute(
-        "SELECT * FROM finish_drafts WHERE id = ?", (draft_id,)
-    ).fetchone()
-    if not draft:
-        flash("Story draft not found.", "warning")
-        return redirect(url_for("library"))
-
-    story = db.execute(
-        "SELECT * FROM stories WHERE id = ?", (draft["story_id"],)
-    ).fetchone()
-    if not story:
-        flash("Linked story not found.", "warning")
-        return redirect(url_for("library"))
+    draft = db.execute("SELECT * FROM finish_drafts WHERE id = ?", (draft_id,)).fetchone()
+    story = db.execute("SELECT * FROM stories WHERE id = ?", (draft["story_id"],)).fetchone()
 
     full_content = (draft.get("completion_text") or story.get("content") or "").strip()
-    if not full_content:
-        flash("This story is unfinished or empty.", "warning")
-        return redirect(url_for("library"))
-
-    vocab = db.execute(
-        "SELECT * FROM vocab_items WHERE story_id = ? ORDER BY word COLLATE NOCASE",
-        (story["id"],),
-    ).fetchall()
-
-    # Each paragraph (split by blank line) = one page.
     pages = [p.strip() for p in full_content.split("\n\n") if p.strip()]
-    pages = pages[1:]
+
+    # NEW: Extract the per-page images
+    page_images = []
+    if story.get("page_images_json"):
+        try:
+            page_images = json.loads(story["page_images_json"])
+        except:
+            pass
+
     return render_template(
         "book_view.html",
-        draft=draft,
         story=story,
         pages=pages,
-        vocab=vocab,
+        page_images=page_images,  # Pass to JS
+        vocab=db.execute("SELECT * FROM vocab_items WHERE story_id=?", (story["id"],)).fetchall()
     )
-
-
 # --- End app2.py addition ---
 
 
@@ -2763,233 +3038,270 @@ def admin_edit_worksheet_assignment(assignment_id: int):
     # we redirect back to the /admin/stories tab.
     return redirect(url_for("admin_stories", tab="assigned"))
 
+def get_openai_client():
+    """
+    Minimal OpenAI client factory.
+    Uses OPENAI_API_KEY from environment.
+    """
+    if not api_key:
+        raise RuntimeError("Missing OPENAI_API_KEY environment variable.")
+    return OpenAI(api_key=api_key)
 
 # --- New Helper: make_structured_story ---
 # --- Updated make_structured_story function in app.py ---
 # --- Helper: make_structured_story ---
-def make_structured_story(prompt: str, level: str) -> dict:
+def make_structured_story(prompt: str, level: str) -> dict | None:
     """
-    Generates a full story structured into Beginning, Middle, and Ending parts
-    using the OpenAI API. Forces JSON output via the system prompt.
-    """
-    if client is None:
-        # Robust fallback for when AI is disabled
-        return {"title": "Luna's Lost Star",
-                "beginning": "Luna the fox cub woke up to a dark sky. 'Where is my favorite morning star?' she whispered. It was always the first thing she saw. Luna decided she must go find it.",
-                "middle": "She climbed the tallest oak tree, but the star was not there. She asked the sleepy owl and the busy squirrel, but nobody had seen a star fall. Luna felt a little sad, but she kept looking.",
-                "ending": "Finally, Luna looked down at her feet. The star wasn't in the sky at all! It was a shiny piece of glass left by the pond, reflecting the moon's light. Luna giggled and carefully put the shiny glass next to her bed."}
+    Generate a story as JSON with keys: title, beginning, middle, ending.
 
-    # Define the required JSON structure
+    IMPORTANT:
+    - The *values* for beginning/middle/ending must be plain story text.
+    - They must NOT include labels like "Beginning:", "Middle:", "End:" inside the text.
+    - Returns None if GPT is unavailable or parsing fails (no fallback).
+    """
+    import json
+    import re
+
+    def _strip_leading_labels(s: str) -> str:
+        if not s:
+            return ""
+        s = s.strip()
+        # Remove accidental leading labels if GPT still adds them
+        s = re.sub(r'^(beginning|middle|ending|end)\s*[:\-–]\s*', '', s, flags=re.IGNORECASE).strip()
+        s = re.sub(r'^(beginning|middle|ending|end)\s+', '', s, flags=re.IGNORECASE).strip()
+        return s
+
+    if client is None:
+        print("[GPT][story] ERROR: OpenAI client is not initialized. Story generation requires GPT (no fallback).")
+        return None
+
+    # Define required JSON structure (kept loose; we validate keys ourselves)
     json_schema = {
         "type": "object",
         "properties": {
             "title": {"type": "string"},
-            "beginning": {"type": "string",
-                          "description": "The introduction and setup (MUST be 2-3 detailed paragraphs)."},
-            "middle": {"type": "string",
-                       "description": "The conflict and main action (MUST be 2-3 detailed paragraphs)."},
-            "ending": {"type": "string",
-                       "description": "The resolution and conclusion (MUST be 2-3 detailed paragraphs)."}
+            "beginning": {"type": "string"},
+            "middle": {"type": "string"},
+            "ending": {"type": "string"}
         },
         "required": ["title", "beginning", "middle", "ending"]
     }
 
-    # 1. Inject JSON requirement into the system prompt
-    system = (
-        "You are a children's story generator for phonics & early readers. "
-        "You must generate a complete story and divide it clearly into three distinct, cohesive parts: Beginning, Middle, and Ending. "
-        "Each part MUST be written as 2 to 3 detailed paragraphs, separated by double newlines. "
-        "IMPORTANT: Output ONLY a single JSON object (no markdown, no commentary). The output MUST match the keys: title, beginning, middle, ending. "
-        f"Schema hint: {json.dumps(json_schema)}"
+    system_instructions = (
+        "You are a helpful children's story writer. "
+        "Return ONLY valid JSON. No markdown. No extra commentary."
     )
 
-    user = f"""
-    Target Story Level: {level.title()}
-    Target elements: {prompt}
-    Generate a complete, simple, child-friendly story of 300-450 words, structured into three parts (Beginning, Middle, Ending). Each part should contain multiple sentences and clear action.
-    """
+    user_instructions = f"""
+Write a short story suitable for English learners at level: {level}.
+
+Prompt/theme:
+{prompt}
+
+Return ONLY valid JSON matching:
+{{
+  "title": "...",
+  "beginning": "...",
+  "middle": "...",
+  "ending": "..."
+}}
+
+Rules:
+- The values for beginning/middle/ending must be plain story text.
+- Do NOT include section labels like "Beginning", "Middle", "End", or headings inside the values.
+- Keep each section concise and coherent (beginning introduces characters/setting, middle introduces problem/attempts, ending resolves).
+"""
 
     try:
-        resp = client.responses.create(
-            model=DEFAULT_MODEL,
-            input=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
+        print(f"[GPT][story] Calling GPT for structured story. level={level}")
+        # Use the same client style already used in the app
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            temperature=0.8,
+            messages=[
+                {"role": "system", "content": system_instructions},
+                {"role": "user", "content": user_instructions},
             ],
-            temperature=0.7,
-            max_output_tokens=1500,
+            response_format={"type": "json_object"},
         )
-        raw_json = getattr(resp, "output_text", "") or ""
+        text = (resp.choices[0].message.content or "").strip()
+        if not text:
+            print("[GPT][story] ERROR: Empty response from GPT.")
+            return None
 
-        # Robust JSON parsing
-        raw_json = raw_json.strip()
-        if raw_json.startswith("```json"):
-            raw_json = raw_json.strip("```json").strip("```").strip()
+        data = json.loads(text)
 
-        return json.loads(raw_json)
+        # Validate keys
+        title = (data.get("title") or "").strip()
+        beginning = _strip_leading_labels(data.get("beginning", ""))
+        middle = _strip_leading_labels(data.get("middle", ""))
+        ending = _strip_leading_labels(data.get("ending", ""))
+
+        if not (title and beginning and middle and ending):
+            print("[GPT][story] ERROR: Missing one or more required fields after parsing.")
+            return None
+
+        # Extra guard: if GPT still injected labels inside content, strip common first-line headings
+        beginning = beginning.replace("### The Beginning", "").strip()
+        middle = middle.replace("### The Middle", "").strip()
+        ending = ending.replace("### The Ending", "").strip()
+
+        print("[GPT][story] SUCCESS: Structured story JSON parsed.")
+        return {"title": title, "beginning": beginning, "middle": middle, "ending": ending}
+
     except Exception as e:
-        print("Error calling OpenAI for structured story:", e)
-        # Ensure a robust fallback is always returned
-        return {"title": "Fallback Story",
-                "beginning": "A young bear named Barnaby lived in a tall, green forest. He loved honey more than anything. One sunny morning, Barnaby decided he was going to find the biggest, sweetest hive in the whole forest. He packed his empty jar and waved goodbye to his mother.",
-                "middle": "Barnaby searched all morning. He climbed over giant mossy logs and waded across a cold, trickling stream. Finally, high up in a maple tree, he saw it: a huge, round beehive! He knew this was the one. But when he reached the first branch, the bees buzzed angrily. Barnaby realized climbing up would be very dangerous. He was stuck.",
-                "ending": "Barnaby sat down and thought hard. Instead of climbing up, he decided to wait quietly near the trunk. After a few minutes, the queen bee flew down. Barnaby bowed politely and said, 'Excuse me, I love honey. Could I please trade you a sweet red apple for a little bit?' The queen bee agreed! Barnaby got his honey and the bees got a tasty apple. It was a win-win day, and Barnaby learned that being patient and polite works better than climbing."}
+        print(f"[GPT][story] ERROR: {e}")
+        return None
 
-
-### B. Helper: `create_finish_prompt` (Implements Difficulty)
-
-
-# --- Helper: create_finish_prompt (Implements Difficulty) ---
 def create_finish_prompt(structured_story: dict, assignment_level: str) -> tuple[str, str, str]:
     """
-    Creates a partial story prompt by randomly omitting one section.
-    Implements level-based difficulty: Beginner favors ending omission.
-    Returns: (partial_text_prompt, full_text_answer, missing_part_name)
+    Creates a partial story prompt by omitting one section (beginning/middle/ending).
+    Returns:
+      (partial_text_prompt, full_text_answer, missing_part_name)
+
+    partial_text_prompt format is compatible with finish_view.html:
+      ### The Beginning ---\n<text>
+      ### The Middle ---\n<text or MISSING...>
+      ### The Ending ---\n<text>
     """
     import random
 
     parts = ["beginning", "middle", "ending"]
 
-    # 1. Select the part to be omitted/written by the student based on level
     level_lower = (assignment_level or "beginner").lower()
-    if level_lower == 'beginner':
-        part_to_omit = 'ending'  # Beginners often find the ending easiest to write
-    elif level_lower == 'intermediate':
-        # Intermediate: 50% chance Ending, 25% Middle, 25% Beginning
-        part_to_omit = random.choice(['ending', 'ending', 'middle', 'beginning'])
-    else:  # Advanced
-        part_to_omit = random.choice(parts)  # Equal chance for any part
+    if level_lower == "beginner":
+        part_to_omit = "ending"
+    elif level_lower == "intermediate":
+        part_to_omit = random.choice(["ending", "ending", "middle", "beginning"])
+    else:
+        part_to_omit = random.choice(parts)
 
-    missing_part_name = part_to_omit.title()
+    missing_part_name = part_to_omit.title()  # Beginning/Middle/Ending
+
+    # Placeholder shown to student
+    placeholder = f"MISSING: Write the {missing_part_name.upper()} here."
 
     story_parts = structured_story.copy()
-
-    # The part the student MUST write is replaced by a placeholder in the prompt.
-    placeholder = (
-        f"\n\n***\n\n"
-        f"**[ {missing_part_name.upper()} MISSING! ]**\n\n"
-        f"**Your turn! Write the creative {missing_part_name} that happens next.**\n\n"
-        f"***"
-    )
     story_parts[part_to_omit] = placeholder
 
-    # 2. Join the parts to create the partial prompt
-    narrative_sections = []
+    blocks = []
 
-    # Append/Insert sections ensuring order is maintained
-    if part_to_omit != 'beginning':
-        narrative_sections.append(f"### The Beginning\n\n{story_parts.get('beginning', '')}")
+    # Keep stable order: Beginning -> Middle -> Ending
+    blocks.append("### The Beginning ---\n" + (story_parts.get("beginning", "") or "").strip())
+    blocks.append("### The Middle ---\n" + (story_parts.get("middle", "") or "").strip())
+    blocks.append("### The Ending ---\n" + (story_parts.get("ending", "") or "").strip())
 
-    if part_to_omit == 'beginning':
-        narrative_sections.insert(0, placeholder)
+    partial_narrative = "\n\n".join(blocks).strip()
 
-    if part_to_omit != 'middle':
-        # If beginning was skipped, middle is section 1 (index 0). If beginning was included, middle is section 1 (index 1).
-        current_index = len(narrative_sections) if part_to_omit != 'beginning' else 0
-        narrative_sections.insert(current_index, f"### The Middle\n\n{story_parts.get('middle', '')}")
-    elif part_to_omit == 'middle':
-        # Insert placeholder where middle should be
-        current_index = len(narrative_sections)
-        narrative_sections.insert(current_index, placeholder)
-
-    if part_to_omit != 'ending':
-        narrative_sections.append(f"### The Ending\n\n{story_parts.get('ending', '')}")
-    elif part_to_omit == 'ending':
-        narrative_sections.append(placeholder)
-
-    # Final cleanup and joining
-    partial_narrative = "\n\n---\n\n".join(narrative_sections).strip()
-
-    # 3. Generate the full, complete narrative for the answer key
     full_narrative = (
-            (structured_story.get("beginning", "") or "") +
-            "\n\n" +
-            (structured_story.get("middle", "") or "") +
-            "\n\n" +
-            (structured_story.get("ending", "") or "")
+        (structured_story.get("beginning", "") or "").strip()
+        + "\n\n"
+        + (structured_story.get("middle", "") or "").strip()
+        + "\n\n"
+        + (structured_story.get("ending", "") or "").strip()
     ).strip()
 
     return partial_narrative, full_narrative, missing_part_name
 
 
+
 # --- Function: generate_worksheet_payload (Updated) ---
 # In app.py, add this new function:
+# -------------------------------------------------------------------
+#  Reading Worksheet Generator (Updated for Factual/Inferential/Critical)
+# -------------------------------------------------------------------
+# In app.py
 
-def generate_reading_worksheet(base_text: str, story_level: str) -> dict:
+def generate_reading_worksheet(base_text: str, story_level: str, worksheet_level: str | None = None) -> dict:
     """
-    Generates a comprehensive reading worksheet including MCQ, FIB, and SA questions.
+    Generates a reading worksheet with a longer story and questions classified by type.
+    Returns JSON with 'mcq' list and 'short_answer' list.
     """
+    # 1. Fallback if OpenAI client is missing
     if client is None:
-        print("OpenAI client not configured; cannot generate full reading worksheet.")
-        return {"type": "reading", "mcq": [], "fill_in_blank": [], "short_answer": []}
+        return {
+            "story_text": base_text or "A simple default story.",
+            "mcq": [
+                {"question": "What is this story about?", "options": ["A", "B", "C", "D"], "correct_index": 0}
+            ],
+            "short_answer": [
+                {"question": "Why did the character do that?", "category": "Inferential"}
+            ]
+        }
 
-    instructions = """
-You are a content generator for a children's English learning platform.
-Given a story text, your task is to generate three types of questions:
-1. Multiple Choice (MCQ): 5 questions testing comprehension.
-2. Fill-in-the-Blank (FIB): 5 sentences directly quoted from the story with one key word removed.
-3. Short Answer (SA): 3 questions requiring a short, subjective response.
+    # 2. Configure Length & Complexity based on Level
+    current_level = worksheet_level or story_level or "beginner"
 
-Rules:
-- Output ONLY a single JSON object.
-- **FIB ACCURACY FIX:** The sentences for Fill-in-the-Blank MUST be taken VERBATIM from the story text. The missing word should be a critical noun, verb, or adjective, NOT a common article or pronoun.
-- The output MUST strictly follow this JSON format:
-  {
-    "type": "reading",
-    "title": "Generated Worksheet Title",
-    "mcq": [ {"question": "string", "options": ["A", "B", "C", "D"], "correct_index": 0}, ... ],
-    "fill_in_blank": [ {"sentence": "string with ___ placeholder", "answer": "missing word"}, ... ],
-    "short_answer": [ {"question": "string", "model_answer": "suggested answer"}, ... ]
-  }
-"""
+    length_instruction = "Write about 100-150 words."
+    if "intermediate" in current_level.lower():
+        length_instruction = "Write about 150-200 words."
+    elif "advanced" in current_level.lower():
+        length_instruction = "Write about 200-250 words."
 
-    user_prompt = f"""
-Story Text:
-\"\"\"{base_text}\"\"\"
+    instructions = f"""
+You are an expert English reading comprehension test generator for young students.
 
-Student Reading Level: {story_level.title()}.
+**Task:**
+1. **Story**: Write an original, engaging story in English suitable for a {current_level} learner.
+   - {length_instruction}
+   - Use simple, clear sentences but an interesting plot.
+   - Topic: {base_text or "A surprise adventure"}
 
-Please generate:
-- 5 Multiple Choice Questions.
-- 5 Fill-in-the-Blank sentences (VERBATIM from the story, removing a key word).
-- 3 Short Answer Questions.
+2. **Questions**: Create exactly 12 questions.
+   - **Questions 1-8 (either Factual/Detail/Inferential/Critical)**: Multiple Choice (MCQ). Provide 4 options each.
+   - **Questions 9-12 (either Factual/Detail/Inferential/Critical)**: Short Answer (Open-ended). No options.
 
-Ensure the FIB sentences are accurately quoted and the missing word is substantial.
+**Output Format**:
+Return ONLY valid JSON with this structure:
+{{
+  "story_text": "Full story text here...",
+  "mcq": [
+    {{
+      "category": "Factual",
+      "question": "Where did the story take place?",
+      "options": ["Option A", "Option B", "Option C", "Option D"], 
+      "correct_index": 0
+    }},
+    
+  ],
+  "short_answer": [
+    {{
+      "category": "Inferential",
+      "question": "Why did the main character feel sad?",
+      "model_answer": "Because he lost his toy."
+    }},
+  ]
+}}
 """
 
     try:
-        resp = client.responses.create(
+        resp = client.chat.completions.create(
             model=DEFAULT_MODEL,
-            max_output_tokens=1200,
-            temperature=0.4,
-            instructions=instructions,
-            input=[
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "input_text",
-                            "text": user_prompt.strip(),
-                        }
-                    ],
-                }
+            messages=[
+                {"role": "system", "content": instructions},
             ],
+            temperature=0.7,
+            response_format={"type": "json_object"},
         )
-        raw = getattr(resp, "output_text", "") or ""
 
-        # Robust JSON extraction
-        raw = raw.strip()
-        if raw.startswith("```json"):
-            raw = raw.strip("```json").strip("```").strip()
-
+        raw = (resp.choices[0].message.content or "").strip()
         data = json.loads(raw)
-        data['type'] = 'reading'  # Ensure type is always set correctly
+
+        # Validate structure
+        if "mcq" not in data: data["mcq"] = []
+        if "short_answer" not in data: data["short_answer"] = []
+
         return data
 
     except Exception as e:
-        print(f"Error calling OpenAI for Reading Worksheet generation: {e}")
-        return {"type": "reading", "mcq": [], "fill_in_blank": [], "short_answer": []}
-# In app.py - Replace your existing generate_worksheet_payload function with this:
+        print(f"Error generating worksheet: {e}")
+        return {
+            "story_text": base_text,
+            "mcq": [],
+            "short_answer": [
+                {"category": "Critical", "question": "Write a summary of the story."}
+            ]
+        }
 
 def generate_worksheet_payload(
         base_text: str,
@@ -3032,9 +3344,17 @@ def generate_worksheet_payload(
         # --- MODE 2: Story Completion (Generate Story with Empty Part) ---
 
         structured_story = make_structured_story(
-            prompt=f"A simple story suitable for a {writing_level} reader.",
+            prompt=(
+                f"A simple story titled '{base_text.strip()}' suitable for a {writing_level} reader. "
+                "Make the story clearly match the title/theme."
+                if (base_text or '').strip()
+                else f"A simple story suitable for a {writing_level} reader."
+            ),
             level=writing_level
         )
+        if not structured_story:
+            print("[GPT][worksheet][completion] ERROR: structured story generation failed (no fallback).")
+            return None
 
         partial_prompt, full_answer, missing_part = create_finish_prompt(
             structured_story,
@@ -3063,12 +3383,545 @@ def generate_worksheet_payload(
 
     return None
 
+
+# -------------------------------------------------------------------
+# MAIN-based story grammar analytics (Character/Setting/Problem/Actions/Resolution)
+# -------------------------------------------------------------------
+def analyze_main_story_grammar(story_text: str) -> Optional[dict]:
+    """Return MAIN-style story grammar analysis as JSON.
+
+    Scores are 0/1/2 per component:
+      0 = missing, 1 = partial/unclear, 2 = clear and complete.
+    """
+    if client is None:
+        return None
+
+    text = (story_text or "").strip()
+    if not text:
+        return None
+
+    instructions = """
+You are an assessor for a children's English writing platform.
+Assess the student's story using MAIN-style story grammar components:
+1) Character (who)
+2) Setting (where/when)
+3) Problem / Initiating Event (what starts the issue)
+4) Actions / Attempts (what the character does)
+5) Resolution (how it ends)
+
+Return ONLY JSON with this schema:
+{
+  "scores": {
+    "character": 0|1|2,
+    "setting": 0|1|2,
+    "problem": 0|1|2,
+    "actions": 0|1|2,
+    "resolution": 0|1|2
+  },
+  "evidence": {
+    "character": "short quote or phrase",
+    "setting": "short quote or phrase",
+    "problem": "short quote or phrase",
+    "actions": "short quote or phrase",
+    "resolution": "short quote or phrase"
+  },
+  "tips": {
+    "character": "one improvement suggestion",
+    "setting": "one improvement suggestion",
+    "problem": "one improvement suggestion",
+    "actions": "one improvement suggestion",
+    "resolution": "one improvement suggestion"
+  },
+  "summary": "1-2 sentence overall feedback"
+}
+
+Rules:
+- Keep evidence short (<= 12 words each). If missing, set evidence to "".
+- Be generous for beginner writers: if implied, score 1.
+"""
+
+    user_prompt = f"Student story text:\n\n{text}"
+
+    try:
+        resp = client.responses.create(
+            model=DEFAULT_MODEL,
+            max_output_tokens=650,
+            temperature=0.2,
+            instructions=instructions.strip(),
+            input=[
+                {
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": user_prompt.strip()}],
+                }
+            ],
+        )
+        raw = (getattr(resp, "output_text", "") or "").strip()
+        if raw.startswith("```"):
+            raw = re.sub(r"^```(?:json)?", "", raw).strip()
+            raw = raw.strip("`").strip()
+
+        # Robust JSON extraction
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            m = re.search(r"\{.*\}", raw, re.DOTALL)
+            if not m:
+                return None
+            data = json.loads(m.group(0))
+
+        # Normalize scores
+        scores = data.get("scores") or {}
+        norm = {}
+        for k in ["character", "setting", "problem", "actions", "resolution"]:
+            v = scores.get(k, 0)
+            try:
+                v = int(v)
+            except Exception:
+                v = 0
+            if v < 0:
+                v = 0
+            if v > 2:
+                v = 2
+            norm[k] = v
+        data["scores"] = norm
+        return data
+    except Exception as e:
+        print("MAIN story grammar analysis failed:", e)
+        return None
+
 # -------------------------------------------------------------------
 # ADMIN: generate worksheet + assign to students
 # -------------------------------------------------------------------
 # --- Updated admin_generate_worksheet function in app.py ---
 # --- Function: admin_generate_worksheet (Updated) ---
 # In app.py - Replace your existing admin_generate_worksheet function with this:
+def _reading_level_guidance(level: str) -> str:
+    lvl = (level or "").strip().lower()
+    if lvl in {"beginner", "a1"}:
+        return "Beginner: short sentences, simple vocabulary, clear events. ~120–180 words."
+    if lvl in {"intermediate", "a2"}:
+        return "Intermediate: slightly longer sentences, more details, gentle inference. ~180–260 words."
+    return "Advanced: richer details, varied sentences, mild challenge but kid-friendly. ~260–360 words."
+def safe_json_load(raw_text: str):
+    if not raw_text:
+        return None
+
+    text = raw_text.strip()
+
+    # Remove markdown code fences if present
+    text = re.sub(r"^```json\s*", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"^```", "", text)
+    text = re.sub(r"```$", "", text)
+
+    # Try direct load first
+    try:
+        return json.loads(text)
+    except Exception:
+        pass
+
+    # Try extracting first JSON object using regex
+    match = re.search(r"\{.*\}", text, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group(0))
+        except Exception:
+            return None
+
+    return None
+def generate_reading_story_and_questions_v3(
+    worksheet_title: str,
+    worksheet_level: str = "beginner",
+    language: str = "en",
+) -> dict:
+    """
+    Creates a NEW reading assignment payload:
+      - Generates a short story with GPT
+      - Comprehension questions: 사실적(factual) / 추론적(inference) / 비판적(critical)
+      - Expression questions: MAIN story grammar rubric
+      - Includes analytics schema placeholders so grading can compute strengths by category
+    Returns dict payload ready to json.dumps().
+    """
+    # Fallback when OpenAI client is not available
+    if client is None:
+        story_text = (
+            "Mina found a small key under a tree near the school garden. "
+            "She wondered what it opened, so she asked her friend Joon to help. "
+            "They searched the garden shed and discovered a tiny locked box. "
+            "Inside, they found a note that said, 'Be curious, be kind.' "
+            "Mina smiled and decided to return the key to the school office."
+        )
+        return {
+            "type": "reading_v3",
+            "title": worksheet_title or "Reading Worksheet",
+            "language": language,
+            "story": {"title": worksheet_title or "A Curious Key", "text": story_text},
+            "comprehension": [
+                {
+                    "id": "C1",
+                    "question_type": "factual",
+                    "question_type_ko": "사실적",
+                    "format": "mcq",
+                    "question": "Where did Mina find the key?",
+                    "options": ["Under a tree", "In her backpack", "On a bus seat", "In the classroom"],
+                    "correct_index": 0,
+                    "rationale": "The story says Mina found the key under a tree."
+                },
+                {
+                    "id": "C2",
+                    "question_type": "inference",
+                    "question_type_ko": "추론적",
+                    "format": "short",
+                    "question": "Why did Mina ask Joon for help? (1–2 sentences)",
+                    "model_answer": "She was curious about what the key opened and wanted help searching for the lock."
+                },
+                {
+                    "id": "C3",
+                    "question_type": "critical",
+                    "question_type_ko": "비판적",
+                    "format": "short",
+                    "question": "Do you think Mina made a good choice by returning the key? Explain your opinion (2–3 sentences).",
+                    "model_answer": "Yes, because returning the key is responsible and prevents problems. "
+                                    "It also shows honesty and respect for school property."
+                },
+            ],
+            "expression": [
+                {
+                    "id": "E1",
+                    "grammar_label": "Character",
+                    "grammar_label_ko": "인물",
+                    "question": "Who is the main character? Describe them using 2 details from the story.",
+                    "model_answer": "Mina is the main character. She is curious and responsible because she searches for answers and returns the key."
+                },
+                {
+                    "id": "E2",
+                    "grammar_label": "Setting",
+                    "grammar_label_ko": "배경",
+                    "question": "Where and when does the story happen? Use words from the story.",
+                    "model_answer": "It happens near the school garden and around the garden shed during a normal school day."
+                },
+                {
+                    "id": "E3",
+                    "grammar_label": "Problem/Initiating Event",
+                    "grammar_label_ko": "문제/시작 사건",
+                    "question": "What event starts the story’s problem?",
+                    "model_answer": "Mina finds a key and doesn’t know what it opens."
+                },
+                {
+                    "id": "E4",
+                    "grammar_label": "Actions/Attempts",
+                    "grammar_label_ko": "시도/행동",
+                    "question": "What actions do the characters take to solve the problem? List 2 actions.",
+                    "model_answer": "She asks Joon for help and they search the garden shed to find what the key opens."
+                },
+                {
+                    "id": "E5",
+                    "grammar_label": "Resolution",
+                    "grammar_label_ko": "해결",
+                    "question": "How is the problem resolved at the end?",
+                    "model_answer": "Mina discovers the note in the box and decides to return the key to the school office."
+                },
+            ],
+            "analytics_schema": {
+                "comprehension": {
+                    "by_type": {
+                        "factual": {"label_ko": "사실적", "strength_rule": "more correct factual answers", "weakness_rule": "many incorrect factual answers"},
+                        "inference": {"label_ko": "추론적", "strength_rule": "answers show reasonable inference supported by text", "weakness_rule": "answers not supported by text"},
+                        "critical": {"label_ko": "비판적", "strength_rule": "clear opinion + reasoning connected to story", "weakness_rule": "opinion without reasons or unrelated"},
+                    },
+                    "report_note": "Compute category accuracy/quality during grading and summarize strengths/weaknesses (focus on factual vs inference as requested).",
+                },
+                "expression": {
+                    "main_story_grammar": {
+                        "Character": {"label_ko": "인물"},
+                        "Setting": {"label_ko": "배경"},
+                        "Problem/Initiating Event": {"label_ko": "문제/시작 사건"},
+                        "Actions/Attempts": {"label_ko": "시도/행동"},
+                        "Resolution": {"label_ko": "해결"},
+                    },
+                    "report_note": "During grading, mark which MAIN elements are complete/clear and summarize the student’s strongest area.",
+                },
+            },
+        }
+
+    # GPT path
+    lvl_hint = _reading_level_guidance(worksheet_level)
+
+    instructions = f"""
+You are generating a READING WORKSHEET JSON for kids.
+Return ONLY valid JSON (no markdown, no extra text).
+
+Requirements:
+1) First create an original short story in {language}. Make it kid-friendly and coherent.
+   - {lvl_hint}
+2) Create Comprehension questions with EXACTLY these 3 types:
+   - factual (사실적): answer is explicitly stated in the text (use MCQ)
+   - inference (추론적): answer requires reasoning from the text (short answer)
+   - critical (비판적): opinion/argument question connected to the story (short answer)
+3) Create Expression questions based on MAIN story grammar:
+   Character, Setting, Problem/Initiating Event, Actions/Attempts, Resolution
+4) Include analytics_schema so the grader can compute strengths/weaknesses:
+   - emphasize factual vs inference strengths/weaknesses
+   - include MAIN category labels
+
+JSON shape:
+{{
+  "type": "reading_v3",
+  "title": "...",
+  "language": "{language}",
+  "story": {{"title": "...", "text": "..."}},
+  "comprehension": [
+    {{
+      "id": "C1",
+      "question_type": "factual",
+      "question_type_ko": "사실적",
+      "format": "mcq",
+      "question": "...",
+      "options": ["...","...","...","..."],
+      "correct_index": 0,
+      "rationale": "..."
+    }},
+    {{
+      "id": "C2",
+      "question_type": "inference",
+      "question_type_ko": "추론적",
+      "format": "short",
+      "question": "...",
+      "model_answer": "..."
+    }},
+    {{
+      "id": "C3",
+      "question_type": "critical",
+      "question_type_ko": "비판적",
+      "format": "short",
+      "question": "...",
+      "model_answer": "..."
+    }}
+  ],
+  "expression": [
+    {{
+      "id": "E1",
+      "grammar_label": "Character",
+      "grammar_label_ko": "인물",
+      "question": "...",
+      "model_answer": "..."
+    }},
+    ...
+  ],
+  "analytics_schema": {{
+    "comprehension": {{
+      "by_type": {{
+        "factual": {{"label_ko":"사실적", "strength_rule":"...", "weakness_rule":"..."}},
+        "inference": {{"label_ko":"추론적", "strength_rule":"...", "weakness_rule":"..."}},
+        "critical": {{"label_ko":"비판적", "strength_rule":"...", "weakness_rule":"..."}}
+      }},
+      "report_note": "..."
+    }},
+    "expression": {{
+      "main_story_grammar": {{
+        "Character": {{"label_ko":"인물"}},
+        "Setting": {{"label_ko":"배경"}},
+        "Problem/Initiating Event": {{"label_ko":"문제/시작 사건"}},
+        "Actions/Attempts": {{"label_ko":"시도/행동"}},
+        "Resolution": {{"label_ko":"해결"}}
+      }},
+      "report_note": "..."
+    }}
+  }}
+}}
+"""
+
+    user_prompt = f"""
+Worksheet title/theme: {worksheet_title or "Reading Worksheet"}
+Generate the JSON now.
+"""
+
+    resp = client.responses.create(
+        model=DEFAULT_MODEL,
+        max_output_tokens=1600,
+        temperature=0.5,
+        instructions=instructions.strip(),
+        input=[{"role": "user", "content": [{"type": "input_text", "text": user_prompt.strip()}]}],
+    )
+
+    raw = getattr(resp, "output_text", "") or ""
+    data = safe_json_load(raw)
+
+    if not isinstance(data, dict):
+        raise ValueError("Reading v3: model did not return a JSON object.")
+
+    # Hard-guard defaults
+    data["type"] = "reading_v3"
+    data.setdefault("title", worksheet_title or "Reading Worksheet")
+    data.setdefault("language", language)
+    data.setdefault("story", {})
+    data.setdefault("comprehension", [])
+    data.setdefault("expression", [])
+    data.setdefault("analytics_schema", {})
+
+    return data
+
+
+def _extract_json_object(text: str) -> str:
+    """Best-effort: extract the first top-level JSON object from a model response."""
+    if not text:
+        return ""
+    start = text.find("{")
+    end = text.rfind("}")
+    if start == -1 or end == -1 or end <= start:
+        return ""
+    return text[start : end + 1]
+
+
+def gpt_json(client, prompt: str, model: str = None, default=None):
+    """
+    Returns dict parsed from GPT output.
+    Assumes you have an OpenAI client already (e.g., OpenAI()).
+    Works even if model sometimes wraps JSON in extra text.
+    """
+    if default is None:
+        default = {}
+    try:
+        # Use whichever you already use elsewhere in your app.
+        # If you are using Responses API:
+        # resp = client.responses.create(model=model or "gpt-4.1-mini", input=prompt)
+        # text = resp.output_text
+
+        # If you are using Chat Completions:
+        resp = client.chat.completions.create(
+            model=model or "gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "Return ONLY valid JSON. No markdown, no extra text."},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.7,
+        )
+        text = (resp.choices[0].message.content or "").strip()
+
+        j = safe_json_load(text, None)
+        if isinstance(j, dict):
+            return j
+
+        # fallback: strip wrappers
+        j2 = safe_json_load(_extract_json_object(text), None)
+        if isinstance(j2, dict):
+            return j2
+        return default
+    except Exception:
+        return default
+
+
+def generate_reading_story_payload_gpt(
+    client,
+    worksheet_level: str,
+    topic: str = "",
+    genre: str = "",
+    length: str = "short",
+):
+    """
+    GPT generates the reading story (title + content) for the worksheet.
+    """
+    worksheet_level = (worksheet_level or "beginner").strip().lower()
+    topic = (topic or "").strip()
+    genre = (genre or "").strip()
+    length = (length or "short").strip().lower()
+
+    # Simple length control
+    if length == "long":
+        sentence_hint = "12–16 sentences"
+    elif length == "medium":
+        sentence_hint = "8–12 sentences"
+    else:
+        sentence_hint = "5–8 sentences"
+
+    # Level control
+    if worksheet_level == "advanced":
+        vocab_hint = "slightly richer vocabulary, varied sentence structures, but still kid-friendly"
+    elif worksheet_level == "intermediate":
+        vocab_hint = "simple vocabulary with a few new words, kid-friendly"
+    else:
+        vocab_hint = "very simple vocabulary, short sentences, kid-friendly"
+
+    prompt = f"""
+Create an original children's reading passage for an English worksheet.
+
+Constraints:
+- Language: English
+- Difficulty: {worksheet_level}
+- Length: {sentence_hint}
+- Style: {vocab_hint}
+- Must be a complete story with: Character, Setting, Problem/Initiating Event, Actions/Attempts, Resolution
+- Avoid violence, politics, or scary content.
+
+Optional guidance (use if provided):
+- Topic/Theme: {topic if topic else "auto"}
+- Genre: {genre if genre else "auto"}
+
+Return ONLY JSON in this exact structure:
+{{
+  "title": "string",
+  "language": "en",
+  "level": "{worksheet_level}",
+  "content": "full story text"
+}}
+""".strip()
+
+    data = gpt_json(client, prompt, default={})
+    title = (data.get("title") or "").strip()
+    content = (data.get("content") or "").strip()
+
+    if not title:
+        title = (topic.title() if topic else "Reading Story")
+    if not content:
+        # very small fallback story so route never breaks
+        content = "Mina found a lost notebook at school. She looked for the owner and asked her teacher for help. Soon, she returned it to Jun, who smiled and said thank you."
+
+    return {
+        "title": title,
+        "language": "en",
+        "level": worksheet_level,
+        "content": content,
+    }
+
+
+def generate_expression_rubric_gpt(client, base_text: str):
+    """
+    GPT generates MAIN-based story grammar rubric prompts + analytics keys.
+    Stored into questions_json under 'expression' section.
+    """
+    prompt = f"""
+You are an English literacy teacher. Based on the story below, produce a MAIN-style story grammar evaluation rubric.
+
+Story:
+\"\"\"{base_text}\"\"\"
+
+Return ONLY JSON:
+{{
+  "story_grammar": [
+    {{"key":"character","label":"Character","what_to_check":"...","student_prompt":"..."}},
+    {{"key":"setting","label":"Setting","what_to_check":"...","student_prompt":"..."}},
+    {{"key":"problem","label":"Problem/Initiating Event","what_to_check":"...","student_prompt":"..."}},
+    {{"key":"actions","label":"Actions/Attempts","what_to_check":"...","student_prompt":"..."}},
+    {{"key":"resolution","label":"Resolution","what_to_check":"...","student_prompt":"..."}}
+  ],
+  "analytics_keys": ["character","setting","problem","actions","resolution"]
+}}
+""".strip()
+
+    data = gpt_json(client, prompt, default={})
+    sg = data.get("story_grammar") if isinstance(data.get("story_grammar"), list) else []
+    keys = data.get("analytics_keys") if isinstance(data.get("analytics_keys"), list) else ["character","setting","problem","actions","resolution"]
+
+    if not sg:
+        sg = [
+            {"key":"character","label":"Character","what_to_check":"Who is the main character? What are they like?","student_prompt":"Write 1–2 sentences describing the main character."},
+            {"key":"setting","label":"Setting","what_to_check":"Where and when does the story happen?","student_prompt":"Write 1 sentence telling where the story happens."},
+            {"key":"problem","label":"Problem/Initiating Event","what_to_check":"What problem starts the story?","student_prompt":"Write 1 sentence explaining the problem."},
+            {"key":"actions","label":"Actions/Attempts","what_to_check":"What does the character try to do?","student_prompt":"List 2 actions the character takes."},
+            {"key":"resolution","label":"Resolution","what_to_check":"How does the story end? Is the problem solved?","student_prompt":"Write 1 sentence explaining the ending."},
+        ]
+
+    return {"story_grammar": sg, "analytics_keys": keys}
+
 
 @app.route("/admin/generate-worksheet", methods=["POST"])
 @login_required
@@ -3079,26 +3932,31 @@ def admin_generate_worksheet():
 
     db = get_db()
 
-    story_id = request.form.get("story_id", type=int)
     assignment_type = (request.form.get("worksheet_type") or "").strip().lower()
     worksheet_title = (request.form.get("worksheet_title") or "").strip()
 
-    # NEW FIELDS for writing task
+    # writing fields
     writing_mode = (request.form.get("writing_mode") or "planning").strip().lower()
-    writing_level = (request.form.get("writing_level") or "beginner").strip().lower()
+    writing_level = (
+                request.form.get("writing_level") or request.form.get("worksheet_level") or "beginner").strip().lower()
+
+    # reading fields
+    worksheet_level = (request.form.get("worksheet_level") or "beginner").strip().lower()
+    reading_topic = (request.form.get("reading_topic") or "").strip()
+    reading_genre = (request.form.get("reading_genre") or "").strip()
+    reading_length = (request.form.get("reading_length") or "short").strip().lower()
 
     raw_user_ids = request.form.getlist("user_ids") or []
     user_ids = [int(uid) for uid in raw_user_ids if uid]
 
-    # --- Initialization ---
     draft_id = None
-    story = None
+    story_id = None
     questions_json = None
 
-    # --- Basic validation ---
     if assignment_type not in {"writing", "reading"}:
         flash("Please choose a valid worksheet type.", "warning")
         return redirect(url_for("admin_stories", tab="assign"))
+
     if not user_ids:
         flash("Please choose at least one student to assign the worksheet to.", "warning")
         return redirect(url_for("admin_stories", tab="assign"))
@@ -3107,39 +3965,8 @@ def admin_generate_worksheet():
     # WRITING ASSIGNMENT SETUP
     # --------------------------
     if assignment_type == "writing":
-        # Find or create the dummy story/draft for assignment links
-        dummy = db.execute(
-            "SELECT id FROM stories WHERE slug = ?", ("free-writing-template",)
-        ).fetchone()
-
-        if dummy is None:
-            cur = db.execute(
-                """INSERT INTO stories (slug, title, language, level, content, created_at)
-                   VALUES (?, ?, ?, ?, ?, datetime('now'))""",
-                ("free-writing-template", "Creative Writing Practice", "en", "A1", "",),
-            )
-            story_id = cur.lastrowid
-        else:
-            story_id = dummy["id"]
-
-        dummy_draft = db.execute(
-            "SELECT id FROM finish_drafts WHERE story_id = ? ORDER BY id DESC LIMIT 1",
-            (story_id,),
-        ).fetchone()
-
-        if dummy_draft is None:
-            cur = db.execute(
-                """INSERT INTO finish_drafts (story_id, seed_prompt, partial_text, completion_text)
-                   VALUES (?, ?, ?, ?)""",
-                (story_id, "System generated prompt", "", None),
-            )
-            draft_id = cur.lastrowid
-        else:
-            draft_id = dummy_draft["id"]
-
-        # 1. Generate the payload
         worksheet_payload = generate_worksheet_payload(
-            base_text="",
+            base_text=worksheet_title,
             worksheet_type="writing",
             writing_mode=writing_mode,
             writing_level=writing_level
@@ -3149,93 +3976,154 @@ def admin_generate_worksheet():
             flash("Failed to generate writing worksheet with AI.", "danger")
             return redirect(url_for("admin_stories", tab="assign"))
 
-        # 2. SPECIAL HANDLING: Completion Mode saves the story content to DB
+        level_map = {"beginner": "A1", "intermediate": "A2", "advanced": "B1"}
+        story_level = level_map.get(writing_level, "beginner")
+
         if writing_mode == "completion":
+            generated_title = (worksheet_payload.get("story_title") or "").strip() or "Story Completion"
+            slug = f"writing-completion-{uuid.uuid4().hex[:12]}"
 
-            # A. Overwrite the dummy story's content with the *full answer key*
-            db.execute(
-                "UPDATE stories SET content = ? WHERE id = ?",
-                (worksheet_payload["full_text_answer"], story_id)
-            )
-
-            # B. Overwrite the dummy draft's text with the *partial prompt* and answer key
-            db.execute(
-                """
-                UPDATE finish_drafts
-                SET partial_text = ?, completion_text = ?
-                WHERE id = ?
-                """,
-                (worksheet_payload["partial_text_prompt"], worksheet_payload["full_text_answer"], draft_id)
-            )
-
-            # Set the title to reflect the missing part
             if not worksheet_title:
-                worksheet_title = worksheet_payload['story_title']
+                worksheet_title = generated_title
 
-            # Store only the instructions/structure in questions_json for the assignment
+            cur = db.execute(
+                """
+                INSERT INTO stories (slug, title, language, level, content, created_at)
+                VALUES (?, ?, ?, ?, ?, datetime('now'))
+                """,
+                (slug, worksheet_title or generated_title, "en", story_level,
+                 worksheet_payload.get("full_text_answer", ""))
+            )
+            story_id = cur.lastrowid
+
+            cur = db.execute(
+                """
+                INSERT INTO finish_drafts (story_id, seed_prompt, partial_text, completion_text)
+                VALUES (?, ?, ?, ?)
+                """,
+                (
+                    story_id,
+                    "System generated completion worksheet",
+                    worksheet_payload.get("partial_text_prompt", ""),
+                    worksheet_payload.get("full_text_answer", "")
+                )
+            )
+            draft_id = cur.lastrowid
+
             payload_for_db = {
                 "type": "writing_completion",
-                "sections": worksheet_payload["sections"],
-                "checklist": worksheet_payload["checklist"]
+                "sections": worksheet_payload.get("sections", []),
+                "checklist": worksheet_payload.get("checklist", [])
             }
             questions_json = json.dumps(payload_for_db, ensure_ascii=False)
 
-        else:  # writing_mode == "planning"
-            # Keep original planning logic (no story/draft content updates needed)
+        else:
+            dummy = db.execute(
+                "SELECT id FROM stories WHERE slug = ?",
+                ("free-writing-template",)
+            ).fetchone()
+
+            if dummy is None:
+                cur = db.execute(
+                    """
+                    INSERT INTO stories (slug, title, language, level, content, created_at)
+                    VALUES (?, ?, ?, ?, ?, datetime('now'))
+                    """,
+                    ("free-writing-template", "Creative Writing Practice", "en", "beginner", "")
+                )
+                story_id = cur.lastrowid
+            else:
+                story_id = dummy["id"]
+
+            dummy_draft = db.execute(
+                "SELECT id FROM finish_drafts WHERE story_id = ? ORDER BY id DESC LIMIT 1",
+                (story_id,)
+            ).fetchone()
+
+            if dummy_draft is None:
+                cur = db.execute(
+                    """
+                    INSERT INTO finish_drafts (story_id, seed_prompt, partial_text, completion_text)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (story_id, "System generated prompt", "", None)
+                )
+                draft_id = cur.lastrowid
+            else:
+                draft_id = dummy_draft["id"]
+
             if not worksheet_title:
                 worksheet_title = worksheet_payload.get("title") or "Writing Structure Practice"
+
             questions_json = json.dumps(worksheet_payload, ensure_ascii=False)
 
     # --------------------------
-    # READING ASSIGNMENT SETUP (CALLS generate_reading_worksheet directly)
+    # READING ASSIGNMENT SETUP (UPDATED)
     # --------------------------
     elif assignment_type == "reading":
-        # Check story validity
-        if not story_id:
-            flash("Please select a story for the reading worksheet.", "warning")
-            return redirect(url_for("admin_stories", tab="assign"))
+        # 1) Use the TOPIC as the base_text input
+        # generate_reading_worksheet will now handle story generation AND question generation
 
-        story = db.execute("SELECT * FROM stories WHERE id = ?", (story_id,)).fetchone()
-        draft = db.execute(
-            "SELECT id, completion_text FROM finish_drafts WHERE story_id = ? ORDER BY created_at DESC LIMIT 1",
-            (story_id,)).fetchone()
+        # Ensure we have a topic, even if generic
+        topic_prompt = reading_topic if reading_topic else "A generic story for reading practice"
 
-        base_text = (draft.get("completion_text") if draft else story.get("content")).strip()
-        draft_id = draft["id"] if draft else None
+        worksheet_payload = generate_reading_worksheet(
+            base_text=topic_prompt,
+            story_level=worksheet_level,
+            worksheet_level=worksheet_level,
+        ) or {}
 
-        if not base_text:
-            flash("Story text is empty; cannot generate a reading worksheet.", "warning")
-            return redirect(url_for("admin_stories", tab="assign"))
+        # 2) Extract the generated story text from the payload
+        # (The updated function returns 'story_text' in the dict)
+        story_text = worksheet_payload.get("story_text") or worksheet_payload.get("story", {}).get("text") or ""
 
-        # 1. Generate the FULL structured reading payload (MCQ, FIB, SA)
-        worksheet_payload = generate_reading_worksheet(  # <--- CORRECT DIRECT CALL
-            base_text=base_text,
-            story_level=story["level"]
+        # Fallback if generation failed entirely
+        if not story_text:
+            story_text = f"Story generation failed for topic: {reading_topic}. Please try again."
+
+        # 3) Determine Title (User provided or Auto-generated format)
+        if not worksheet_title:
+            if reading_topic:
+                worksheet_title = f"Reading · {reading_topic.title()}"
+            else:
+                worksheet_title = "Reading Worksheet"
+
+        slug = f"reading-auto-{uuid.uuid4().hex[:12]}"
+
+        # 4) Insert the generated story into DB
+        cur = db.execute(
+            """
+            INSERT INTO stories (slug, title, language, level, content, created_at)
+            VALUES (?, ?, ?, ?, ?, datetime('now'))
+            """,
+            (slug, worksheet_title, "en", worksheet_level, story_text)
         )
+        story_id = cur.lastrowid
 
-        if not worksheet_payload or not (
-                worksheet_payload.get('mcq') or worksheet_payload.get('fill_in_blank') or worksheet_payload.get(
-                'short_answer')):
-            flash("AI failed to generate question content for the reading worksheet. Try a different story.", "danger")
-            return redirect(url_for("admin_stories", tab="assign"))
+        # 5) Ensure payload has the correct lists (mcq, short_answer)
+        worksheet_payload.setdefault("mcq", [])
+        worksheet_payload.setdefault("short_answer", [])
 
-        # 2. Save the entire structured payload to the assignment row
+        # (Optional) Generate Expression Rubric based on the new text
+        client = get_openai_client()
+        expression = generate_expression_rubric_gpt(client, story_text)
+        worksheet_payload["expression"] = expression
+
         questions_json = json.dumps(worksheet_payload, ensure_ascii=False)
 
-        # 3. Use the generated title if the user didn't provide one
-        if not worksheet_title:
-            worksheet_title = worksheet_payload.get("title") or f"Reading · {story['title']}"
-
-    # --- INSERT ASSIGNMENTS INTO DB (Common Path) ---
+    # --------------------------
+    # INSERT ASSIGNMENTS (Common Path)
+    # --------------------------
     created = 0
     for uid in user_ids:
         assignee_id = int(uid)
+        class_id = request.form.get("class_id")
         db.execute(
             """
             INSERT INTO assignments
             (story_id, draft_id, assignee_id, assignment_type,
-             questions_json, assigned_by, assignment_title, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'assigned')
+             questions_json, assigned_by, assignment_title, status, class_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'assigned',?)
             """,
             (
                 story_id,
@@ -3245,6 +4133,7 @@ def admin_generate_worksheet():
                 questions_json,
                 session.get("user_id"),
                 worksheet_title,
+                class_id
             ),
         )
         created += 1
@@ -3252,7 +4141,6 @@ def admin_generate_worksheet():
     db.commit()
     flash(f"Worksheet generated and assigned to {created} student(s) successfully.", "success")
     return redirect(url_for("admin_stories", tab="assigned"))
-
 # --- New Route: admin_assignment_group_detail ---
 
 @app.get("/admin/assignments/group/<int:assignment_id>")
@@ -3538,72 +4426,67 @@ def admin_grading_page(submission_id: int):
             assignment_details["prompt_story"] = draft["partial_text"]
 
     # --- 4. Parse Questions and Structure (Reading/Writing Rubric) ---
-    # In app.py - inside the admin_grading_page function, replace your existing parsing block with this:
-
-    # --- 4. Parse Questions and Structure (Reading/Writing Rubric) ---
     if submission["questions_json"]:
         try:
             payload = json.loads(submission["questions_json"])
 
-            # --- FIX FOR DIRECT READING PAYLOAD (like the one provided by the user) ---
-            if payload.get("type") == 'reading':
-
-                # Extract lists directly from top-level keys
-                mcq_list = payload.get("mcq", [])
-                fib_list = payload.get("fill_in_blank", [])
-                sa_list = payload.get("short_answer", [])
-
-                # Store the full question lists for cross-referencing and display
-                assignment_details["mcq_questions"] = mcq_list
-
-                # Rebuild sections structure for the template display:
-                if mcq_list:
-                    assignment_details["sections"].append({"label": "MCQ Questions", "questions": mcq_list})
-                if fib_list:
-                    # Note: The template expects 'sentence' and 'answer' for FIB, which your payload provides.
-                    assignment_details["sections"].append({"label": "Fill-in-the-Blank Prompts", "questions": fib_list})
-                if sa_list:
-                    # Note: The template expects 'question' and 'model_answer' for SA, which your payload provides.
-                    assignment_details["sections"].append({"label": "Short Answer Questions", "questions": sa_list})
-
-            elif submission["assignment_type"] == 'reading':
-                # This handles cases where the reading questions are nested under a 'sections' key (legacy/alternative structure)
-
+            # Detect Reading Assignment Types
+            if submission["assignment_type"] == 'reading':
                 mcq_list = []
                 fib_list = []
                 sa_list = []
 
-                for section in payload.get("sections", []):
-                    label = section.get('label', '')
-                    questions = section.get('questions', [])
-                    if 'MCQ' in label:
-                        mcq_list.extend(questions)
-                    elif 'Fill-in' in label:
-                        fib_list.extend(questions)
-                    elif 'Short Answer' in label:
-                        sa_list.extend(questions)
+                # Strategy A: Check for V3 Structure (comprehension list)
+                if payload.get("type") == "reading_v3" or "comprehension" in payload:
+                    comp_list = payload.get("comprehension") or []
+                    # Sort V3 questions into buckets
+                    for q in comp_list:
+                        fmt = q.get("format", "").lower()
+                        if fmt == "mcq":
+                            mcq_list.append(q)
+                        elif fmt == "fill_in_blank":
+                            fib_list.append(q)
+                        else:
+                            sa_list.append(q)
+                    # Add expression questions to Short Answer
+                    expr_list = payload.get("expression") or []
+                    sa_list.extend(expr_list)
 
+                # Strategy B: Check for Direct Lists (Standard Reading Generator)
+                elif "mcq" in payload or "short_answer" in payload:
+                    mcq_list = payload.get("mcq") or []
+                    fib_list = payload.get("fill_in_blank") or []
+                    sa_list = payload.get("short_answer") or []
+
+                # Strategy C: Check for Legacy "sections" Structure
+                elif "sections" in payload:
+                    for section in payload.get("sections", []):
+                        label = section.get('label', '')
+                        questions = section.get('questions', [])
+                        if 'MCQ' in label:
+                            mcq_list.extend(questions)
+                        elif 'Fill-in' in label:
+                            fib_list.extend(questions)
+                        elif 'Short Answer' in label:
+                            sa_list.extend(questions)
+
+                # --- POPULATE VIEW DATA ---
                 assignment_details["mcq_questions"] = mcq_list
 
-                if mcq_list or fib_list or sa_list:
-                    # Rebuild sections for the template display using the extracted lists
-                    if mcq_list:
-                        assignment_details["sections"].append({"label": "MCQ Questions", "questions": mcq_list})
-                    if fib_list:
-                        assignment_details["sections"].append(
-                            {"label": "Fill-in-the-Blank Prompts", "questions": fib_list})
-                    if sa_list:
-                        assignment_details["sections"].append({"label": "Short Answer Questions", "questions": sa_list})
-
+                if mcq_list:
+                    assignment_details["sections"].append({"label": "MCQ Questions", "questions": mcq_list})
+                if fib_list:
+                    assignment_details["sections"].append({"label": "Fill-in-the-Blank Prompts", "questions": fib_list})
+                if sa_list:
+                    assignment_details["sections"].append({"label": "Short Answer Questions", "questions": sa_list})
 
             elif submission["assignment_type"] == 'writing':
                 # Handles standard writing assignment structure (sections for planning/rubric)
                 assignment_details["sections"].extend(payload.get("sections", []))
 
         except Exception as e:
-            # Note: Added print for debugging, you can remove this after deployment
             print(f"Error parsing assignment template content: {e}")
-            # flash(f"Error parsing assignment template content: {e}", "warning") # Use flash instead of print in production
+
     # --- 5. Render the dedicated grading page ---
     return render_template(
         "admin_grading_page.html",
@@ -4634,6 +5517,77 @@ def admin_create_class():
     flash("Could not generate a unique class code. Try again.", "danger")
     return redirect(url_for("classes_page"))
 
+@app.post("/assignments/<int:assignment_id>/one_idea")
+@login_required
+def assignment_one_idea(assignment_id: int):
+    db = get_db()
+    user_id = g.current_user["id"]
+
+    assignment = db.execute(
+        "SELECT * FROM assignments WHERE id=? AND assignee_id=?",
+        (assignment_id, user_id),
+    ).fetchone()
+    if not assignment:
+        return jsonify({"error": "not_found"}), 404
+
+    story = db.execute("SELECT * FROM stories WHERE id=?", (assignment["story_id"],)).fetchone()
+    draft = None
+    if assignment.get("draft_id"):
+        draft = db.execute("SELECT * FROM finish_drafts WHERE id=?", (assignment["draft_id"],)).fetchone()
+
+    title = (assignment.get("assignment_title") or "")
+    ins = (assignment.get("instructions") or "")  # might be missing in your table; safe
+    blob = (title + " " + ins).lower()
+
+    part = "middle"
+    if "beginning" in blob:
+        part = "beginning"
+    elif "middle" in blob:
+        part = "middle"
+    elif "ending" in blob or " end " in blob or blob.endswith(" end"):
+        part = "end"
+
+    partial = ""
+    if draft:
+        partial = (draft.get("partial_text") or "").strip()
+
+    # Fallback if OpenAI is not configured
+    if client is None:
+        fallback = {
+            "beginning": "One day, Tim decided to start his adventure by saying hello to someone nearby.",
+            "middle": "Then something surprising happened, and Tim had to try a new idea with his friends.",
+            "end": "In the end, Tim solved the problem and felt proud of his new friends.",
+        }[part]
+        return jsonify({"idea": fallback})
+
+    # GPT one-sentence prompt
+    sys = "You write for 7–8 year olds. Output exactly ONE sentence. No quotes. No extra text."
+    user = f"""
+Story so far:
+\"\"\"{partial}\"\"\"
+
+Task:
+Give ONE sentence of idea and suggestion for helping young student to complete the {part} of the story.
+Make it simple, clear, and connected to the story.
+"""
+
+    try:
+        resp = client.responses.create(
+            model=DEFAULT_MODEL,
+            max_output_tokens=60,
+            temperature=0.6,
+            input=[
+                {"role": "system", "content": sys},
+                {"role": "user", "content": user.strip()},
+            ],
+        )
+        idea = (getattr(resp, "output_text", "") or "").strip()
+        # Safety: keep only first line / first sentence-ish
+        idea = idea.splitlines()[0].strip()
+        return jsonify({"idea": idea or "Then Tim had an idea and tried it with a smile."})
+    except Exception as e:
+        log_input("one_idea_error", {"error": str(e), "assignment_id": assignment_id})
+        return jsonify({"idea": "Then Tim had an idea and tried it with a smile."})
 
 if __name__ == "__main__":
     with app.app_context():

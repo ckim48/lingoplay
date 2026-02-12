@@ -5,6 +5,22 @@
 
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Baloo+2:wght@700;800&display=swap" rel="stylesheet">
 
+{# -----------------------------
+   Detect which part user writes: beginning / middle / end
+   Uses assignment title + instructions text
+   ----------------------------- #}
+{% set part = 'middle' %}
+{% set t = (assignment.assignment_title or '') | lower %}
+{% set ins = (assignment.instructions or '') | lower %}
+{% set blob = t ~ ' ' ~ ins %}
+{% if 'beginning' in blob %}
+  {% set part = 'beginning' %}
+{% elif 'middle' in blob %}
+  {% set part = 'middle' %}
+{% elif 'ending' in blob or ' end ' in blob or blob.endswith(' end') %}
+  {% set part = 'end' %}
+{% endif %}
+
 <div class="container mt-4 mb-5">
   <div class="row justify-content-center">
     <div class="col-12">
@@ -18,6 +34,7 @@
               Finish the Story
             {% endif %}
           </h1>
+
           <p class="mb-4 finish-sub-text">
             Mission: <strong class="text-deep-blue">{{ assignment.assignment_title or story.title }}</strong>
           </p>
@@ -29,116 +46,206 @@
             </div>
           {% endif %}
 
-          {# ---------- NEW: WRITING WORKSHEET SECTIONS ---------- #}
-          {% if writing_sections %}
-            <h5 class="fw-semibold mb-3 finish-section-title">
-              {% if assignment.assignment_type == 'writing' %}
-                Plan Your Story
-              {% else %}
-                Plan Your Ending
-              {% endif %}
-            </h5>
+          {# =========================
+             Kid-friendly checklist + one-sentence idea (writing only)
+             MAIN story grammar: Character, Setting, Problem/Initiating Event, Actions/Attempts, Resolution
+             ========================= #}
+          {% if assignment.assignment_type == 'writing' %}
+
+            <div class="story-reminder mb-3">
+              <div class="reminder-title">Story Grammar Reminder</div>
+              <div class="small reminder-text">
+                Check for: <strong>Character</strong>, <strong>Setting</strong>, <strong>Problem</strong>, <strong>Actions</strong>, <strong>Resolution</strong>.
+              </div>
+            </div>
+
             <div class="row g-3 mb-4">
-              {% for sec in writing_sections %}
-                <div class="col-md-4">
-                  <div class="finish-section-card h-100">
-                    <h6 class="finish-section-label mb-2">
-                      {{ sec.label }}
-                    </h6>
-                    {% if sec.instruction %}
-                      <p class="finish-text-body small mb-2">
-                        {{ sec.instruction }}
-                      </p>
-                    {% endif %}
-                    {% if sec.guiding_questions %}
-                      <ul class="finish-guiding-list mb-0">
-                        {% for q in sec.guiding_questions %}
-                          <li class="small">{{ q }}</li>
-                        {% endfor %}
-                      </ul>
+              <div class="col-lg-7">
+                <div class="check-card">
+                  <div class="d-flex align-items-center justify-content-between mb-2">
+                    <h6 class="mb-0 check-title">Did I include everything?</h6>
+                    <span class="small text-muted" id="checkCountLabel">0 / 5</span>
+                  </div>
+
+                  <div class="progress check-progress mb-3" role="progressbar" aria-label="Checklist progress">
+                    <div class="progress-bar" id="checkProgressBar" style="width: 0%"></div>
+                  </div>
+
+                  {# NOTE:
+                     We show the same MAIN checklist for any part (beginning/middle/end)
+                     so kids always learn the full story grammar.
+                   #}
+                  <ul class="finish-checklist-list">
+
+                    <li class="d-flex align-items-start gap-2">
+                      <input class="form-check-input checklist-checkbox mt-1 main-check" type="checkbox" id="c1"
+                             {% if assignment.user_status == 'submitted' %}disabled{% endif %}>
+                      <label class="small finish-text-body" for="c1">
+                        <strong>Character</strong> I said who the story is about (name + a small detail).
+                      </label>
+                    </li>
+
+                    <li class="d-flex align-items-start gap-2">
+                      <input class="form-check-input checklist-checkbox mt-1 main-check" type="checkbox" id="c2"
+                             {% if assignment.user_status == 'submitted' %}disabled{% endif %}>
+                      <label class="small finish-text-body" for="c2">
+                        <strong>Setting</strong> I said where and when it happens.
+                      </label>
+                    </li>
+
+                    <li class="d-flex align-items-start gap-2">
+                      <input class="form-check-input checklist-checkbox mt-1 main-check" type="checkbox" id="c3"
+                             {% if assignment.user_status == 'submitted' %}disabled{% endif %}>
+                      <label class="small finish-text-body" for="c3">
+                        <strong>Problem / Initiating Event</strong> Something happens that starts the problem.
+                      </label>
+                    </li>
+
+                    <li class="d-flex align-items-start gap-2">
+                      <input class="form-check-input checklist-checkbox mt-1 main-check" type="checkbox" id="c4"
+                             {% if assignment.user_status == 'submitted' %}disabled{% endif %}>
+                      <label class="small finish-text-body" for="c4">
+                        <strong>Actions / Attempts</strong> The character tries to fix it .
+                      </label>
+                    </li>
+
+                    <li class="d-flex align-items-start gap-2">
+                      <input class="form-check-input checklist-checkbox mt-1 main-check" type="checkbox" id="c5"
+                             {% if assignment.user_status == 'submitted' %}disabled{% endif %}>
+                      <label class="small finish-text-body" for="c5">
+                        <strong>Resolution</strong> The ending shows what happened and how the problem ends.
+                      </label>
+                    </li>
+
+                  </ul>
+
+                  {# Optional: tiny hint that adapts to the “part” #}
+                  <div class="small text-muted mt-3 finish-text-body" style="color:#64748b!important;">
+                    {% if part == 'beginning' %}
+                      Tip: In the beginning, make Character + Setting very clear.
+                    {% elif part == 'middle' %}
+                      Tip: In the middle, focus on the Problem and Actions.
+                    {% else %}
+                      Tip: In the ending, make the Resolution clear and complete.
                     {% endif %}
                   </div>
+
                 </div>
-              {% endfor %}
+              </div>
+
+              {# ---------- One-sentence GPT Idea card ---------- #}
+              <div class="col-lg-5">
+                <div class="idea-card h-100">
+                  <div class="d-flex align-items-center justify-content-between mb-2">
+                    <div class="idea-title">Need an idea?</div>
+                    <button type="button"
+                            class="btn btn-sm btn-idea"
+                            id="getIdeaBtn"
+                            data-assignment-id="{{ assignment.id }}"
+                            {% if assignment.user_status == 'submitted' %}disabled{% endif %}>
+                      Get one sentence
+                    </button>
+                  </div>
+
+                  <div class="idea-one-line" id="ideaLine">
+                    Click the button to get one helpful sentence.
+                  </div>
+
+                  <div class="d-flex gap-2 mt-3">
+                    <button type="button"
+                            class="btn btn-sm btn-outline-secondary"
+                            id="insertIdeaBtn"
+                            disabled
+                            {% if assignment.user_status == 'submitted' %}disabled{% endif %}>
+                      Add to my story
+                    </button>
+                    <button type="button"
+                            class="btn btn-sm btn-outline-secondary"
+                            id="newIdeaBtn"
+                            disabled
+                            {% if assignment.user_status == 'submitted' %}disabled{% endif %}>
+                      New idea
+                    </button>
+                  </div>
+
+                  <div class="small text-muted mt-3">
+                    One sentence only. You can change words to make it yours.
+                  </div>
+                </div>
+              </div>
+              {# ---------- END One-sentence GPT Idea card ---------- #}
+
             </div>
           {% endif %}
-          {# ---------- END NEW: WRITING WORKSHEET SECTIONS ---------- #}
+          {# =========================
+             END writing helper
+             ========================= #}
 
-          {# ---------- CONDITIONAL STORY PREVIEW (Only for Story Completion) ---------- #}
-          {# Show if it's NOT a 'writing' type (i.e., a true Finish the Story task linked to content) #}
-          {% if assignment.assignment_type != 'writing' or draft and draft.partial_text and draft.partial_text | length > 10 %}
+          {# ---------- Story preview ---------- #}
+          {% if assignment.assignment_type != 'writing' or (draft and draft.partial_text and draft.partial_text | length > 10) %}
             <h5 class="fw-semibold mb-3 finish-section-title">The Story So Far...</h5>
             <div class="border rounded-4 p-4 bg-story-preview finish-text-body mb-4 story-preview-box story-content-rendered">
 
-              {# --- CUSTOM RENDERING LOGIC FOR MARKDOWN SECTIONS --- #}
-              {# Check if draft content exists and contains the structured marker (###) #}
+              {# We now standardize partial_text to the "### ... ---" format only. #}
               {% if draft and draft.partial_text and '###' in draft.partial_text %}
-
                 {% set parts = draft.partial_text.split('###') %}
-                {% set formatted_text = '' %}
-
-                {% for part in parts %}
+                {% for partx in parts %}
                   {% if loop.index > 1 %}
-                    {# The split relies on the Python structure: ### [SECTION NAME] --- CONTENT --- #}
-                    {% set split_content = part.split('---', 1) %}
+                    {% set split_content = partx.split('---', 1) %}
                     {% set section_name_full = split_content[0] | default('') | trim %}
                     {% set section_content = split_content[1] | default('') | replace('***', '') | trim %}
                     {% set section_name = section_name_full | replace('The', '') | trim %}
 
-                    {# --- Render Section Title --- #}
                     {% if section_name %}
                       <div class="story-section-header">
-                          <span class="story-section-label">{{ section_name }}</span>
+                        <span class="story-section-label">{{ section_name }}</span>
                       </div>
+                      <hr class="story-section-underline">
                     {% endif %}
 
-                    {# --- Render Content, treating newlines as paragraphs/breaks --- #}
                     <div class="story-section-content">
                       {{ section_content | nl2br | safe }}
                     </div>
 
-                    {# --- Add Separator (FIXED: Use 'in' operator for 'MISSING') --- #}
                     {% set content_check = section_content | default('') %}
                     {% if not 'MISSING' in content_check and not loop.last %}
-                        <hr class="story-section-divider">
+                      <hr class="story-section-divider">
                     {% endif %}
-
                   {% endif %}
                 {% endfor %}
-
-              {# Fallback for simple rendering if no structured markers are found #}
               {% elif draft and draft.partial_text %}
-                 {{ draft.partial_text | nl2br }}
+                <div class="story-section-content">
+                  {{ draft.partial_text | nl2br | safe }}
+                </div>
               {% endif %}
 
             </div>
           {% endif %}
-          {# ---------- END CONDITIONAL STORY PREVIEW ---------- #}
+          {# ---------- End story preview ---------- #}
 
-
-          {# ---------- END NEW: CHECKLIST ---------- #}
-
-          <form method="post">
+          <form method="post" id="finishForm">
             <div class="mb-3">
               <label class="form-label fw-semibold finish-section-title">
                 {% if assignment.assignment_type == 'writing' %}
-                  Write your full story here!
+                  Write here
                 {% else %}
-                  Write your brilliant ending!
+                  Write your ending here
                 {% endif %}
               </label>
+
               <textarea
                 name="completion_text"
-                rows="6"
+                rows="8"
                 class="form-control rounded-3 finish-textarea"
-                placeholder="Continue the story in your own words. Use your best words and imagination!"
-              {% if assignment.user_status == 'submitted' %}disabled{% endif %}
+                id="completionText"
+                placeholder="Write your story here."
+                {% if assignment.user_status == 'submitted' %}disabled{% endif %}
               >{{ submission.completion_text if submission else "" }}</textarea>
             </div>
 
             {% if assignment.user_status == 'submitted' %}
               <p class="small text-muted finish-text-body mt-3">
-                <i class="bi bi-info-circle me-1"></i> You have already submitted this assignment. You can view your work on the assignments list.
+                <i class="bi bi-info-circle me-1"></i> You have already submitted this assignment.
               </p>
             {% endif %}
 
@@ -150,7 +257,7 @@
                       class="btn btn-lg btn-action-primary finish-text-button rounded-pill shadow-lg"
                       {% if assignment.user_status == 'submitted' %}disabled{% endif %}
                       id="submitButton">
-                Submit {% if assignment.assignment_type == 'writing' %}Story{% else %}Ending{% endif %} <i class="bi bi-send-fill ms-1"></i>
+                Submit <i class="bi bi-send-fill ms-1"></i>
               </button>
             </div>
           </form>
@@ -161,278 +268,216 @@
   </div>
 </div>
 
-{# Submission Success Modal #}
-{% if assignment.user_status == 'submitted' and request.method == 'POST' %}
-<div class="modal fade" id="submissionSuccessModal" tabindex="-1" aria-labelledby="submissionSuccessLabel" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content rounded-4 modal-success-v8">
-      <div class="modal-header border-0 pb-0">
-        <h5 class="modal-title finish-main-title text-success-color" id="submissionSuccessLabel">Mission Accomplished!</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body finish-text-body text-center">
-        <p class="fs-4 text-deep-blue"><i class="bi bi-check-circle-fill me-2"></i>Submission Successful!</p>
-        <p>Your writing has been saved. Your teacher will review it soon!</p>
-      </div>
-      <div class="modal-footer border-0 pt-0">
-        <a href="{{ url_for('assignments_list') }}" class="btn btn-action-primary rounded-pill finish-text-button">
-          Go to Missions List
-        </a>
-      </div>
-    </div>
-  </div>
-</div>
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-  const successModal = new bootstrap.Modal(document.getElementById('submissionSuccessModal'));
-  successModal.show();
-});
+(function(){
+  // checklist progress
+  function updateChecklist() {
+    const checks = Array.from(document.querySelectorAll('.main-check'));
+    if (!checks.length) return;
+    const done = checks.filter(c => c.checked).length;
+    const total = checks.length;
+    const pct = Math.round((done / total) * 100);
+    const bar = document.getElementById('checkProgressBar');
+    const lbl = document.getElementById('checkCountLabel');
+    if (bar) bar.style.width = pct + '%';
+    if (lbl) lbl.textContent = done + ' / ' + total;
+  }
+  document.querySelectorAll('.main-check').forEach(c => c.addEventListener('change', updateChecklist));
+  updateChecklist();
+
+  // one-sentence idea (fetch from backend)
+  const getBtn = document.getElementById('getIdeaBtn');
+  const newBtn = document.getElementById('newIdeaBtn');
+  const insertBtn = document.getElementById('insertIdeaBtn');
+  const ideaLine = document.getElementById('ideaLine');
+  const box = document.getElementById('completionText');
+
+  let lastIdea = "";
+
+  function insertAtCursor(textarea, text) {
+    if (!textarea) return;
+    const start = textarea.selectionStart ?? textarea.value.length;
+    const end   = textarea.selectionEnd ?? textarea.value.length;
+    const before = textarea.value.substring(0, start);
+    const after  = textarea.value.substring(end);
+    const glue = (before.trim().length && !before.endsWith("\n")) ? "\n" : "";
+    textarea.value = before + glue + text + "\n" + after;
+    textarea.focus();
+    const pos = (before + glue + text + "\n").length;
+    textarea.setSelectionRange(pos, pos);
+  }
+
+  async function fetchIdea() {
+    const aid = getBtn?.dataset?.assignmentId;
+    if (!aid) return;
+    ideaLine.textContent = "Thinking...";
+    getBtn.disabled = true;
+    try {
+      const r = await fetch(`/assignments/${aid}/one_idea`, { method: "POST" });
+      const data = await r.json();
+      if (!data || !data.idea) throw new Error("No idea");
+      lastIdea = data.idea;
+      ideaLine.textContent = data.idea;
+      insertBtn.disabled = false;
+      newBtn.disabled = false;
+    } catch (e) {
+      ideaLine.textContent = "Sorry, I couldn’t get an idea. Try again.";
+      insertBtn.disabled = true;
+      newBtn.disabled = false;
+    } finally {
+      getBtn.disabled = false;
+    }
+  }
+
+  getBtn?.addEventListener("click", fetchIdea);
+  newBtn?.addEventListener("click", fetchIdea);
+  insertBtn?.addEventListener("click", () => {
+    if (!lastIdea) return;
+    insertAtCursor(box, lastIdea);
+  });
+})();
 </script>
-{% endif %}
 
 <style>
-/* Define Child-Like Theme Variables */
-:root {
-    --coral-main: #ff6b6b;
-    --coral-light: #ffd7cc;
-    --ink: #111827;
-    --muted: #6b7280;
-    --paper: #ffffff;
-    --success-color: #10b981; /* Green */
-    --info-color: #3b82f6;
-    --deep-blue: #0A3D62;
-    --shadow-soft: 0 10px 30px rgba(255, 107, 107, 0.1), 0 4px 8px rgba(0, 0, 0, 0.05);
+:root{
+  --coral-main:#ff6b6b;
+  --coral-light:#ffd7cc;
+  --ink:#111827;
+  --muted:#6b7280;
+  --deep-blue:#0A3D62;
 }
 
-/* --- Font Application --- */
-.finish-main-title {
-    font-family: 'Baloo 2', cursive;
-    font-weight: 800;
-    color: var(--coral-main);
-    font-size: 2.2rem;
-    line-height: 1.1;
+/* Fonts */
+.finish-main-title{font-family:'Baloo 2',cursive;font-weight:800;color:var(--coral-main);font-size:2.2rem;line-height:1.1;}
+.finish-section-title{font-family:'Baloo 2',cursive;font-weight:700!important;color:var(--ink);font-size:1.4rem;}
+.finish-sub-text,.finish-text-body,.finish-text-button{font-family:'Fredoka','Nunito',sans-serif;}
+.finish-sub-text{font-size:1.15rem;color:var(--muted)!important;font-weight:500;}
+.finish-text-body{font-weight:500;color:var(--muted)!important;}
+.finish-text-button{font-weight:600!important;}
+.text-deep-blue{color:var(--deep-blue)!important;}
+
+/* Card */
+.finish-card-v8{
+  border-radius:1.75rem;
+  background:#fffcf8;
+  box-shadow:0 1rem 3rem rgba(255,107,107,0.15);
+  border:3px solid var(--coral-light)!important;
 }
-.finish-section-title {
-    font-family: 'Baloo 2', cursive;
-    font-weight: 700 !important;
-    color: var(--ink);
-    font-size: 1.4rem;
+.border-top-soft{border-top:1px solid rgba(255,107,107,0.2)!important;}
+
+/* Reminder strip */
+.story-reminder{
+  background:rgba(10,61,98,0.06);
+  border:1px solid rgba(10,61,98,0.14);
+  border-radius:1.25rem;
+  padding:0.9rem 1rem;
 }
-.finish-sub-text, .finish-text-body, .finish-text-button {
-    font-family: 'Fredoka', 'Nunito', sans-serif;
+.reminder-title{
+  font-family:'Baloo 2',cursive;
+  font-weight:800;
+  color:var(--deep-blue);
+  font-size:1.25rem;
 }
-.finish-sub-text {
-    font-size: 1.15rem;
-    color: var(--muted) !important;
-    font-weight: 500;
+.reminder-text{color:#475569;}
+
+/* Checklist */
+.check-card{
+  background:#fffdf7;
+  border-radius:1.25rem;
+  border:2px dashed rgba(255,107,107,0.35);
+  padding:1rem 1rem 1.1rem;
+  box-shadow:0 6px 14px rgba(0,0,0,0.03);
 }
-.finish-text-body {
-    font-weight: 500;
-    color: var(--muted) !important;
+.check-title{
+  font-family:'Baloo 2',cursive;
+  font-weight:800;
+  color:var(--deep-blue);
+  font-size:1.15rem;
 }
-.finish-text-button {
-    font-weight: 600 !important;
+.finish-checklist-list{list-style:none;padding-left:0;margin-bottom:0;}
+.finish-checklist-list li + li{margin-top:0.35rem;}
+.checklist-checkbox{width:1rem;height:1rem;}
+.check-progress{height:10px;border-radius:999px;background:rgba(10,61,98,0.08);overflow:hidden;}
+.check-progress .progress-bar{background:var(--deep-blue);}
+
+/* Idea card */
+.idea-card{
+  background:#ffffff;
+  border-radius:1.25rem;
+  border:2px solid rgba(255,215,204,0.9);
+  padding:1rem 1rem 1.1rem;
+  box-shadow:0 10px 22px rgba(0,0,0,0.05);
 }
-.text-deep-blue {
-    color: var(--deep-blue) !important;
+.idea-title{
+  font-family:'Baloo 2',cursive;
+  font-weight:800;
+  color:var(--deep-blue);
+  font-size:1.15rem;
 }
-.text-success-color {
-    color: var(--success-color) !important;
+.btn-idea{
+  background:rgba(10,61,98,0.10);
+  border:1px solid rgba(10,61,98,0.18);
+  color:var(--deep-blue);
+  font-weight:800;
+  border-radius:999px;
+  padding:0.35rem 0.8rem;
+}
+.btn-idea:hover{background:rgba(10,61,98,0.16);}
+.idea-one-line{
+  margin-top:0.35rem;
+  background:rgba(255,107,107,0.08);
+  border:1px solid rgba(255,107,107,0.18);
+  border-radius:1rem;
+  padding:0.85rem 0.9rem;
+  color:#0f172a;
+  font-weight:700;
+  line-height:1.4;
+  min-height:64px;
 }
 
-/* --- Card & Layout --- */
-.finish-card-v8 {
-    border-radius: 1.75rem; /* Large rounded corners */
-    background: #fffcf8; /* Soft off-white background */
-    box-shadow: 0 1rem 3rem rgba(255, 107, 107, 0.15); /* Coral shadow */
-    border: 3px solid var(--coral-light) !important;
+/* Story preview */
+.story-preview-box{
+  font-size:1.1rem;
+  line-height:1.6;
+  background:#fefefe !important;
+  border:2px solid rgba(135,206,250,0.2) !important;
+  box-shadow:inset 0 2px 4px rgba(0,0,0,0.05);
+  color:#475569;
+  max-height:none !important;
+  overflow:visible !important;
 }
-.border-top-soft {
-    border-top: 1px solid rgba(255, 107, 107, 0.2) !important;
+.story-section-underline{
+  border:none;
+  border-top:2px solid rgba(10,61,98,0.18);
+  margin:0.35rem 0 0.85rem;
 }
-
-/* --- Story Preview Box FIX --- */
-.story-preview-box {
-    font-size: 1.1rem;
-    line-height: 1.6;
-    background: #fefefe !important;
-    border: 2px solid rgba(135, 206, 250, 0.2) !important;
-    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
-    color: #475569;
-    max-height: none !important;
-    overflow: visible !important;
+.story-content-rendered .story-section-label{
+  font-family:'Baloo 2',cursive;
+  font-size:1.25rem;
+  color:var(--deep-blue);
+  display:inline-block;
 }
-.story-content-rendered .story-section-header {
-    /* Styles for the visible part header */
-    padding: 0.5rem 0;
-    margin-top: 1rem;
-}
-.story-content-rendered .story-section-label {
-    /* Styles for the text like 'Beginning' or 'Middle' */
-    font-family: 'Baloo 2', cursive;
-    font-size: 1.25rem;
-    color: var(--deep-blue);
-    display: inline-block;
-    padding-bottom: 0.2rem;
-/*    border-bottom: 3px solid var(--coral-light);*/
-}
-.story-content-rendered .story-section-content {
-    /* Styles for the main text blocks */
-    margin-top: 0.5rem;
-    margin-bottom: 1rem;
-    line-height: 1.7;
-}
-.story-content-rendered .story-section-content strong {
-    /* Style for the [ MISSING! ] placeholder */
-    display: block;
-    text-align: center;
-    font-family: 'Baloo 2', cursive;
-    font-size: 1.2rem;
-    color: var(--coral-main);
-    padding: 1.5rem 0;
-    background: #fff6ed;
-    border-radius: 0.75rem;
-    border: 2px dashed var(--coral-light);
-    margin: 1rem 0;
-}
-.story-content-rendered .story-section-divider {
-    /* Custom dashed separator between visible parts */
-    border: none;
-    border-top: 2px dashed #ccc;
-    margin: 2rem 0;
-}
-.story-content-rendered .story-section-content br {
-    /* Reduce vertical space for single line breaks */
-    content: "";
-    display: block;
-    margin: 0;
-    line-height: 0;
-}
-.story-content-rendered .story-section-content br+br {
-    /* Increase vertical space for double line breaks (paragraphs) */
-    margin: 1em 0 0;
-    line-height: normal;
+.story-content-rendered .story-section-divider{
+  border:none;
+  border-top:2px dashed #ccc;
+  margin:1.6rem 0;
 }
 
-
-/* --- NEW: Worksheet section cards --- */
-.finish-section-card {
-    background: #fffdf7;
-    border-radius: 1.25rem;
-    border: 2px dashed rgba(255, 107, 107, 0.35);
-    padding: 0.9rem 1rem;
-    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.03);
+/* Textarea */
+.finish-textarea{
+  min-height:220px;
+  padding:1rem;
+  font-size:1.12rem;
+  font-family:'Fredoka','Nunito',sans-serif;
+  border:2px solid var(--coral-light);
+  box-shadow:0 2px 5px rgba(0,0,0,0.05);
+  transition:border-color 0.2s;
 }
-.finish-section-label {
-    font-family: 'Baloo 2', cursive;
-    font-size: 1.1rem;
-    color: var(--deep-blue);
+.finish-textarea:focus{
+  border-color:var(--coral-main);
+  box-shadow:0 0 0 .2rem rgba(255,107,107,.25);
 }
-.finish-guiding-list {
-    padding-left: 1.2rem;
-    margin-bottom: 0;
-}
-.finish-guiding-list li {
-    margin-bottom: 0.2rem;
-}
-
-/* --- NEW: Checklist --- */
-.finish-checklist-list {
-    list-style: none;
-    padding-left: 0;
-    margin-bottom: 0;
-}
-.finish-checklist-list li + li {
-    margin-top: 0.2rem;
-}
-.checklist-checkbox {
-    width: 1rem;
-    height: 1rem;
-}
-
-/* --- Alerts --- */
-.finish-alert-v8 {
-    border-radius: 1rem;
-    padding: 1rem 1.25rem;
-}
-.alert-info {
-    background-color: #e6f0ff;
-    border-color: #c9e0ff;
-    color: var(--info-color);
-}
-.alert-info strong {
-    color: var(--deep-blue);
-}
-
-/* --- Input Area --- */
-.finish-textarea {
-    min-height: 200px;
-    padding: 1rem;
-    font-size: 1.15rem;
-    font-family: 'Fredoka', 'Nunito', sans-serif;
-    border: 2px solid var(--coral-light);
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
-    transition: border-color 0.2s;
-}
-.finish-textarea:focus {
-    border-color: var(--coral-main);
-    box-shadow: 0 0 0 .2rem rgba(255,107,107,.25);
-}
-.finish-textarea[disabled] {
-    background-color: #f7f7f7;
-    cursor: not-allowed;
-}
-
-/* --- Buttons --- */
-.btn-lg {
-    padding: 0.75rem 1.5rem;
-}
-.rounded-pill {
-    border-radius: 999px !important;
-}
-.btn-action-primary {
-    background-color: var(--coral-main);
-    border-color: var(--coral-main);
-    color: white;
-    box-shadow: 0 6px 14px rgba(255, 107, 107, 0.35);
-    transition: all 0.2s ease;
-}
-.btn-action-primary:hover:not(:disabled) {
-    background-color: #e86060;
-    border-color: #e86060;
-    transform: translateY(-2px);
-    box-shadow: 0 8px 16px rgba(255, 107, 107, 0.5);
-}
-.btn-action-primary:disabled {
-    background-color: #ccc;
-    border-color: #ccc;
-    box-shadow: none;
-    cursor: not-allowed;
-}
-
-.btn-outline-secondary {
-    font-weight: 500;
-}
-
-/* --- Modal Theming --- */
-.modal-success-v8 {
-    background-color: #e6fff4; /* Very light success background */
-    border: 3px solid var(--success-color);
-    box-shadow: 0 0 0 0.5rem rgba(16, 185, 129, 0.1);
-}
-.modal-success-v8 .finish-main-title {
-    color: var(--success-color);
-}
-.modal-footer .btn-action-primary {
-    background-color: var(--deep-blue);
-    border-color: var(--deep-blue);
-    box-shadow: 0 4px 8px rgba(10, 61, 98, 0.3);
-}
-.modal-footer .btn-action-primary:hover {
-    background-color: #082a45;
-    border-color: #082a45;
-    transform: translateY(-1px);
-}
+.finish-textarea[disabled]{background:#f7f7f7;cursor:not-allowed;}
 </style>
 
 {% endblock %}

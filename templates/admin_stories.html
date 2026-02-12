@@ -2,1203 +2,783 @@
 {% block title %}Story Review · LexiTale{% endblock %}
 
 {% block content %}
-<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Baloo+2:wght@700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@300;400;500;600&family=Baloo+2:wght@600;700;800&display=swap" rel="stylesheet">
 
 {% set active_tab = request.args.get('tab') or active_tab or 'assign' %}
 {% set fragment = request.args.get('fragment') or fragment or '' %}
 {% set selected_class_id = request.args.get('class_id') or selected_class_id or '' %}
 
-<div class="admin-stories-wrap-v2 mt-3 mt-md-4">
-  <div class="p-3 p-md-4">
+<div class="lexi-admin-wrapper mt-3 mt-md-5">
+  <div class="container-fluid px-3 px-md-5">
 
-    <!-- Header: Title + Class Switcher + Create Class -->
-    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3 mb-md-4">
+    <div class="d-flex justify-content-between align-items-end flex-wrap gap-4 mb-5">
       <div class="d-flex align-items-center gap-3">
-        <div class="admin-pill-icon-v7">
+        <div class="lexi-icon-box">
           <i class="bi bi-stars"></i>
         </div>
         <div>
-          <h1 class="mb-1 fw-bolder admin-title-v7">Admin Dashboard</h1>
-          <p class="mb-0 text-muted small admin-text-body">
-            Assign worksheets, view assigned work, and grade student submissions.
-          </p>
+          <h1 class="lexi-page-title mb-1">Admin Dashboard</h1>
+          <p class="lexi-text-muted mb-0">Assign worksheets, track progress, and grade submissions.</p>
         </div>
       </div>
 
-      <div class="d-flex align-items-center gap-2 flex-wrap">
-
-        <!-- Class selector (changes dashboard scope) -->
-        <form method="get" action="{{ url_for('admin_stories') }}" class="d-flex align-items-center gap-2">
-          <input type="hidden" name="tab" value="{{ active_tab }}">
-          {% if fragment %}
-            <input type="hidden" name="fragment" value="{{ fragment }}">
-          {% endif %}
-
-          <div class="d-flex flex-column align-items-start">
-            <label class="form-label small text-uppercase text-muted admin-text-label mb-1" for="classSelectTop">
-              Select a class
-            </label>
-            <select id="classSelectTop"
-                    name="class_id"
-                    class="form-select rounded-pill admin-text-body class-select-v7"
-                    onchange="this.form.submit()">
-              <option value="">All classes</option>
+      <div class="d-flex align-items-end gap-2 flex-wrap">
+        <form method="get" action="{{ url_for('admin_stories') }}" class="d-flex flex-column">
+          <label class="lexi-label-micro mb-1">Current Class</label>
+          <div class="position-relative">
+            <select name="class_id" class="lexi-select-pill pe-5" onchange="this.form.submit()">
+              <option value="">All Classes</option>
               {% for c in classes or [] %}
                 <option value="{{ c.id }}" {% if selected_class_id and (selected_class_id|string) == (c.id|string) %}selected{% endif %}>
                   {{ c.name }}
                 </option>
               {% endfor %}
             </select>
+            <i class="bi bi-chevron-down position-absolute top-50 end-0 translate-middle-y me-3 text-muted" style="pointer-events: none;"></i>
           </div>
+          <input type="hidden" name="tab" value="{{ active_tab }}">
+          {% if fragment %}<input type="hidden" name="fragment" value="{{ fragment }}">{% endif %}
         </form>
 
-        <!-- Create Class button (replaces New Story in header) -->
-        <button type="button"
-                class="btn d-none mt-4 btn-sm btn-action-primary-v7 rounded-pill shadow-sm admin-text-button"
-                data-bs-toggle="modal"
-                data-bs-target="#createClassModal">
-          <i class="bi bi-people-fill me-1"></i> Create Class
+        <button type="button" class="btn lexi-btn-secondary" data-bs-toggle="modal" data-bs-target="#createClassModal">
+          <i class="bi bi-plus-lg me-1"></i> New Class
         </button>
-        <a href="/classes"
-                class="btn mt-4 btn-sm btn-action-primary-v7 rounded-pill shadow-sm admin-text-button">
 
-          Manage Class
+        <a href="/classes" class="btn lexi-btn-primary">
+          <i class="bi bi-gear-fill me-1"></i> Manage
         </a>
-
       </div>
     </div>
 
-    <!-- Join code helper (shown when a class is selected and code is available) -->
     {% if selected_class and (selected_class.join_code or selected_class.code) %}
       {% set join_code = selected_class.join_code or selected_class.code %}
-      <div class="card border-0 rounded-4 shadow-sm mb-4">
-        <div class="card-body p-3 p-md-4">
-          <div class="d-flex align-items-start justify-content-between flex-wrap gap-2">
-            <div>
-              <h6 class="fw-bold mb-1 admin-text-title" style="font-size:1.1rem;">
-                Class Join Code · <span class="text-coral-dark">{{ selected_class.name }}</span>
-              </h6>
-              <div class="small text-muted admin-text-body">
-                Share this code with students so they can join your class.
-              </div>
-            </div>
-
-            <div class="d-flex align-items-center gap-2">
-              <div class="joincode-pill">
-                <span class="joincode-label">CODE</span>
-                <span class="joincode-value" id="joinCodeValue">{{ join_code }}</span>
-              </div>
-              <button type="button"
-                      class="btn btn-sm btn-action-outline-v7 rounded-pill admin-text-button"
-                      id="copyJoinCodeBtn"
-                      data-copy-text="{{ join_code }}">
-                <i class="bi bi-clipboard me-1"></i> Copy
-              </button>
-            </div>
+      <div class="lexi-card mb-4 p-4 border-start border-4 border-coral">
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+          <div>
+            <h6 class="lexi-heading-sm mb-1">Join Code: <span class="text-coral">{{ selected_class.name }}</span></h6>
+            <p class="lexi-text-muted mb-0">Share this code with your students to enroll them.</p>
           </div>
-
-          <div class="mt-3 small admin-text-body">
-            Students can join at:
-            <span class="text-muted">Classes → Join Class</span>
-            (or whatever page you provide for joining).
+          <div class="d-flex align-items-center gap-2 bg-light rounded-pill p-1 pe-3">
+            <div class="bg-white rounded-pill px-3 py-2 fw-bold font-monospace shadow-sm text-dark">
+              {{ join_code }}
+            </div>
+            <button type="button" class="btn btn-sm btn-link text-decoration-none text-coral fw-bold"
+                    id="copyJoinCodeBtn" data-copy-text="{{ join_code }}">
+              <i class="bi bi-clipboard me-1"></i> Copy
+            </button>
           </div>
         </div>
       </div>
     {% endif %}
 
-    <ul class="nav nav-pills mb-4 gap-2" id="adminTabs" role="tablist">
-      <li class="nav-item" role="presentation">
+    <ul class="nav nav-pills lexi-nav-pills mb-4 gap-2" role="tablist">
+      <li class="nav-item">
         <a class="nav-link {% if active_tab == 'assign' %}active{% endif %}"
-           id="assign-tab"
-           data-bs-toggle="pill"
-           data-bs-target="#assign-pane"
-           href="{{ url_for('admin_stories', tab='assign', class_id=selected_class_id or None) }}"
-           role="tab"
-           aria-controls="assign-pane"
-           aria-selected="{{ 'true' if active_tab == 'assign' else 'false' }}">
-          <i class="bi bi-book-fill me-1"></i> Assign Worksheets
+           href="{{ url_for('admin_stories', tab='assign', class_id=selected_class_id or None) }}">
+          <i class="bi bi-magic me-2"></i>Create & Assign
         </a>
       </li>
-
-      <li class="nav-item" role="presentation">
+      <li class="nav-item">
         <a class="nav-link {% if active_tab == 'assigned' %}active{% endif %}"
-           id="assigned-tab"
-           data-bs-toggle="pill"
-           data-bs-target="#assigned-pane"
-           href="{{ url_for('admin_stories', tab='assigned', class_id=selected_class_id or None) }}"
-           role="tab"
-           aria-controls="assigned-pane"
-           aria-selected="{{ 'true' if active_tab == 'assigned' else 'false' }}">
-          <i class="bi bi-clipboard-check me-1"></i> Assigned Worksheets
+           href="{{ url_for('admin_stories', tab='assigned', class_id=selected_class_id or None) }}">
+           <i class="bi bi-list-check me-2"></i>Active Worksheets
         </a>
       </li>
-
-      <li class="nav-item" role="presentation">
+      <li class="nav-item">
         <a class="nav-link {% if active_tab == 'submitted' %}active{% endif %}"
-           id="submitted-tab"
-           data-bs-toggle="pill"
-           data-bs-target="#review-pane"
-           href="{{ url_for('admin_stories', tab='submitted', class_id=selected_class_id or None) }}"
-           role="tab"
-           aria-controls="review-pane"
-           aria-selected="{{ 'true' if active_tab == 'submitted' else 'false' }}">
-          <i class="bi bi-award-fill me-1"></i> Submitted Work
+           href="{{ url_for('admin_stories', tab='submitted', class_id=selected_class_id or None) }}">
+           <i class="bi bi-inbox-fill me-2"></i>Submissions
         </a>
       </li>
     </ul>
 
-    <div class="tab-content" id="adminTabsContent">
+    <div class="tab-content">
 
-      <!-- ASSIGN TAB -->
-      <div class="tab-pane fade {% if active_tab == 'assign' %}show active{% endif %}"
-           id="assign-pane" role="tabpanel" aria-labelledby="assign-tab">
+      <div class="tab-pane fade {% if active_tab == 'assign' %}show active{% endif %}">
+        <div class="lexi-card p-4 p-md-5">
 
-        <div class="card border-0 rounded-4 shadow-sm mb-4">
-          <div class="card-body p-3 p-md-4">
-            <h2 class="fw-bold mb-2 admin-title-v7" style="font-size: 1.75rem;">
-              Create & Assign Worksheet
-            </h2>
-            <p class="text-muted small admin-text-body mb-4">
-              Choose a worksheet type, let GPT generate the tasks, and assign it to specific students.
-              {% if selected_class %}
-                <span class="d-block mt-1">Current class: <b class="text-coral-dark">{{ selected_class.name }}</b></span>
-              {% elif selected_class_id %}
-                <span class="d-block mt-1">Current class selected.</span>
-              {% else %}
-                <span class="d-block mt-1 text-warning-v7">Tip: Select a class to assign only to students in that class.</span>
-              {% endif %}
-            </p>
+          <div class="text-center mb-5">
+            <h2 class="lexi-section-title">Worksheet Wizard</h2>
+            <p class="lexi-text-muted">Generate AI-powered content and assign it to your class in 3 steps.</p>
 
             {% if not selected_class_id %}
-              <div class="alert bg-light-soft-blue-v7 small admin-text-body mb-4">
-                <b>Please select a class</b> at the top to assign worksheets by class.
-                (You can still create stories any time using “New Story”.)
-              </div>
-            {% endif %}
-
-            <div class="worksheet-stepper d-flex align-items-center gap-3 mb-4">
-              <div class="d-flex align-items-center gap-2">
-                <div class="step-circle step-circle-active" data-step-circle="1">1</div>
-                <span class="small admin-text-body d-none d-md-inline">Title</span>
-              </div>
-              <div class="step-line flex-grow-1 d-none d-md-block"></div>
-              <div class="d-flex align-items-center gap-2">
-                <div class="step-circle" data-step-circle="2">2</div>
-                <span class="small admin-text-body d-none d-md-inline">Type & story</span>
-              </div>
-              <div class="step-line flex-grow-1 d-none d-md-block"></div>
-              <div class="d-flex align-items-center gap-2">
-                <div class="step-circle" data-step-circle="3">3</div>
-                <span class="small admin-text-body d-none d-md-inline">Assign students</span>
-              </div>
-            </div>
-
-            {% if stories %}
-            <form id="worksheetForm"
-                  method="post"
-                  action="{{ url_for('admin_generate_worksheet') }}"
-                  class="worksheet-gen-form">
-
-              <!-- IMPORTANT: pass class_id so backend can assign by class -->
-              <input type="hidden" name="class_id" value="{{ selected_class_id }}">
-
-              <div class="worksheet-step active" data-step="1">
-                <div class="row g-3 mb-3">
-                  <div class="col-md-8">
-                    <label for="worksheetTitleInput" class="form-label admin-text-label small text-uppercase text-muted mb-1">
-                      Worksheet Title
-                    </label>
-                    <input type="text"
-                           id="worksheetTitleInput"
-                           name="worksheet_title"
-                           class="form-control rounded-3 admin-text-body"
-                           placeholder="e.g. Writing · My Adventure Story"
-                           required
-                           {% if not selected_class_id %}disabled{% endif %}>
-                    <div class="form-text small text-muted admin-text-body">
-                      This title appears on the student's assignment page.
-                    </div>
-                  </div>
-                </div>
-
-                <div class="d-flex justify-content-end mt-3">
-                  <button type="button"
-                          class="btn btn-action-primary-v7 rounded-pill shadow-sm admin-text-button btn-step-next"
-                          data-next-step="2"
-                          {% if not selected_class_id %}disabled{% endif %}>
-                    Next: Choose type <i class="bi bi-arrow-right ms-1"></i>
-                  </button>
-                </div>
-              </div>
-
-              <div class="worksheet-step" data-step="2">
-                <div class="mb-3 p-3 rounded-4 bg-light-soft-blue-v7">
-                  <label class="form-label small text-uppercase fw-bold text-coral-dark mb-2 admin-text-label">
-                    Worksheet Type
-                  </label>
-                  <div class="d-flex flex-column gap-2">
-                    <div class="form-check">
-                      <input class="form-check-input check-coral-v7"
-                             type="radio"
-                             name="worksheet_type"
-                             id="worksheetTypeWriting"
-                             value="writing"
-                             required
-                             {% if not selected_class_id %}disabled{% endif %}>
-                      <label class="form-check-label fw-medium admin-text-body" for="worksheetTypeWriting">
-                        Writing & Story Creation
-                      </label>
-                    </div>
-                    <div class="form-check">
-                      <input class="form-check-input check-coral-v7"
-                             type="radio"
-                             name="worksheet_type"
-                             id="worksheetTypeReading"
-                             value="reading"
-                             {% if not selected_class_id %}disabled{% endif %}>
-                      <label class="form-check-label fw-medium admin-text-body" for="worksheetTypeReading">
-                        Reading comprehension – <b>MCQ + fill-in-the-blank + short answer</b> based on a selected story.
-                      </label>
-                    </div>
-                  </div>
-                  <div class="small text-warning-v7 mt-2 admin-text-body">
-                    GPT will generate prompts tailored to the selected worksheet type.
-                  </div>
-                </div>
-
-                <div id="step2-writing" class="mb-3 d-none">
-                  <div class="p-3 rounded-4 border bg-white">
-                    <h6 class="mb-3 small text-uppercase fw-bold text-coral-dark admin-text-label">Writing Mode</h6>
-                    <div class="row g-3">
-                      <div class="col-md-6 mb-3">
-                        <label for="writingLevelSelect" class="form-label admin-text-label small text-uppercase text-muted mb-1">
-                          Target Reading/Writing Level
-                        </label>
-                        <select id="writingLevelSelect"
-                                name="writing_level"
-                                class="form-select rounded-3 admin-text-body"
-                                required
-                                {% if not selected_class_id %}disabled{% endif %}>
-                            <option value="beginner">Beginner</option>
-                            <option value="intermediate">Intermediate</option>
-                            <option value="advanced">Advanced</option>
-                        </select>
-                        <div class="form-text small text-muted admin-text-body">
-                            Sets the complexity for the generated story content.
-                        </div>
-                      </div>
-
-                      <div class="col-md-6 mb-3">
-                        <label for="writingModeSelect" class="form-label admin-text-label small text-uppercase text-muted mb-1">
-                          Task Type
-                        </label>
-                        <select id="writingModeSelect"
-                                name="writing_mode"
-                                class="form-select rounded-3 admin-text-body"
-                                required
-                                {% if not selected_class_id %}disabled{% endif %}>
-                            <option value="planning">1. Free Writing (Planning Worksheet)</option>
-                            <option value="completion" selected>2. Story Completion (Missing Part)</option>
-                        </select>
-                        <div class="form-text small text-muted admin-text-body">
-                            Completion mode generates a full story with a random B/M/E section removed.
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div id="step2-reading" class="mb-3 d-none">
-                  <div class="p-3 rounded-4 border bg-white">
-                    <p class="mb-2 small admin-text-body">
-                      <strong>Reading comprehension:</strong> GPT will generate questions from a specific story.
-                    </p>
-                    <div class="row g-3">
-                      <div class="col-md-8">
-                        <label for="worksheetStorySelect" class="form-label admin-text-label small text-uppercase text-muted mb-1">
-                          Story for reading worksheet
-                        </label>
-                        <select id="worksheetStorySelect"
-                                name="story_id"
-                                class="form-select rounded-3 admin-text-body"
-                                {% if not selected_class_id %}disabled{% endif %}>
-                          <option value="">Select a story…</option>
-                          {% for s in stories %}
-                            <option value="{{ s.id }}"
-                                    data-story-title="{{ s.title|e }}">
-                              {{ s.title }} ({{ s.language|upper }} · {{ s.level }})
-                            </option>
-                          {% endfor %}
-                        </select>
-                        <div class="form-text small text-muted admin-text-body">
-                          Required only for reading worksheets. GPT will use this story to generate questions.
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="d-flex justify-content-between mt-3">
-                  <button type="button"
-                          class="btn btn-outline-secondary rounded-pill admin-text-button btn-step-prev"
-                          data-prev-step="1"
-                          {% if not selected_class_id %}disabled{% endif %}>
-                    <i class="bi bi-arrow-left me-1"></i> Back
-                  </button>
-                  <button type="button"
-                          class="btn btn-action-primary-v7 rounded-pill shadow-sm admin-text-button btn-step-next"
-                          data-next-step="3"
-                          {% if not selected_class_id %}disabled{% endif %}>
-                    Next: Select students <i class="bi bi-arrow-right ms-1"></i>
-                  </button>
-                </div>
-              </div>
-
-              <div class="worksheet-step" data-step="3">
-                <div class="mb-3">
-                  <label class="form-label small text-uppercase fw-bold text-muted mb-1 admin-text-label">
-                    Assign To Students
-                  </label>
-
-                  {% if users %}
-                  <div class="border rounded-4 p-3 admin-student-list-v7">
-                    {% for u in users %}
-                    <div class="form-check small mb-1">
-                      <input class="form-check-input check-coral-v7"
-                             type="checkbox"
-                             name="user_ids"
-                             value="{{ u.id }}"
-                             id="worksheet_user_{{ u.id }}"
-                             {% if not selected_class_id %}disabled{% endif %}>
-                      <label class="form-check-label fw-medium admin-text-body" for="worksheet_user_{{ u.id }}">
-                        {{ u.username }}
-                        <span class="text-muted">· {{ u.email }}</span>
-                      </label>
-                    </div>
-                    {% endfor %}
-                  </div>
-                  <div class="form-text small text-muted mt-1 admin-text-body">
-                    The generated worksheet will be assigned to all selected students.
-                  </div>
-                  {% else %}
-                  <p class="small text-muted mb-0 admin-text-body">
-                    No students found in this class.
-                  </p>
-                  {% endif %}
-                </div>
-
-                <div class="d-flex justify-content-between mt-3">
-                  <button type="button"
-                          class="btn btn-outline-secondary rounded-pill admin-text-button btn-step-prev"
-                          data-prev-step="2"
-                          {% if not selected_class_id %}disabled{% endif %}>
-                    <i class="bi bi-arrow-left me-1"></i> Back
-                  </button>
-                  <button type="submit"
-                          id="worksheetSubmitBtn"
-                          class="btn btn-action-primary-v7 rounded-pill shadow-sm admin-text-button"
-                          {% if not selected_class_id %}disabled{% endif %}>
-                    <i class="bi bi-magic me-1"></i>
-                    Generate & Assign Worksheet
-                  </button>
-                </div>
-              </div>
-
-            </form>
-            {% else %}
-              <div class="py-4 text-center text-muted small admin-text-body">
-                No stories yet. Create a story first from the
-                <a href="{{ url_for('story_new') }}">AI Story Generator</a>, then return here to build worksheets.
+              <div class="d-inline-block bg-warning-subtle text-warning-emphasis px-4 py-2 rounded-pill mt-2 fw-medium">
+                <i class="bi bi-exclamation-circle me-1"></i> Please select a class above to start.
               </div>
             {% endif %}
           </div>
+
+          <div class="lexi-stepper mb-5">
+            <div class="step active" data-step-indicator="1">
+              <div class="circle">1</div>
+              <div class="label">Details</div>
+            </div>
+            <div class="line"></div>
+            <div class="step" data-step-indicator="2">
+              <div class="circle">2</div>
+              <div class="label">Type</div>
+            </div>
+            <div class="line"></div>
+            <div class="step" data-step-indicator="3">
+              <div class="circle">3</div>
+              <div class="label">Students</div>
+            </div>
+          </div>
+
+          <form id="worksheetForm" method="post" action="{{ url_for('admin_generate_worksheet') }}">
+            <input type="hidden" name="class_id" value="{{ selected_class_id }}">
+            <input type="hidden" name="include_story_grammar" value="1">
+
+            <div class="worksheet-step active" data-step="1">
+              <div class="row justify-content-center">
+                <div class="col-md-8">
+                  <div class="mb-4">
+                    <label class="lexi-label mb-2">Worksheet Title</label>
+                    <input type="text" name="worksheet_title" id="worksheetTitleInput"
+                           class="form-control lexi-input"
+                           placeholder="e.g. Space Adventure: Week 1" required
+                           {% if not selected_class_id %}disabled{% endif %}>
+                  </div>
+                  <div class="d-flex justify-content-end">
+                    <button type="button" class="btn lexi-btn-primary btn-step-next" data-next-step="2" {% if not selected_class_id %}disabled{% endif %}>
+                      Next Step <i class="bi bi-arrow-right ms-2"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="worksheet-step" data-step="2">
+              <div class="row justify-content-center">
+                <div class="col-lg-9">
+
+                  <label class="lexi-label mb-3 text-center d-block">Choose Worksheet Mode</label>
+
+                  <div class="row g-3 mb-4">
+                    <div class="col-md-6">
+                      <label class="lexi-radio-card">
+                        <input type="radio" name="worksheet_type" value="writing" required {% if not selected_class_id %}disabled{% endif %}>
+                        <div class="card-content">
+                          <div class="icon"><i class="bi bi-pencil-fill"></i></div>
+                          <div class="text">
+                            <h6>Writing & Creation</h6>
+                            <p>Story grammar focus: Character, Setting, Problem & Resolution.</p>
+                          </div>
+                          <div class="check"><i class="bi bi-check-circle-fill"></i></div>
+                        </div>
+                      </label>
+                    </div>
+                    <div class="col-md-6">
+                      <label class="lexi-radio-card">
+                        <input type="radio" name="worksheet_type" value="reading" {% if not selected_class_id %}disabled{% endif %}>
+                        <div class="card-content">
+                          <div class="icon"><i class="bi bi-book-half"></i></div>
+                          <div class="text">
+                            <h6>Reading Comprehension</h6>
+                            <p>AI generates a story + comprehension questions automatically.</p>
+                          </div>
+                          <div class="check"><i class="bi bi-check-circle-fill"></i></div>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div id="step2-writing" class="d-none lexi-sub-settings fade-in">
+                    <div class="row g-3">
+                      <div class="col-md-6">
+                        <label class="lexi-label-micro">Target Level</label>
+                        <select name="writing_level" id="writingLevelSelect" class="form-select lexi-select">
+                          <option value="beginner">Beginner</option>
+                          <option value="intermediate">Intermediate</option>
+                          <option value="advanced">Advanced</option>
+                        </select>
+                      </div>
+                      <div class="col-md-6">
+                        <label class="lexi-label-micro">Task Type</label>
+                        <select name="writing_mode" id="writingModeSelect" class="form-select lexi-select">
+                           <option value="completion" selected>Story Completion (Finish the story)</option>
+                           <option value="planning">Free Writing (Planning)</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div id="step2-reading" class="d-none lexi-sub-settings fade-in">
+                    <div class="mb-3">
+                      <label class="lexi-label-micro text-coral">Topic / Theme (Required)</label>
+                      <input type="text" name="reading_topic" id="readingTopicInput"
+                             class="form-control lexi-input"
+                             placeholder="e.g. Robots playing soccer, A lost puppy, Life on Mars">
+                    </div>
+                    <div class="row g-3">
+                      <div class="col-md-4">
+                        <label class="lexi-label-micro">Difficulty</label>
+                        <select name="worksheet_level" id="readingLevelSelect" class="form-select lexi-select">
+                          <option value="beginner" selected>Beginner</option>
+                          <option value="intermediate">Intermediate</option>
+                          <option value="advanced">Advanced</option>
+                        </select>
+                      </div>
+                      <div class="col-md-4">
+                        <label class="lexi-label-micro">Length</label>
+                        <select name="reading_length" id="readingLengthSelect" class="form-select lexi-select">
+                          <option value="short" selected>Short</option>
+                          <option value="medium">Medium</option>
+                          <option value="long">Long</option>
+                        </select>
+                      </div>
+                      <div class="col-md-4">
+                        <label class="lexi-label-micro">Genre</label>
+                        <select name="reading_genre" id="readingGenreSelect" class="form-select lexi-select">
+                          <option value="" selected>Auto-detect</option>
+                          <option value="adventure">Adventure</option>
+                          <option value="fantasy">Fantasy</option>
+                          <option value="science">Sci-Fi</option>
+                          <option value="realistic">Realistic</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="d-flex justify-content-between mt-5">
+                    <button type="button" class="btn lexi-btn-secondary btn-step-prev" data-prev-step="1">Back</button>
+                    <button type="button" class="btn lexi-btn-primary btn-step-next" data-next-step="3">
+                      Select Students <i class="bi bi-arrow-right ms-2"></i>
+                    </button>
+                  </div>
+
+                </div>
+              </div>
+            </div>
+
+            <div class="worksheet-step" data-step="3">
+              <div class="row justify-content-center">
+                <div class="col-md-8">
+                  <label class="lexi-label mb-3">Assign to...</label>
+
+                  <div class="lexi-student-list mb-4">
+                    {% if users %}
+                      <div class="list-group list-group-flush rounded-3">
+                        {% for u in users %}
+                        <label class="list-group-item d-flex gap-3 align-items-center p-3 cursor-pointer">
+                          <input class="form-check-input flex-shrink-0 lexi-checkbox" type="checkbox" name="user_ids" value="{{ u.id }}" checked>
+                          <span class="pt-1 form-checked-content">
+                            <strong>{{ u.username }}</strong>
+                            <span class="d-block text-muted small">{{ u.email }}</span>
+                          </span>
+                        </label>
+                        {% endfor %}
+                      </div>
+                    {% else %}
+                      <div class="text-center p-4 text-muted border rounded-3 bg-light">
+                        No students found in this class.
+                      </div>
+                    {% endif %}
+                  </div>
+
+                  <div class="d-flex justify-content-between">
+                    <button type="button" class="btn lexi-btn-secondary btn-step-prev" data-prev-step="2">Back</button>
+                    <button type="submit" id="worksheetSubmitBtn" class="btn lexi-btn-primary w-50">
+                      <i class="bi bi-stars me-2"></i> Generate & Assign
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </form>
         </div>
       </div>
 
-      <!-- ASSIGNED TAB -->
-      <div class="tab-pane fade {% if active_tab == 'assigned' %}show active{% endif %}"
-           id="assigned-pane" role="tabpanel" aria-labelledby="assigned-tab">
-
-        <h2 class="fw-bold mb-3 admin-title-v7" style="font-size: 1.75rem;">
-          Assigned Worksheets <i class="bi bi-clipboard-check"></i>
-        </h2>
+      <div class="tab-pane fade {% if active_tab == 'assigned' %}show active{% endif %}">
+        <h2 class="lexi-section-title mb-4">Active Worksheets</h2>
 
         {% if assignments %}
-          <div class="admin-table-shell-v7">
-            <div class="table-responsive p-0 table-padding-outer">
-              <table class="table align-middle mb-0 story-table-v7">
-                <thead class="small admin-text-body">
-                  <tr>
-                    <th scope="col" class="table-th-padding">Worksheet</th>
-                    <th scope="col" class="table-th-padding">Story</th>
-                    <th scope="col" class="d-none d-md-table-cell table-th-padding">Type</th>
-                    <th scope="col" class="table-th-padding">Students</th>
-                    <th scope="col" class="d-none d-md-table-cell table-th-padding">Status</th>
-                    <th scope="col" class="d-none d-md-table-cell text-end table-th-padding">Assigned On</th>
-                    <th scope="col" class="text-end table-th-padding">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
+          <div class="lexi-table-container">
+            <table class="table lexi-table">
+              <thead>
+                <tr>
+                  <th>Worksheet</th>
+                  <th>Info</th>
+                  <th class="d-none d-md-table-cell">Assigned To</th>
+                  <th class="d-none d-md-table-cell">Progress</th>
+                  <th class="text-end">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
                 {% for g in assignments %}
-                  {% set total = g.count_assigned + g.count_submitted + g.count_graded %}
-                  <tr>
-                    <td class="table-td-padding">
-                      <a href="{{ url_for('admin_assignment_group_detail', assignment_id=g.primary_assignment_id) }}"
-                         class="fw-bold text-coral-dark admin-text-body text-decoration-none">
-                        {{ g.assignment_title or ('Writing Worksheet' if g.assignment_type == 'finish' else 'Reading Worksheet') }}
+                <tr>
+                  <td>
+                    <div class="d-flex flex-column">
+                      <a href="{{ url_for('admin_assignment_group_detail', assignment_id=g.primary_assignment_id) }}" class="fw-bold text-dark text-decoration-none fs-5">
+                        {{ g.assignment_title or 'Untitled Worksheet' }}
                       </a>
-                      {% if g.class_name %}
-                        <div class="small text-muted admin-text-body mt-1">
-                          Class: {{ g.class_name }}
-                        </div>
-                      {% endif %}
-                    </td>
-
-                    <td class="table-td-padding">
-                      <div class="small admin-text-body">
-                        {% if g.story_title %}
-                          {{ g.story_title }}
-                          <span class="text-muted">
-                            ({{ g.language|upper }} · {{ g.level }})
-                          </span>
-                        {% else %}
-                          <span class="text-muted">—</span>
-                        {% endif %}
-                      </div>
-                    </td>
-
-                    <td class="d-none d-md-table-cell table-td-padding">
-                      <span class="story-tag tag-level-v7 admin-text-tag">
-                        {% if g.assignment_type == 'writing' or g.assignment_type == 'finish' %}
-                          Writing
-                        {% else %}
-                          Reading
-                        {% endif %}
+                      <span class="badge rounded-pill bg-light text-dark border mt-2 w-auto align-self-start">
+                        {% if g.assignment_type in ['writing', 'finish'] %}Writing{% else %}Reading{% endif %}
                       </span>
-                    </td>
-
-                    <td class="table-td-padding">
-                      {% if total == 0 %}
-                        <span class="small text-muted admin-text-body">
-                          No students assigned
-                        </span>
-                      {% else %}
-                        <div class="d-flex flex-wrap gap-1">
-                          {% for stu in g.assignees[:3] %}
-                            <span class="badge rounded-pill text-bg-light admin-text-body">
-                              {{ stu.username }}
-                            </span>
-                          {% endfor %}
-                          {% if total > 3 %}
-                            <span class="small text-muted admin-text-body">
-                              +{{ total - 3 }} more
-                            </span>
-                          {% endif %}
-                        </div>
-                      {% endif %}
-                    </td>
-
-                    <td class="d-none d-md-table-cell table-td-padding">
-                      <span class="small text-muted admin-text-body">
-                        {{ g.count_assigned }} assigned ·
-                        {{ g.count_submitted }} submitted ·
-                        {{ g.count_graded }} graded
-                      </span>
-                    </td>
-
-                    <td class="d-none d-md-table-cell text-end table-td-padding">
-                      <span class="small admin-text-body text-muted">
-                        {{ g.created_at|dt("%Y-%m-%d") }}
-                      </span>
-                    </td>
-
-                    <td class="text-end table-td-padding">
-                      <button type="button"
-                              class="btn btn-sm btn-action-outline-v7 rounded-pill admin-text-button"
-                              data-bs-toggle="modal"
-                              data-bs-target="#editAssignmentGroupModal-{{ g.group_id }}">
-                        <i class="bi bi-pencil-square me-1"></i>Edit
-                      </button>
-                    </td>
-                  </tr>
-                {% endfor %}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {# Edit modals for each worksheet group #}
-          {% for g in assignments %}
-          <div class="modal fade"
-               id="editAssignmentGroupModal-{{ g.group_id }}"
-               tabindex="-1"
-               aria-labelledby="editAssignmentGroupLabel-{{ g.group_id }}"
-               aria-hidden="true">
-            <div class="modal-dialog modal-lg modal-dialog-centered">
-              <div class="modal-content rounded-4">
-                <form method="POST"
-                      action="{{ url_for('admin_edit_worksheet_assignment', assignment_id=g.primary_assignment_id) }}">
-                  <div class="modal-header border-0">
-                    <h5 class="modal-title fw-bold admin-text-title"
-                        id="editAssignmentGroupLabel-{{ g.group_id }}">
-                      Edit Worksheet – {{ g.assignment_title or ('Worksheet · ' ~ g.story_title) }}
-                    </h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                  </div>
-
-                  <div class="modal-body">
-                    <div class="mb-3">
-                      <label class="form-label small text-uppercase text-muted admin-text-label">
-                        Worksheet Title
-                      </label>
-                      <input type="text"
-                             name="worksheet_title"
-                             class="form-control rounded-3 admin-text-body"
-                             value="{{ g.assignment_title or ('Worksheet · ' ~ g.story_title) }}"
-                             required>
-                      <div class="form-text small text-muted admin-text-body">
-                        This updates the worksheet title for all students assigned to this worksheet.
-                      </div>
                     </div>
-
-                    <div class="mb-3">
-                      <label class="form-label small text-uppercase text-muted admin-text-label">
-                        Currently assigned students
-                      </label>
-                      {% if g.assignees %}
-                        <div class="border rounded-4 p-3 admin-student-list-v7">
-                          <ul class="mb-0 small admin-text-body list-unstyled">
-                            {% for stu in g.assignees %}
-                              <li>
-                                <strong>{{ stu.username }}</strong>
-                                <span class="text-muted">· {{ stu.email }}</span>
-                              </li>
-                            {% endfor %}
-                          </ul>
-                        </div>
-                      {% else %}
-                        <p class="small text-muted admin-text-body mb-0">
-                          No students are currently assigned to this worksheet.
-                        </p>
+                  </td>
+                  <td>
+                    <div class="small text-muted">
+                      {% if g.story_title %}
+                        <i class="bi bi-book me-1"></i> {{ g.story_title }}<br>
                       {% endif %}
+                      <i class="bi bi-calendar me-1"></i> {{ g.created_at|dt("%b %d") }}
                     </div>
-
-                    <div class="mb-3">
-                      <label class="form-label small text-uppercase text-muted admin-text-label">
-                        Assign to additional students
-                      </label>
-
-                      {% if users %}
-                      {% set assigned_ids = g.assignees | map(attribute='id') | list %}
-                      <div class="admin-student-list-v7 border rounded-4 p-3">
-                        {% for u in users %}
-                          {% if u.id in assigned_ids %}
-                            <div class="form-check small mb-1">
-                              <input class="form-check-input check-coral-v7"
-                                     type="checkbox"
-                                     disabled
-                                     checked>
-                              <label class="form-check-label admin-text-body">
-                                {{ u.username }} <span class="text-muted">· already assigned</span>
-                              </label>
-                            </div>
-                          {% else %}
-                            <div class="form-check small mb-1">
-                              <input class="form-check-input check-coral-v7"
-                                     type="checkbox"
-                                     name="extra_user_ids"
-                                     value="{{ u.id }}"
-                                     id="edit_assign_group{{ g.group_id }}_user_{{ u.id }}">
-                              <label class="form-check-label admin-text-body"
-                                     for="edit_assign_group{{ g.group_id }}_user_{{ u.id }}">
-                                {{ u.username }} <span class="text-muted">· {{ u.email }}</span>
-                              </label>
-                            </div>
-                          {% endif %}
+                  </td>
+                  <td class="d-none d-md-table-cell">
+                    <div class="d-flex align-items-center">
+                      <div class="avatar-stack">
+                        {% for stu in g.assignees[:4] %}
+                          <span class="avatar-circle" title="{{ stu.username }}">{{ stu.username[0]|upper }}</span>
                         {% endfor %}
+                        {% if g.assignees|length > 4 %}
+                          <span class="avatar-circle more">+{{ g.assignees|length - 4 }}</span>
+                        {% endif %}
                       </div>
-                      <div class="form-text small text-muted admin-text-body">
-                        Leave empty to keep the current student list. Checked students will be added as new assignees.
-                      </div>
-                      {% else %}
-                      <p class="small text-muted mb-0 admin-text-body">
-                        No students found to assign.
-                      </p>
-                      {% endif %}
                     </div>
-
-                    <div class="alert bg-light-soft-blue-v7 small admin-text-body">
-                      This worksheet is currently assigned to {{ g.assignees|length }} student(s).
-                      Use "Unassign this worksheet" below to remove it from all of them.
-                    </div>
-                  </div>
-
-                  <div class="modal-footer border-0 d-flex justify-content-between">
-                    <button type="submit"
-                            name="action"
-                            value="delete"
-                            class="btn btn-outline-danger rounded-pill admin-text-button">
-                      <i class="bi bi-trash me-1"></i> Unassign this worksheet
+                  </td>
+                  <td class="d-none d-md-table-cell align-middle">
+                     <div class="d-flex gap-3 small fw-medium">
+                       <span class="text-muted">{{ g.count_assigned }} Assigned</span>
+                       <span class="text-success">{{ g.count_submitted }} Done</span>
+                     </div>
+                     <div class="progress mt-1" style="height: 6px; width: 120px;">
+                       {% set total = g.count_assigned + g.count_submitted + g.count_graded %}
+                       {% set pct = 0 %}
+                       {% if total > 0 %}{% set pct = ((g.count_submitted + g.count_graded) / total * 100) %}{% endif %}
+                       <div class="progress-bar bg-success" style="width: {{ pct }}%"></div>
+                     </div>
+                  </td>
+                  <td class="text-end">
+                    <button class="btn btn-sm lexi-btn-secondary" data-bs-toggle="modal" data-bs-target="#editAssignmentGroupModal-{{ g.group_id }}">
+                      <i class="bi bi-pencil"></i>
                     </button>
+                  </td>
+                </tr>
 
-                    <div class="d-flex gap-2">
-                      <button type="button"
-                              class="btn btn-outline-secondary rounded-pill admin-text-button"
-                              data-bs-dismiss="modal">
-                        Cancel
-                      </button>
-                      <button type="submit"
-                              name="action"
-                              value="save"
-                              class="btn btn-action-primary-v7 rounded-pill admin-text-button">
-                        <i class="bi bi-save me-1"></i> Save changes
-                      </button>
+                <div class="modal fade" id="editAssignmentGroupModal-{{ g.group_id }}" tabindex="-1" aria-hidden="true">
+                  <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content border-0 shadow rounded-4">
+                      <div class="modal-header border-0 pb-0">
+                        <h5 class="modal-title fw-bold font-heading">Edit Worksheet</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                      </div>
+                      <form method="POST" action="{{ url_for('admin_edit_worksheet_assignment', assignment_id=g.primary_assignment_id) }}">
+                        <div class="modal-body">
+                          <div class="mb-3">
+                            <label class="lexi-label-micro">Title</label>
+                            <input type="text" name="worksheet_title" class="form-control lexi-input" value="{{ g.assignment_title }}" required>
+                          </div>
+                          <div class="alert alert-light border small text-muted">
+                            <i class="bi bi-info-circle me-1"></i> Currently assigned to {{ g.assignees|length }} students.
+                          </div>
+                        </div>
+                        <div class="modal-footer border-0 pt-0">
+                           <button type="submit" name="action" value="delete" class="btn btn-outline-danger btn-sm rounded-pill px-3 me-auto">
+                             Unassign All
+                           </button>
+                           <button type="button" class="btn lexi-btn-secondary" data-bs-dismiss="modal">Close</button>
+                           <button type="submit" name="action" value="save" class="btn lexi-btn-primary">Save</button>
+                        </div>
+                      </form>
                     </div>
                   </div>
-
-                </form>
-              </div>
-            </div>
+                </div>
+                {% endfor %}
+              </tbody>
+            </table>
           </div>
-          {% endfor %}
-
         {% else %}
-          <div class="py-4 text-center text-muted small admin-text-body">
-            No worksheets have been assigned yet.
+          <div class="text-center py-5">
+            <img src="https://cdn-icons-png.flaticon.com/512/7486/7486744.png" width="80" class="mb-3 opacity-50" alt="Empty">
+            <p class="text-muted fw-medium">No worksheets assigned yet.</p>
           </div>
         {% endif %}
       </div>
 
-      <!-- SUBMITTED TAB -->
-      <div class="tab-pane fade {% if active_tab == 'submitted' %}show active{% endif %}"
-           id="review-pane" role="tabpanel" aria-labelledby="submitted-tab">
-        <h2 class="fw-bold mb-3 admin-title-v7" style="font-size: 1.75rem;">
-          Submitted Work <i class="bi bi-award"></i>
-        </h2>
+      <div class="tab-pane fade {% if active_tab == 'submitted' %}show active{% endif %}">
+        <h2 class="lexi-section-title mb-4">Review Submissions</h2>
 
         {% if submissions_to_review %}
-
-          <div class="accordion accordion-flush admin-table-shell-v7" id="submissionsAccordion">
+          <div class="row g-3">
             {% for sub in submissions_to_review %}
-            {% set submission_id = sub.submission_id %}
-            {% set is_open = (fragment == 'submission-' ~ submission_id) %}
-            <div class="accordion-item">
-              <h2 class="accordion-header" id="heading-{{ submission_id }}">
-                <button class="accordion-button {% if not is_open %}collapsed{% endif %} fw-bold admin-text-title" type="button" data-bs-toggle="collapse"
-                        data-bs-target="#collapse-{{ submission_id }}" aria-expanded="{{ 'true' if is_open else 'false' }}" aria-controls="collapse-{{ submission_id }}">
-
-                  <div class="d-flex align-items-center justify-content-between w-100 pe-3">
-                    <span class="text-coral-dark">
-                        {{ sub.assignee_username }}
-                        <span class="text-muted fw-normal small"> · {{ sub.story_title }}</span>
-                        {% if sub.class_name %}
-                          <span class="text-muted fw-normal small"> · {{ sub.class_name }}</span>
-                        {% endif %}
-                    </span>
-
-                    <div class="d-flex gap-2 align-items-center">
-                        {% if sub.current_score is not none %}
-                            <span class="badge bg-success-v7 admin-text-body" style="color: black">Score: {{ sub.current_score|int }}%</span>
-                        {% endif %}
-                        <span class="status-pill admin-text-body" style="background: {{ sub.review_status_color }}; color: black;">
-                            {{ sub.review_status_label }}
-                        </span>
-                    </div>
+            <div class="col-12">
+              <div class="lexi-card p-3 d-flex flex-column flex-md-row align-items-center justify-content-between gap-3 hover-lift">
+                <div class="d-flex align-items-center gap-3 w-100">
+                  <div class="bg-light rounded-circle d-flex align-items-center justify-content-center text-primary fw-bold" style="width:48px; height:48px; font-family:'Baloo 2'; font-size:1.2rem;">
+                    {{ sub.assignee_username[0]|upper }}
                   </div>
-                </button>
-              </h2>
-
-              <div id="collapse-{{ submission_id }}" class="accordion-collapse collapse {% if is_open %}show{% endif %}" aria-labelledby="heading-{{ submission_id }}" data-bs-parent="#submissionsAccordion">
-                <div class="accordion-body p-4">
-                  <div class="d-flex justify-content-between align-items-center mb-3">
-                      <p class="small text-muted mb-0">Submitted: {{ sub.submitted_at|dt("%Y-%m-%d %H:%M") }} &bull; Assignment: {{ sub.assignment_title }}</p>
-
-                      <a href="{{ url_for('admin_grading_page', submission_id=sub.submission_id) }}"
-                         class="btn btn-action-primary-v7 rounded-pill shadow-sm admin-text-button btn-sm">
-                          <i class="bi bi-pencil-fill me-1"></i> Review & Grade
-                      </a>
+                  <div>
+                    <h6 class="mb-1 fw-bold text-dark">{{ sub.assignee_username }}</h6>
+                    <p class="mb-0 text-muted small">
+                      <span class="text-coral fw-bold">{{ sub.story_title }}</span> &bull; {{ sub.assignment_title }}
+                    </p>
                   </div>
+                </div>
 
-                  <div class="small text-muted pt-2">
-                    Click 'Review & Grade' to view the full assignment and student response.
-                  </div>
+                <div class="d-flex align-items-center gap-3 flex-shrink-0">
+                   {% if sub.current_score is not none %}
+                     <span class="badge bg-success-subtle text-success border border-success-subtle px-3 py-2 rounded-pill">
+                       {{ sub.current_score|int }}% Score
+                     </span>
+                   {% endif %}
+
+                   <span class="badge rounded-pill px-3 py-2 text-dark" style="background: {{ sub.review_status_color }}">
+                     {{ sub.review_status_label }}
+                   </span>
+
+                   <a href="{{ url_for('admin_grading_page', submission_id=sub.submission_id) }}" class="btn lexi-btn-primary btn-sm px-4">
+                     Review
+                   </a>
                 </div>
               </div>
             </div>
             {% endfor %}
           </div>
-
         {% else %}
-          <div class="py-4 text-center text-muted small admin-text-body">
-            <i class="bi bi-check-circle-fill me-1"></i> All submitted worksheets have been reviewed!
+          <div class="text-center py-5">
+             <i class="bi bi-check-circle-fill text-success display-4 mb-3"></i>
+             <h5 class="fw-bold">All caught up!</h5>
+             <p class="text-muted">No pending submissions to review.</p>
           </div>
         {% endif %}
       </div>
+
     </div>
   </div>
 </div>
 
-<!-- Loading overlay -->
-<div id="worksheetLoadingOverlay"
-     class="position-fixed top-0 start-0 w-100 h-100 d-none"
-     style="background: rgba(15,23,42,0.65); z-index: 1057;">
-  <div class="d-flex flex-column align-items-center justify-content-center h-100">
-    <div class="spinner-grow text-coral-main mb-3" role="status" style="width: 2.5rem; height: 2.5rem;">
-      <span class="visually-hidden">Loading...</span>
-    </div>
-    <div class="text-white small fw-bold p-2 rounded-3 admin-text-body" style="background: rgba(0,0,0,0.2);">
-      <i class="bi bi-magic me-1"></i> Generating worksheet with AI…
-    </div>
-  </div>
+<div id="worksheetLoadingOverlay" class="position-fixed top-0 start-0 w-100 h-100 d-none justify-content-center align-items-center flex-column"
+     style="background: rgba(255,255,255,0.9); z-index: 9999; backdrop-filter: blur(5px);">
+  <div class="spinner-border text-coral mb-3" role="status" style="width: 3rem; height: 3rem;"></div>
+  <h5 class="fw-bold font-heading text-dark">Dreaming up</h5>
+  <p class="text-muted small">This usually takes about 10-15 seconds.</p>
 </div>
 
-<!-- Create Class Modal -->
-<div class="modal fade" id="createClassModal" tabindex="-1" aria-labelledby="createClassLabel" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-centered">
-    <div class="modal-content rounded-4">
+<div class="modal fade" id="createClassModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow rounded-4">
+      <div class="modal-header border-0">
+        <h5 class="modal-title fw-bold font-heading">New Class</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
       <form method="POST" action="{{ url_for('admin_create_class') }}">
-        <div class="modal-header border-0">
-          <h5 class="modal-title fw-bold admin-text-title" id="createClassLabel">
-            Create a New Class
-          </h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-
         <div class="modal-body">
-          <div class="mb-3">
-            <label class="form-label small text-uppercase text-muted admin-text-label">
-              Class Name
-            </label>
-            <input type="text"
-                   name="class_name"
-                   class="form-control rounded-3 admin-text-body"
-                   placeholder="e.g. Grade 5 · English A"
-                   required>
-            <div class="form-text small text-muted admin-text-body">
-              A join code will be generated automatically so students can join.
-            </div>
-          </div>
-
-          <div class="alert bg-light-soft-blue-v7 small admin-text-body">
-            After creating the class, you can share the <b>join code</b> with students.
-            Students will enter the code on the <b>Join Class</b> page to enroll.
-          </div>
+          <label class="lexi-label-micro">Class Name</label>
+          <input type="text" name="class_name" class="form-control lexi-input" placeholder="e.g. 5th Grade English" required>
         </div>
-
-        <div class="modal-footer border-0 d-flex justify-content-between">
-          <button type="button"
-                  class="btn btn-outline-secondary rounded-pill admin-text-button"
-                  data-bs-dismiss="modal">
-            Cancel
-          </button>
-          <button type="submit"
-                  class="btn btn-action-primary-v7 rounded-pill admin-text-button">
-            <i class="bi bi-plus-circle me-1"></i> Create Class
-          </button>
-
-
+        <div class="modal-footer border-0 pt-0">
+          <button type="button" class="btn lexi-btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn lexi-btn-primary">Create</button>
         </div>
       </form>
     </div>
   </div>
 </div>
 
+<style>
+/* --- LEXI MODERN THEME VARIABLES --- */
+:root {
+  --lexi-primary: #ff6b6b;
+  --lexi-primary-dark: #e05555;
+  --lexi-primary-soft: #ffe5e5;
+  --lexi-text-dark: #2c3e50;
+  --lexi-text-muted: #7f8c8d;
+  --lexi-bg: #f8f9fa;
+  --lexi-card-shadow: 0 10px 30px rgba(0,0,0,0.05);
+  --lexi-radius: 16px;
+  --font-heading: 'Baloo 2', cursive;
+  --font-body: 'Fredoka', sans-serif;
+}
+
+body { font-family: var(--font-body); background-color: #fffaf9; color: var(--lexi-text-dark); }
+.text-coral { color: var(--lexi-primary) !important; }
+.border-coral { border-color: var(--lexi-primary) !important; }
+.font-heading { font-family: var(--font-heading); }
+
+/* --- TYPOGRAPHY --- */
+.lexi-page-title { font-family: var(--font-heading); font-weight: 800; color: var(--lexi-text-dark); font-size: 2.5rem; }
+.lexi-section-title { font-family: var(--font-heading); font-weight: 700; color: var(--lexi-text-dark); }
+.lexi-heading-sm { font-family: var(--font-heading); font-weight: 700; font-size: 1.1rem; }
+.lexi-text-muted { color: var(--lexi-text-muted); font-size: 0.95rem; }
+.lexi-label { font-weight: 600; color: var(--lexi-text-dark); display: block; }
+.lexi-label-micro { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; color: #95a5a6; display: block; margin-bottom: 4px; }
+
+/* --- ICON BOX --- */
+.lexi-icon-box {
+  width: 60px; height: 60px;
+  background: linear-gradient(135deg, var(--lexi-primary), var(--lexi-primary-dark));
+  color: white; border-radius: 18px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.8rem;
+  box-shadow: 0 8px 16px rgba(255, 107, 107, 0.3);
+}
+
+/* --- BUTTONS --- */
+.btn { font-family: var(--font-body); font-weight: 600; border-radius: 50px; padding: 0.6rem 1.4rem; transition: all 0.2s ease; }
+.lexi-btn-primary {
+  background-color: var(--lexi-primary); border: none; color: white;
+  box-shadow: 0 4px 12px rgba(255, 107, 107, 0.3);
+}
+.lexi-btn-primary:hover, .lexi-btn-primary:active {
+  background-color: var(--lexi-primary-dark); color: white; transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(255, 107, 107, 0.4);
+}
+.lexi-btn-primary:disabled { background-color: #fab1b1; transform: none; box-shadow: none; }
+
+.lexi-btn-secondary {
+  background-color: white; border: 2px solid #eee; color: var(--lexi-text-dark);
+}
+.lexi-btn-secondary:hover {
+  border-color: var(--lexi-primary); color: var(--lexi-primary); background-color: var(--lexi-primary-soft);
+}
+
+/* --- INPUTS --- */
+.lexi-input, .lexi-select {
+  background-color: #f4f6f8; border: 2px solid transparent; border-radius: 12px;
+  padding: 0.7rem 1rem; font-weight: 500; color: var(--lexi-text-dark);
+}
+.lexi-input:focus, .lexi-select:focus {
+  background-color: #fff; border-color: var(--lexi-primary); box-shadow: 0 0 0 4px var(--lexi-primary-soft);
+}
+.lexi-select-pill {
+  appearance: none; background-color: white; border: 2px solid #eee;
+  border-radius: 50px; padding: 0.5rem 1.2rem; font-weight: 600;
+  color: var(--lexi-text-dark); cursor: pointer; min-width: 200px;
+}
+.lexi-select-pill:hover { border-color: var(--lexi-primary); }
+
+/* --- CARDS & LAYOUT --- */
+.lexi-card {
+  background: white; border-radius: var(--lexi-radius);
+  box-shadow: var(--lexi-card-shadow); border: 1px solid rgba(0,0,0,0.02);
+}
+.hover-lift { transition: transform 0.2s; }
+.hover-lift:hover { transform: translateY(-3px); }
+
+/* --- NAV TABS --- */
+.lexi-nav-pills .nav-link {
+  color: var(--lexi-text-muted); font-weight: 600; border-radius: 12px; padding: 0.7rem 1.2rem;
+}
+.lexi-nav-pills .nav-link.active {
+  background-color: var(--lexi-primary-soft); color: var(--lexi-primary-dark);
+}
+.lexi-nav-pills .nav-link:hover:not(.active) { background-color: #fff; color: var(--lexi-primary); }
+
+/* --- STEPPER --- */
+.lexi-stepper { display: flex; align-items: center; justify-content: center; gap: 1rem; }
+.lexi-stepper .step { display: flex; flex-direction: column; align-items: center; opacity: 0.5; transition: 0.3s; }
+.lexi-stepper .step.active { opacity: 1; transform: scale(1.1); }
+.lexi-stepper .circle {
+  width: 36px; height: 36px; border-radius: 50%; background: #eee; color: #999;
+  display: flex; align-items: center; justify-content: center; font-weight: 800; font-family: var(--font-heading); margin-bottom: 5px;
+}
+.lexi-stepper .step.active .circle { background: var(--lexi-primary); color: white; box-shadow: 0 4px 10px rgba(255,107,107,0.4); }
+.lexi-stepper .label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; }
+.lexi-stepper .line { width: 50px; height: 3px; background: #eee; border-radius: 2px; }
+
+/* WIZARD STEP VISIBILITY */
+.worksheet-step {
+  display: none;
+  animation: fadeIn 0.4s ease forwards;
+}
+.worksheet-step.active {
+  display: block;
+}
+
+
+/* --- RADIO CARDS (THE BIG UPGRADE) --- */
+.lexi-radio-card { display: block; cursor: pointer; position: relative; }
+.lexi-radio-card input { position: absolute; opacity: 0; }
+.lexi-radio-card .card-content {
+  background: white; border: 2px solid #f0f0f0; border-radius: 16px; padding: 1.5rem;
+  display: flex; gap: 1rem; align-items: flex-start; transition: all 0.2s;
+}
+.lexi-radio-card .icon {
+  width: 44px; height: 44px; background: #fff5f5; color: var(--lexi-primary);
+  border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; flex-shrink: 0;
+}
+.lexi-radio-card h6 { font-family: var(--font-heading); font-weight: 700; margin-bottom: 4px; color: var(--lexi-text-dark); }
+.lexi-radio-card p { font-size: 0.85rem; color: #7f8c8d; margin: 0; line-height: 1.4; }
+.lexi-radio-card .check {
+  position: absolute; top: 10px; right: 10px; color: var(--lexi-primary); opacity: 0; transform: scale(0.5); transition: all 0.2s;
+}
+/* Selected State */
+.lexi-radio-card input:checked + .card-content {
+  border-color: var(--lexi-primary); background-color: #fffafa; box-shadow: 0 8px 20px rgba(255, 107, 107, 0.15);
+}
+.lexi-radio-card input:checked + .card-content .check { opacity: 1; transform: scale(1); }
+
+/* --- STUDENT LIST --- */
+.lexi-student-list { max-height: 250px; overflow-y: auto; border: 1px solid #eee; border-radius: 12px; }
+.lexi-checkbox { width: 1.2em; height: 1.2em; border-radius: 6px; border: 2px solid #ddd; }
+.lexi-checkbox:checked { background-color: var(--lexi-primary); border-color: var(--lexi-primary); }
+
+/* --- TABLES --- */
+.lexi-table-container { background: transparent; }
+.lexi-table { border-collapse: separate; border-spacing: 0 10px; }
+.lexi-table thead th {
+  border: none; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: #95a5a6; padding: 0 1.5rem;
+}
+.lexi-table tbody tr {
+  background: white; box-shadow: 0 2px 5px rgba(0,0,0,0.02); transition: transform 0.2s;
+}
+.lexi-table tbody tr:hover { transform: scale(1.005); box-shadow: 0 5px 15px rgba(0,0,0,0.05); }
+.lexi-table td { border: none; padding: 1.25rem 1.5rem; vertical-align: middle; }
+.lexi-table td:first-child { border-top-left-radius: 12px; border-bottom-left-radius: 12px; }
+.lexi-table td:last-child { border-top-right-radius: 12px; border-bottom-right-radius: 12px; }
+
+/* Avatars */
+.avatar-stack { display: flex; }
+.avatar-circle {
+  width: 32px; height: 32px; border-radius: 50%; background: #eee; border: 2px solid white;
+  display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; color: #555; margin-left: -8px;
+}
+.avatar-circle:first-child { margin-left: 0; }
+.avatar-circle.more { background: #333; color: white; }
+
+/* Animation Utils */
+.fade-in { animation: fadeIn 0.4s ease forwards; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+</style>
+
 <script>
-(function(){
-  const worksheetTitleInput = document.getElementById('worksheetTitleInput');
-  const storySelect = document.getElementById('worksheetStorySelect');
+document.addEventListener('DOMContentLoaded', function() {
+
+  // --- STATE MANAGEMENT ---
   const typeRadios = document.querySelectorAll('input[name="worksheet_type"]');
   const step2Writing = document.getElementById('step2-writing');
   const step2Reading = document.getElementById('step2-reading');
+  const submitBtn = document.getElementById('worksheetSubmitBtn');
+  const loader = document.getElementById('worksheetLoadingOverlay');
 
-  function updateStep2View() {
-    const selected = document.querySelector('input[name="worksheet_type"]:checked');
-    const type = selected ? selected.value : null;
+  // Reading Autocomplete Elements
+  const readingInputs = ['readingTopicInput', 'readingGenreSelect', 'readingLevelSelect'];
+  const titleInput = document.getElementById('worksheetTitleInput');
 
-    if (!step2Writing || !step2Reading) return;
+  // --- 1. TOGGLE WORKSHEET MODE (Reading vs Writing) ---
+  function updateMode() {
+    const selected = document.querySelector('input[name="worksheet_type"]:checked')?.value;
 
-    if (type === 'writing') {
-      step2Writing.classList.remove('d-none');
-      step2Reading.classList.add('d-none');
-    } else if (type === 'reading') {
-      step2Writing.classList.add('d-none');
-      step2Reading.classList.remove('d-none');
-    } else {
-      step2Writing.classList.add('d-none');
-      step2Reading.classList.add('d-none');
-    }
-
-    if (storySelect) {
-      if (type === 'reading') {
-        storySelect.disabled = false;
-        storySelect.setAttribute('required', 'required');
-      } else {
-        storySelect.disabled = true;
-        storySelect.removeAttribute('required');
-      }
-    }
-
-    const writingLevelSelect = document.getElementById('writingLevelSelect');
-    const writingModeSelect = document.getElementById('writingModeSelect');
-
-    if (writingLevelSelect && writingModeSelect) {
-      if (type === 'writing') {
-        writingLevelSelect.setAttribute('required', 'required');
-        writingModeSelect.setAttribute('required', 'required');
-      } else {
-        writingLevelSelect.removeAttribute('required');
-        writingModeSelect.removeAttribute('required');
-      }
+    if(selected === 'writing') {
+       if(step2Writing) step2Writing.classList.remove('d-none');
+       if(step2Reading) step2Reading.classList.add('d-none');
+    } else if (selected === 'reading') {
+       if(step2Writing) step2Writing.classList.add('d-none');
+       if(step2Reading) step2Reading.classList.remove('d-none');
+       updateReadingTitle(); // Trigger title update
     }
   }
 
-  if (storySelect && worksheetTitleInput) {
-    storySelect.addEventListener('change', function () {
-      const selectedType = document.querySelector('input[name="worksheet_type"]:checked')?.value;
-      if (selectedType !== 'reading') return;
-      const opt = storySelect.selectedOptions[0];
-      const title = opt ? opt.getAttribute('data-story-title') : '';
-      if (title) {
-        if (!worksheetTitleInput.value ||
-            worksheetTitleInput.value.startsWith('Worksheet ·') ||
-            worksheetTitleInput.value.startsWith('Reading ·')) {
-          worksheetTitleInput.value = `Reading · ${title}`;
-        }
-      }
-    });
+  // Bind Listeners
+  typeRadios.forEach(r => r.addEventListener('change', updateMode));
+
+  // --- 2. AUTO-GENERATE TITLE FOR READING ---
+  function updateReadingTitle() {
+    const type = document.querySelector('input[name="worksheet_type"]:checked')?.value;
+    if(type !== 'reading') return;
+
+    const topic = document.getElementById('readingTopicInput').value;
+    const genre = document.getElementById('readingGenreSelect').value;
+
+    // Only update if title is empty, or if it looks like a generic auto-generated title
+    const currentTitle = titleInput.value;
+    if(!currentTitle || currentTitle.startsWith('Reading')) {
+       let newTitle = "Reading Task";
+       if(topic) newTitle = `Reading: ${topic.charAt(0).toUpperCase() + topic.slice(1)}`;
+       else if(genre) newTitle = `Reading: ${genre.charAt(0).toUpperCase() + genre.slice(1)} Story`;
+
+       titleInput.value = newTitle;
+    }
   }
 
-  typeRadios.forEach(r => r.addEventListener('change', updateStep2View));
-
-  const steps = Array.from(document.querySelectorAll('.worksheet-step'));
-  const stepCircles = Array.from(document.querySelectorAll('.step-circle'));
-  let currentStep = 1;
-
-  function setStepCircleActive(stepNum) {
-    stepCircles.forEach(c => {
-      const s = parseInt(c.getAttribute('data-step-circle'), 10);
-      c.classList.toggle('step-circle-active', s === stepNum);
-    });
-  }
-
-  function showStep(targetStep) {
-    if (currentStep === 1 && targetStep === 2) {
-      if (worksheetTitleInput && !worksheetTitleInput.value) {
-        worksheetTitleInput.reportValidity();
-        return;
-      }
-    }
-
-    if (currentStep === 2 && targetStep === 3) {
-      const selectedType = document.querySelector('input[name="worksheet_type"]:checked')?.value;
-      if (selectedType === 'reading' && storySelect && !storySelect.value) {
-        storySelect.reportValidity();
-        return;
-      }
-    }
-
-    if (targetStep === currentStep) return;
-
-    const currentEl = steps.find(s => parseInt(s.getAttribute('data-step'), 10) === currentStep);
-    const nextEl = steps.find(s => parseInt(s.getAttribute('data-step'), 10) === targetStep);
-    if (!nextEl) return;
-
-    if (currentEl) {
-      currentEl.classList.remove('active');
-      currentEl.classList.add('fading-out');
-      setTimeout(() => {
-        currentEl.classList.remove('fading-out');
-        currentEl.style.display = 'none';
-      }, 220);
-    }
-
-    nextEl.style.display = 'block';
-    requestAnimationFrame(() => nextEl.classList.add('active'));
-
-    currentStep = targetStep;
-    setStepCircleActive(targetStep);
-    updateStep2View();
-  }
-
-  steps.forEach(step => {
-    const s = parseInt(step.getAttribute('data-step'), 10);
-    if (s === 1) {
-      step.style.display = 'block';
-      step.classList.add('active');
-    } else {
-      step.style.display = 'none';
-      step.classList.remove('active');
-    }
+  readingInputs.forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.addEventListener('input', updateReadingTitle);
   });
-  setStepCircleActive(1);
-  updateStep2View();
 
+  // --- 3. STEPPER WIZARD LOGIC ---
+  const allSteps = document.querySelectorAll('.worksheet-step');
+  const indicators = document.querySelectorAll('.lexi-stepper .step');
+
+  function setStep(stepNum) {
+    // 1. Manage Step Content visibility
+    allSteps.forEach(s => {
+       const sNum = parseInt(s.getAttribute('data-step'));
+       if(sNum === stepNum) {
+         s.classList.add('active');
+       } else {
+         s.classList.remove('active');
+       }
+    });
+
+    // 2. Manage Top Indicators
+    indicators.forEach(ind => {
+      const i = parseInt(ind.getAttribute('data-step-indicator'));
+      if(i === stepNum) ind.classList.add('active');
+      else ind.classList.remove('active');
+    });
+  }
+
+  // Next Button Logic (with Validation)
   document.querySelectorAll('.btn-step-next').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const next = parseInt(btn.getAttribute('data-next-step'), 10);
-      if (!isNaN(next)) showStep(next);
+    btn.addEventListener('click', function() {
+       const currentStepDiv = this.closest('.worksheet-step');
+
+       // Simple HTML5 Validation
+       const inputs = currentStepDiv.querySelectorAll('input[required], select[required]');
+       let valid = true;
+       inputs.forEach(i => {
+         if(!i.checkValidity()) {
+           i.reportValidity();
+           valid = false;
+         }
+       });
+
+       if(valid) {
+         const nextStep = parseInt(this.getAttribute('data-next-step'));
+         setStep(nextStep);
+       }
     });
   });
+
+  // Back Button Logic
   document.querySelectorAll('.btn-step-prev').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const prev = parseInt(btn.getAttribute('data-prev-step'), 10);
-      if (!isNaN(prev)) showStep(prev);
+    btn.addEventListener('click', function() {
+       const prevStep = parseInt(this.getAttribute('data-prev-step'));
+       setStep(prevStep);
     });
   });
 
-  const worksheetForm = document.getElementById('worksheetForm');
-  const worksheetSubmitBtn = document.getElementById('worksheetSubmitBtn');
-  const worksheetLoadingOverlay = document.getElementById('worksheetLoadingOverlay');
-
-  if (worksheetForm) {
-    worksheetForm.addEventListener('submit', function (e) {
-      const selectedType = document.querySelector('input[name="worksheet_type"]:checked')?.value;
-      let isValid = true;
-
-      if (selectedType === 'reading' && storySelect && !storySelect.value) isValid = false;
-
-      if (isValid) {
-        if (worksheetSubmitBtn) worksheetSubmitBtn.disabled = true;
-        if (worksheetLoadingOverlay) worksheetLoadingOverlay.classList.remove('d-none');
-      } else {
-        e.preventDefault();
-        if (selectedType === 'reading' && storySelect) storySelect.reportValidity();
-      }
+  // --- 4. FORM SUBMIT LOADER ---
+  const form = document.getElementById('worksheetForm');
+  if(form) {
+    form.addEventListener('submit', function() {
+       loader.classList.remove('d-none');
+       loader.classList.add('d-flex');
+       submitBtn.disabled = true;
     });
   }
 
-  // Tab persistence
-  const activeTab = '{{ active_tab }}';
-  const fragment = '{{ fragment }}';
-
-  let tabIdToShow = null;
-  if (activeTab === 'assigned') tabIdToShow = 'assigned-tab';
-  else if (activeTab === 'submitted' || fragment) tabIdToShow = 'submitted-tab';
-  else tabIdToShow = 'assign-tab';
-
-  if (tabIdToShow) {
-    const tabEl = document.getElementById(tabIdToShow);
-    if (tabEl && window.bootstrap && bootstrap.Tab) new bootstrap.Tab(tabEl).show();
-  }
-
-  // Copy join code
+  // --- 5. CLIPBOARD COPY ---
   const copyBtn = document.getElementById('copyJoinCodeBtn');
-  if (copyBtn) {
-    copyBtn.addEventListener('click', async () => {
-      const txt = copyBtn.getAttribute('data-copy-text') || '';
-      try {
-        await navigator.clipboard.writeText(txt);
-        copyBtn.innerHTML = '<i class="bi bi-check2 me-1"></i> Copied';
-        setTimeout(() => {
-          copyBtn.innerHTML = '<i class="bi bi-clipboard me-1"></i> Copy';
-        }, 900);
-      } catch (e) {
-        // fallback
-        const ta = document.createElement('textarea');
-        ta.value = txt;
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand('copy');
-        ta.remove();
-      }
+  if(copyBtn) {
+    copyBtn.addEventListener('click', () => {
+       const text = copyBtn.getAttribute('data-copy-text');
+       navigator.clipboard.writeText(text).then(() => {
+          const original = copyBtn.innerHTML;
+          copyBtn.innerHTML = '<i class="bi bi-check2"></i> Copied!';
+          setTimeout(() => copyBtn.innerHTML = original, 1500);
+       });
     });
   }
-})();
+
+  // --- INITIALIZATION ---
+  updateMode();
+  setStep(1);
+
+});
 </script>
-
-<style>
-/* --- V7 ADMIN COLOR PALETTE & VARIABLES --- */
-:root {
-  --coral-main: #ff6b6b;
-  --coral-light: #ffd7cc;
-  --coral-dark: #cc5555;
-  --success-v7: #10b981;
-  --danger-v7: #ef4444;
-  --warning-v7: #f59e0b;
-  --light-soft-blue-v7: #ffece5;
-  --soft-yellow-v7: #fff7e5;
-  --table-padding-v2: 1.5rem;
-}
-
-/* Fonts */
-.admin-title-v7, .admin-text-title, .admin-text-button { font-family: 'Baloo 2', cursive; font-weight: 700; }
-.admin-text-body, .admin-text-label, .admin-text-tag { font-family: 'Fredoka', 'Nunito', sans-serif; }
-.admin-title-v7 { font-size: 2.25rem; color: var(--coral-dark); }
-.admin-text-title { font-size: 1.5rem; }
-.admin-text-label { font-weight: 600 !important; }
-.admin-text-button { font-weight: 600 !important; }
-
-.text-coral-dark { color: var(--coral-dark) !important; }
-.text-success-v7 { color: var(--success-v7) !important; }
-.text-danger-v7 { color: var(--danger-v7) !important; }
-.text-warning-v7 { color: var(--warning-v7) !important; }
-.bg-light-soft-blue-v7 { background-color: var(--light-soft-blue-v7) !important; }
-
-.admin-stories-wrap-v2 { max-width: 1300px; margin-inline: auto; }
-
-/* Header pill icon */
-.admin-pill-icon-v7{
-  width:52px;height:52px;border-radius:1.25rem;
-  background:linear-gradient(135deg,var(--coral-main),var(--coral-dark));
-  display:inline-flex;align-items:center;justify-content:center;
-  font-size:1.75rem;color:#fff;
-  box-shadow:0 0.5rem 1rem rgba(255,107,107,.4);
-}
-
-/* Buttons */
-.btn-action-primary-v7{
-  background-color:var(--coral-main); border-color:var(--coral-main); color:#fff;
-  font-weight:600; padding:.5rem 1.2rem; transition:all .2s;
-  box-shadow:0 4px 8px rgba(255,107,107,.3);
-}
-.btn-action-primary-v7:hover{
-  background-color:#e86060; border-color:#e86060;
-  transform:translateY(-2px);
-  box-shadow:0 6px 12px rgba(255,107,107,.4);
-}
-.btn-action-outline-v7{
-  color:var(--coral-dark); border-color:var(--coral-light); background-color:#fff;
-  transition:all .2s; font-weight:600; padding:.4rem 1rem;
-}
-.btn-action-outline-v7:hover{
-  background-color:#ffece5; border-color:var(--coral-main); color:var(--coral-dark);
-}
-
-/* Class selector */
-.class-select-v7{
-  min-width: 220px;
-  border: 1px solid var(--coral-light);
-}
-.class-select-v7:focus{
-  box-shadow:0 0 0 .25rem rgba(255,107,107,.25);
-  border-color:var(--coral-main);
-}
-
-/* Join code pill */
-.joincode-pill{
-  display:inline-flex; align-items:center; gap:.55rem;
-  background:linear-gradient(90deg,#ffece5,#fff7e5);
-  border:1px solid var(--coral-light);
-  padding:.4rem .8rem;
-  border-radius:999px;
-}
-.joincode-label{
-  font-size:.72rem; letter-spacing:.08em;
-  font-weight:800; color:var(--coral-dark);
-}
-.joincode-value{
-  font-weight:800;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  color:#0b1220;
-}
-
-/* Table container */
-.admin-table-shell-v7{
-  border-radius:1.5rem; overflow:hidden;
-  border:2px solid var(--coral-light);
-  background:#fff;
-  box-shadow:0 .5rem 1.5rem rgba(255,107,107,.15);
-}
-.table-padding-outer{ padding:1.5rem !important; }
-
-/* Table head */
-.story-table-v7 thead{
-  background:linear-gradient(90deg,#ffece5,#fff7e5);
-  border-bottom:2px solid var(--coral-light);
-}
-.story-table-v7 thead th{
-  border-bottom:0; font-weight:700; text-transform:uppercase;
-  letter-spacing:.05em; font-size:.75rem; color:var(--coral-dark);
-}
-.table-th-padding{ padding-top:1.2rem !important; padding-bottom:1.2rem !important; }
-.table-td-padding{ padding-top:var(--table-padding-v2) !important; padding-bottom:var(--table-padding-v2) !important; }
-
-/* Table rows */
-.story-table-v7 tbody tr td{ border-top-color:rgba(0,0,0,.08); }
-.story-table-v7 tbody tr{ transition:background-color .15s ease, transform .15s ease; }
-.story-table-v7 tbody tr:hover{ background-color:var(--soft-yellow-v7); transform:scale(1.005); }
-
-/* Status pills */
-.status-pill{
-  padding:.3rem .8rem; border-radius:1rem; font-size:.75rem;
-  font-weight:700; letter-spacing:.02em;
-}
-
-/* Modal-style list for students */
-.admin-student-list-v7{
-  max-height:220px; overflow-y:auto;
-  background:#fcfcfc; border:1px solid #eee;
-  padding:1rem !important; border-radius:1rem !important;
-}
-
-/* Inputs */
-.form-check-input{ border-radius:.45em; border-width:2px; }
-.form-check-input:focus{
-  box-shadow:0 0 0 .25rem rgba(255,107,107,.3);
-  border-color:var(--coral-main);
-}
-.form-check-input:checked{ background-color:var(--coral-main); border-color:var(--coral-main); }
-.form-check-input[type="radio"]{ border-radius:50%; }
-
-/* Loading overlay spinner color */
-#worksheetLoadingOverlay .spinner-grow{ color:var(--coral-main) !important; }
-
-/* Accordion styling */
-.accordion-item{ border:none; margin-bottom:.75rem; border-radius:1rem; }
-.accordion-button{
-  background-color:#fff; border-radius:1rem !important;
-  border:1px solid var(--coral-light);
-  transition:background-color .2s, box-shadow .2s;
-  padding:1.25rem 1.5rem; font-size:1.1rem; color:var(--coral-dark);
-}
-.accordion-button:not(.collapsed){
-  background-color:var(--soft-yellow-v7); color:var(--coral-dark);
-  box-shadow:none; border-bottom-left-radius:0 !important; border-bottom-right-radius:0 !important;
-  border-bottom:1px solid var(--coral-light);
-}
-.accordion-button:focus{ box-shadow:0 0 0 .25rem rgba(255,107,107,.3); }
-.accordion-body{
-  background:#fff; border:1px solid var(--coral-light); border-top:none;
-  border-bottom-left-radius:1rem; border-bottom-right-radius:1rem;
-}
-
-/* Nav tabs styling */
-.nav-pills .nav-item{ padding:0; }
-.nav-pills .nav-link{
-  font-family:'Baloo 2', cursive;
-  font-weight:600; border-radius:999px;
-  padding:.5rem 1.2rem; color:var(--coral-dark);
-  border:1px solid var(--coral-light);
-  background:#fff; transition:all .2s;
-}
-.nav-pills .nav-link:hover:not(.active){
-  background-color:var(--soft-yellow-v7);
-  border-color:var(--coral-main);
-  color:var(--coral-dark);
-}
-.nav-pills .nav-link.active,
-.nav-pills .nav-link.active:hover{
-  color:#fff; background:var(--coral-main); border-color:var(--coral-main);
-  box-shadow:0 4px 8px rgba(255,107,107,.3);
-}
-
-/* Stepper */
-.worksheet-stepper{ border-radius:999px; background:#fff7ef; padding:.6rem .9rem; }
-.step-circle{
-  width:28px;height:28px;border-radius:999px;border:2px solid #fbbfbd;
-  display:inline-flex;align-items:center;justify-content:center;
-  font-size:.8rem;font-weight:700;color:#f97373;background:#fff;transition:all .2s;
-}
-.step-circle-active{
-  background:var(--coral-main); border-color:var(--coral-main); color:#fff;
-  box-shadow:0 .3rem .8rem rgba(255,107,107,.4);
-}
-.step-line{ height:2px; background:linear-gradient(90deg,#fed7d7,#fecaca); }
-
-/* Step panes fade */
-.worksheet-step{ opacity:0; display:none; transition:opacity .22s ease; }
-.worksheet-step.active{ display:block; opacity:1; }
-.worksheet-step.fading-out{ display:block; opacity:0; }
-</style>
-
 {% endblock %}

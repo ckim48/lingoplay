@@ -177,7 +177,7 @@
       opacity:1;
     }
 
-    /* Role toggle chip style (matches theme) */
+    /* Role toggle chip style */
     .role-box{
       border:1px solid #ffd7cc;
       background:#fff7f3;
@@ -228,7 +228,7 @@
         <div class="section-heading">Step 1 · Account</div>
         <hr class="section-divider">
 
-        <!-- ROLE (NEW) -->
+        <!-- ROLE -->
         <div class="mb-2">
           <label class="form-label">Role</label>
           <div class="role-box">
@@ -348,7 +348,67 @@
           We use this information only to choose reading level and guidance.
         </div>
 
-        <!-- OPTIONAL EXTRAS (NEW) -->
+        <!-- SCREENING (STUDENT) -->
+        <div id="screeningBox" class="mt-3">
+          <div class="section-heading">English Background</div>
+          <hr class="section-divider">
+
+          <div class="mb-2">
+            <label class="form-label">How many years have you been exposed to English?</label>
+            <input type="number" class="form-control"
+                   id="english_exposure_years" name="english_exposure_years"
+                   min="0" max="60" step="0.5"
+                   placeholder="e.g., 3"
+                   style="border-left: 1px solid #ffd7cc !important; border-radius: 12px !important;">
+            <div class="help mt-1">Include school + academy + self-study combined.</div>
+          </div>
+
+          <div class="mb-2">
+            <label class="form-label">Where did you learn English mostly?</label>
+            <select class="form-select" id="english_learned_where" name="english_learned_where">
+              <option value="" selected disabled>Select one</option>
+              <option value="school">School</option>
+              <option value="academy">Academy / Hagwon</option>
+              <option value="home">Home / Self-study</option>
+              <option value="online">Online course</option>
+              <option value="abroad">Abroad</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+
+          <div class="mb-2">
+            <label class="form-label">How often do you use English?</label>
+            <select class="form-select" id="english_use_frequency" name="english_use_frequency">
+              <option value="" selected disabled>Select one</option>
+              <option value="never">Never</option>
+              <option value="rarely">Rarely</option>
+              <option value="sometimes">Sometimes</option>
+              <option value="often">Often</option>
+              <option value="daily">Daily</option>
+            </select>
+          </div>
+
+          <div class="mb-2">
+            <label class="form-label">How do you rate your English level?</label>
+            <select class="form-select" id="english_self_level" name="english_self_level">
+              <option value="" selected disabled>Select one</option>
+              <option value="beginner">Beginner</option>
+              <option value="intermediate">Intermediate</option>
+              <option value="advanced">Advanced</option>
+            </select>
+          </div>
+
+          <div class="mb-2">
+            <label class="form-label">When did you start learning English? (optional)</label>
+            <input type="number" class="form-control"
+                   id="english_start_age" name="english_start_age"
+                   min="0" max="80"
+                   placeholder="e.g., 8"
+                   style="border-left: 1px solid #ffd7cc !important; border-radius: 12px !important;">
+          </div>
+        </div>
+
+        <!-- OPTIONAL EXTRAS -->
         <div id="studentExtras" class="mt-3">
           <div class="section-heading">Student (optional)</div>
           <hr class="section-divider">
@@ -385,7 +445,6 @@
 
       <div id="step1Warning" class="text-danger small mt-2" style="display:none;"></div>
 
-      <!-- Button text changes depending on role -->
       <button type="button" class="btn-soft mt-3" id="toLevelBtn">
         Next: Level Test
       </button>
@@ -396,8 +455,8 @@
       <div class="level-section">
         <div class="section-heading mb-1">Step 2 · Quick English Level Test</div>
         <div class="help mb-2">
-          Answer 10 short questions (multiple choice, true/false, and fill-in-the-blank).
-          We use this only to set your starting reading level.
+          Answer 10 short questions. We use this only to set your starting level.
+          Your result is not shown on this page.
         </div>
         <div id="levelQuestions"></div>
         <div id="levelWarning" class="level-result-text text-danger mt-1" style="display:none;"></div>
@@ -425,7 +484,7 @@
   </form>
 </div>
 
-<!-- Success Modal -->
+<!-- Success Modal (NO LEVEL SHOWN) -->
 <div class="modal fade" id="registerSuccessModal" tabindex="-1" aria-labelledby="registerSuccessLabel" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content border-0 rounded-4" style="background: #f7faff; border: 1px solid #cce5ff; box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);">
@@ -436,24 +495,9 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body text-center pt-1 pb-0">
-        <h6 class="fw-bold mb-3" style="color: #4a4a4a;">Welcome to LexiTale!</h6>
-
-        {% if registered_level_name is not none %}
-        <div class="my-3 p-3 rounded-3" style="background: #e9f0ff; border: 1px solid #cce5ff;">
-          <p class="mb-1" style="font-size: 1.1rem; color: #6a6a6a;">
-            <i class="bi bi-award me-1" style="color: #ff6b6b;"></i> Your Starting Level:
-            <strong style="color: #ff6b6b; font-size: 1.3rem;">{{ registered_level_name }}</strong>
-          </p>
-          {% if registered_level_score is not none %}
-          <p class="mb-0 small text-muted">
-            (Level Test Score: {{ registered_level_score }}/10)
-          </p>
-          {% endif %}
-        </div>
-        {% endif %}
-
+        <h6 class="fw-bold mb-2" style="color: #4a4a4a;">Welcome to LexiTale!</h6>
         <p class="small mb-4" style="color: #888;">
-          You can adjust your level later in your profile. Happy reading!
+          Your account is ready. You can start reading right away.
         </p>
       </div>
       <div class="modal-footer border-0 pt-0">
@@ -467,10 +511,8 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-  // URL for AJAX step1 check
   const checkStep1Url = "{{ url_for('register_check_step1') }}";
 
-  // Password match hint
   const pw   = document.getElementById('pw');
   const pw2  = document.getElementById('pw2');
   const hint = document.getElementById('matchHint');
@@ -496,18 +538,16 @@
   pw.addEventListener('input', checkPwMatch);
   pw2.addEventListener('input', checkPwMatch);
 
-  // Fade step switching
   function showStep(stepId){
     const panels = document.querySelectorAll('.fade-panel');
     panels.forEach(p => p.classList.remove('active'));
     const target = document.getElementById(stepId);
     if(target){
-      void target.offsetWidth; // reflow
+      void target.offsetWidth;
       target.classList.add('active');
     }
   }
 
-  // Role helpers
   function getRole(){
     const r = document.querySelector('input[name="role"]:checked');
     return r ? r.value : "student";
@@ -519,19 +559,35 @@
     const studentExtras = document.getElementById("studentExtras");
     const teacherExtras = document.getElementById("teacherExtras");
 
+    const screeningBox = document.getElementById("screeningBox");
+    const exposureEl = document.getElementById("english_exposure_years");
+    const whereEl    = document.getElementById("english_learned_where");
+    const freqEl     = document.getElementById("english_use_frequency");
+    const selfEl     = document.getElementById("english_self_level");
+
     if(role === "teacher"){
-      // teachers skip step2
       toLevelBtn.textContent = "Create Account";
       studentExtras.style.display = "none";
       teacherExtras.style.display = "block";
 
-      // clear level fields so backend doesn't see stale values
+      screeningBox.style.display = "none";
+      exposureEl.required = false;
+      whereEl.required    = false;
+      freqEl.required     = false;
+      selfEl.required     = false;
+
       document.getElementById("levelScore").value = "";
       document.getElementById("levelName").value  = "";
     }else{
       toLevelBtn.textContent = "Next: Level Test";
       studentExtras.style.display = "block";
       teacherExtras.style.display = "none";
+
+      screeningBox.style.display = "block";
+      exposureEl.required = true;
+      whereEl.required    = true;
+      freqEl.required     = true;
+      selfEl.required     = true;
     }
   }
 
@@ -539,57 +595,17 @@
     el.addEventListener("change", applyRoleUI);
   });
 
-  // Level test questions
   const levelQuestions = [
-    { id: 1, type: "mcq",
-      text: "What is the capital of France?",
-      options: ["Berlin", "Paris", "Rome", "Madrid"],
-      answer: "Paris"
-    },
-    { id: 2, type: "mcq",
-      text: "Choose the correct past form of 'go'.",
-      options: ["goed", "went", "goes", "gone"],
-      answer: "went"
-    },
-    { id: 3, type: "mcq",
-      text: "Which word is a noun?",
-      options: ["quickly", "beautiful", "happiness", "run"],
-      answer: "happiness"
-    },
-    { id: 4, type: "mcq",
-      text: "Select the sentence with correct grammar.",
-      options: [
-        "He don't like apples.",
-        "She goes to school every day.",
-        "They is playing.",
-        "I am goes home."
-      ],
-      answer: "She goes to school every day."
-    },
-    { id: 5, type: "tf",
-      text: "The word 'children' is the plural of 'child'.",
-      answer: "true"
-    },
-    { id: 6, type: "tf",
-      text: "In English, adjectives usually come after nouns (for example, 'car red').",
-      answer: "false"
-    },
-    { id: 7, type: "tf",
-      text: "The sentence 'She has been studying for two hours' is present perfect continuous.",
-      answer: "true"
-    },
-    { id: 8, type: "input",
-      text: "Fill in the blank: 'I ____ to the store yesterday.' (go)",
-      answer: "went"
-    },
-    { id: 9, type: "input",
-      text: "Fill in the blank: 'There ____ three books on the table.' (be)",
-      answer: "are"
-    },
-    { id: 10, type: "input",
-      text: "Fill in the blank: 'She is ____ than her brother.' (tall)",
-      answer: "taller"
-    }
+    { id: 1, type: "mcq", text: "What is the capital of France?", options: ["Berlin","Paris","Rome","Madrid"], answer: "Paris" },
+    { id: 2, type: "mcq", text: "Choose the correct past form of 'go'.", options: ["goed","went","goes","gone"], answer: "went" },
+    { id: 3, type: "mcq", text: "Which word is a noun?", options: ["quickly","beautiful","happiness","run"], answer: "happiness" },
+    { id: 4, type: "mcq", text: "Select the sentence with correct grammar.", options: ["He don't like apples.","She goes to school every day.","They is playing.","I am goes home."], answer: "She goes to school every day." },
+    { id: 5, type: "tf",  text: "The word 'children' is the plural of 'child'.", answer: "true" },
+    { id: 6, type: "tf",  text: "In English, adjectives usually come after nouns (for example, 'car red').", answer: "false" },
+    { id: 7, type: "tf",  text: "The sentence 'She has been studying for two hours' is present perfect continuous.", answer: "true" },
+    { id: 8, type: "input", text: "Fill in the blank: 'I ____ to the store yesterday.' (go)", answer: "went" },
+    { id: 9, type: "input", text: "Fill in the blank: 'There ____ three books on the table.' (be)", answer: "are" },
+    { id: 10, type: "input", text: "Fill in the blank: 'She is ____ than her brother.' (tall)", answer: "taller" }
   ];
 
   function renderLevelQuestions(){
@@ -599,56 +615,29 @@
       const block = document.createElement("div");
       block.className = "question-block";
       let html = `
-        <div class="question-title">
-          Q${index + 1}. ${q.text}
-        </div>
-        <div class="question-meta">
-          Type: ${
-            q.type === "mcq" ? "Multiple choice"
-              : q.type === "tf" ? "True / False"
-              : "Fill in the blank"
-          }
-        </div>
+        <div class="question-title">Q${index + 1}. ${q.text}</div>
+        <div class="question-meta">Type: ${q.type === "mcq" ? "Multiple choice" : q.type === "tf" ? "True / False" : "Fill in the blank"}</div>
       `;
       if(q.type === "mcq"){
         html += q.options.map(opt => `
           <div class="form-check">
-            <input class="form-check-input"
-                   type="radio"
-                   name="lvl_q${q.id}"
-                   id="lvl_q${q.id}_${opt}"
-                   value="${opt}">
-            <label class="form-check-label" for="lvl_q${q.id}_${opt}">
-              ${opt}
-            </label>
+            <input class="form-check-input" type="radio" name="lvl_q${q.id}" id="lvl_q${q.id}_${opt}" value="${opt}">
+            <label class="form-check-label" for="lvl_q${q.id}_${opt}">${opt}</label>
           </div>
         `).join("");
       } else if(q.type === "tf"){
         html += `
           <div class="form-check">
-            <input class="form-check-input"
-                   type="radio"
-                   name="lvl_q${q.id}"
-                   id="lvl_q${q.id}_true"
-                   value="true">
+            <input class="form-check-input" type="radio" name="lvl_q${q.id}" id="lvl_q${q.id}_true" value="true">
             <label class="form-check-label" for="lvl_q${q.id}_true">True</label>
           </div>
           <div class="form-check">
-            <input class="form-check-input"
-                   type="radio"
-                   name="lvl_q${q.id}"
-                   id="lvl_q${q.id}_false"
-                   value="false">
+            <input class="form-check-input" type="radio" name="lvl_q${q.id}" id="lvl_q${q.id}_false" value="false">
             <label class="form-check-label" for="lvl_q${q.id}_false">False</label>
           </div>
         `;
       } else {
-        html += `
-          <input type="text"
-                 class="form-control form-control-sm"
-                 name="lvl_q${q.id}"
-                 placeholder="Your answer">
-        `;
+        html += `<input type="text" class="form-control form-control-sm" name="lvl_q${q.id}" placeholder="Your answer">`;
       }
       block.innerHTML = html;
       container.appendChild(block);
@@ -677,17 +666,22 @@
     const ageEl       = document.getElementById("age");
     const genderEl    = document.getElementById("gender");
 
+    const exposureEl  = document.getElementById("english_exposure_years");
+    const whereEl     = document.getElementById("english_learned_where");
+    const freqEl      = document.getElementById("english_use_frequency");
+    const selfEl      = document.getElementById("english_self_level");
+    const startAgeEl  = document.getElementById("english_start_age");
+
     renderLevelQuestions();
     applyRoleUI();
 
-    // Step 1 action:
-    // - Student: validate -> go to Step 2
-    // - Teacher: validate -> submit directly (skip Step 2)
     toLevelBtn.addEventListener("click", function () {
       step1Warn.style.display = "none";
       step1Warn.textContent = "";
 
+      const role = getRole();
       const missing = [];
+
       if (!usernameEl.value.trim()) missing.push("Username");
       if (!emailEl.value.trim())    missing.push("Email");
       if (!pw.value)                missing.push("Password");
@@ -696,6 +690,13 @@
       if (!l2El.value)              missing.push("L2");
       if (!ageEl.value)             missing.push("Age");
       if (!genderEl.value)          missing.push("Gender");
+
+      if (role === "student") {
+        if (!exposureEl.value) missing.push("English exposure years");
+        if (!whereEl.value)    missing.push("Where you learned English");
+        if (!freqEl.value)     missing.push("English use frequency");
+        if (!selfEl.value)     missing.push("Self-assessed English level");
+      }
 
       if (missing.length > 0) {
         step1Warn.style.display = "block";
@@ -716,6 +717,7 @@
       }
 
       const payload = {
+        role: role,
         username: usernameEl.value.trim(),
         email:    emailEl.value.trim(),
         password: pw.value,
@@ -724,6 +726,11 @@
         l2_language: l2El.value,
         age:     ageEl.value,
         gender:  genderEl.value,
+        english_exposure_years: (exposureEl.value || "").trim(),
+        english_learned_where:  (whereEl.value || "").trim(),
+        english_use_frequency:  (freqEl.value || "").trim(),
+        english_self_level:     (selfEl.value || "").trim(),
+        english_start_age:      (startAgeEl.value || "").trim(),
       };
 
       toLevelBtn.disabled = true;
@@ -745,17 +752,13 @@
           return;
         }
 
-        const role = getRole();
-
         if (role === "teacher") {
-          // Skip Step 2: submit form immediately
           scoreInput.value = "";
           nameInput.value  = "";
           form.submit();
           return;
         }
 
-        // Student: go to Step 2
         showStep("stepLevel");
       })
       .catch(() => {
@@ -764,7 +767,7 @@
       })
       .finally(() => {
         toLevelBtn.disabled = false;
-        applyRoleUI(); // restores correct label
+        applyRoleUI();
       });
     });
 
@@ -772,9 +775,6 @@
       showStep("stepAccount");
     });
 
-    // Submit:
-    // - Student: compute score and require all answers
-    // - Teacher: allow submit without test (Step 2 isn't shown anyway)
     form.addEventListener("submit", function(e){
       const role = getRole();
 
@@ -790,15 +790,13 @@
       }
 
       if(role === "teacher"){
-        // ensure level is empty
         scoreInput.value = "";
         nameInput.value  = "";
         levelWarn.style.display = 'none';
         levelWarn.textContent = "";
-        return; // allow normal submit
+        return;
       }
 
-      // student: must do the test
       let score = 0;
       let unanswered = 0;
 
@@ -832,6 +830,7 @@
         return;
       }
 
+      // Save level result in hidden fields (NOT shown to user)
       const levelName = scoreToLevel(score);
       scoreInput.value = String(score);
       nameInput.value  = levelName;
@@ -839,7 +838,6 @@
       levelWarn.textContent = "";
     });
 
-    // Show success modal if backend sets registered=True
     const registered = {{ 'true' if registered else 'false' }};
     if(registered){
       const modalEl = document.getElementById('registerSuccessModal');

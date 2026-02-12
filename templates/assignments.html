@@ -332,22 +332,15 @@ document.addEventListener("DOMContentLoaded", function() {
     });
   }
 
-  function fetchSubmissionReview(assignmentId) {
-    // Replace with real endpoint later:
-    // return fetch(`/api/assignment_review/${assignmentId}`).then(res => res.json());
-
-    return new Promise(resolve => {
-      setTimeout(() => {
-        const mockComments = {
-          '1': { score: 92.5, comment: "Excellent narrative flow! Your vocabulary choice was particularly strong in the climax.", status: 'graded' },
-          '2': { score: 65, comment: "Good effort, but watch your verb tenses. Try to describe the setting in more detail.", status: 'graded' },
-          '3': { score: 100, comment: "Perfect! A delightful read that clearly incorporates the target words.", status: 'graded' },
-          '4': { score: 45, comment: "Needs significant work on sentence structure and using the target words.", status: 'graded' },
-        };
-        resolve(mockComments[assignmentId] || { score: 75, comment: "Teacher review pending or general good standing.", status: 'graded' });
-      }, 500);
+function fetchSubmissionReview(assignment_id) {
+  return fetch(`/api/assignment_review/${assignment_id}`)
+    .then(response => {
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+      return response.json();
     });
-  }
+}
 });
 </script>
 
