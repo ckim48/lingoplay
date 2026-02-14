@@ -16,7 +16,7 @@
   </div>
 
   {# =========================
-     NEW: Class Filter + Manage Classes button
+     Class Filter + Manage Classes
      Assumes backend passes:
        - my_classes (list of {id, name})
        - selected_class_id (int or None)
@@ -81,8 +81,8 @@
               {% set is_mcq = (a.assignment_type == 'mcq') %}
               {% set is_finish = (a.assignment_type == 'finish') %}
               {% set status = (a.status or '') %}
-              {% set score = a.score %}
               {% set title = a.assignment_title or a.story_title %}
+              {% set due_at = a.due_at %}
 
               <div class="col-12 col-sm-6 col-lg-4">
                 <a href="{{ url_for('assignment_detail', assignment_id=a.id) }}" class="text-decoration-none">
@@ -107,7 +107,6 @@
                         Story: {{ a.story_title }}
                       </div>
 
-                      {# NEW: show class name if present #}
                       {% if a.class_name %}
                         <div class="small mt-1">
                           <span class="badge rounded-pill class-badge page-sub-text">
@@ -117,10 +116,26 @@
                       {% endif %}
                     </div>
 
-                    <div class="mt-auto pt-3 d-flex justify-content-between align-items-center small assignment-footer-text">
-                      <div class="text-muted">
-                        {{ a.created_at|dt("%Y-%m-%d") }}
+                    <div class="mt-auto pt-3 d-flex justify-content-between align-items-end small assignment-footer-text">
+                      <div class="d-flex flex-column gap-1">
+                        <div class="text-muted">
+                          {{ a.created_at|dt("%Y-%m-%d") }}
+                        </div>
+
+                        {# NEW: Due date display #}
+                        {% if due_at %}
+                          <div class="due-pill due-pill-soon">
+                            <i class="bi bi-calendar2-week me-1"></i>
+                            Due: <span class="fw-semibold">{{ due_at|dt("%Y-%m-%d") }}</span>
+                          </div>
+                        {% else %}
+                          <div class="due-pill due-pill-none">
+                            <i class="bi bi-calendar2-x me-1"></i>
+                            No deadline
+                          </div>
+                        {% endif %}
                       </div>
+
                       <div class="d-flex flex-column align-items-end">
                         <div>
                           Attempts:
@@ -154,7 +169,9 @@
               {% set status = (a.status or '') %}
               {% set score = a.score %}
               {% set title = a.assignment_title or a.story_title %}
+              {% set due_at = a.due_at %}
 
+              {# Only open the feedback modal when teacher has graded it #}
               {% set trigger_modal = (status == 'graded') %}
               {% set link_url = url_for('assignment_detail', assignment_id=a.id) %}
 
@@ -166,7 +183,10 @@
                       data-bs-target="#reviewModal"
                       data-assignment-id="{{ a.id }}"
                       data-assignment-title="{{ title }}"
-                      data-score="{{ '%.1f'|format(score) }}"
+                      {# IMPORTANT: do NOT expose score unless graded #}
+                      {% if score is not none %}
+                        data-score="{{ '%.1f'|format(score) }}"
+                      {% endif %}
                       data-link-url="{{ link_url }}"
                       style="cursor: pointer;"
                     {% endif %}>
@@ -190,7 +210,6 @@
                         Story: {{ a.story_title }}
                       </div>
 
-                      {# NEW: show class name if present #}
                       {% if a.class_name %}
                         <div class="small mt-1">
                           <span class="badge rounded-pill class-badge page-sub-text">
@@ -200,21 +219,43 @@
                       {% endif %}
                     </div>
 
-                    <div class="mt-auto pt-3 d-flex justify-content-between align-items-center small assignment-footer-text">
-                      <div class="text-muted">
-                        {{ a.created_at|dt("%Y-%m-%d") }}
+                    <div class="mt-auto pt-3 d-flex justify-content-between align-items-end small assignment-footer-text">
+                      <div class="d-flex flex-column gap-1">
+                        <div class="text-muted">
+                          {{ a.created_at|dt("%Y-%m-%d") }}
+                        </div>
+
+                        {# NEW: Due date display #}
+                        {% if due_at %}
+                          <div class="due-pill">
+                            <i class="bi bi-calendar2-week me-1"></i>
+                            Due: <span class="fw-semibold">{{ due_at|dt("%Y-%m-%d") }}</span>
+                          </div>
+                        {% else %}
+                          <div class="due-pill due-pill-none">
+                            <i class="bi bi-calendar2-x me-1"></i>
+                            No deadline
+                          </div>
+                        {% endif %}
                       </div>
+
                       <div class="d-flex flex-column align-items-end">
                         <div>
                           Attempts:
                           <span class="fw-semibold">{{ attempts }}</span>
                         </div>
-                        {% if score is not none %}
+
+                        {# IMPORTANT: hide numeric score until graded #}
+                        {% if status == 'graded' and score is not none %}
                           {% set score_display = '%.1f'|format(score) %}
-                          <div class="{% if status == 'graded' %}text-success-v7 fw-bold{% endif %}">
+                          <div class="text-success-v7 fw-bold">
                             Score:
                             <span class="fw-semibold">{{ score_display }}%</span>
-                            {% if status == 'graded' %}<i class="bi bi-chat-dots ms-1"></i>{% endif %}
+                            <i class="bi bi-chat-dots ms-1"></i>
+                          </div>
+                        {% else %}
+                          <div class="text-muted">
+                            Score: <span class="fw-semibold">Pending</span>
                           </div>
                         {% endif %}
                       </div>
@@ -292,14 +333,21 @@ document.addEventListener("DOMContentLoaded", function() {
 
     reviewModal.addEventListener('show.bs.modal', function (event) {
       const trigger = event.relatedTarget;
+
       const assignmentId = trigger.getAttribute('data-assignment-id');
       const assignmentTitle = trigger.getAttribute('data-assignment-title');
-      const scoreDisplay = trigger.getAttribute('data-score');
+      const scoreDisplayAttr = trigger.getAttribute('data-score'); // may be null if not set
       const linkUrl = trigger.getAttribute('data-link-url');
 
       modalTitle.textContent = assignmentTitle;
-      modalScore.textContent = scoreDisplay + '%';
       modalGoToAssignment.href = linkUrl;
+
+      // Show score if present, else fallback
+      if (scoreDisplayAttr !== null && scoreDisplayAttr !== "") {
+        modalScore.textContent = scoreDisplayAttr + '%';
+      } else {
+        modalScore.textContent = '--';
+      }
 
       scoreSection.classList.remove('bg-success-v7', 'bg-danger');
       scoreSection.style.backgroundColor = V7_COLORS.coralDark;
@@ -310,18 +358,26 @@ document.addEventListener("DOMContentLoaded", function() {
         .then(data => {
           const parsedScore = parseFloat(data.score);
 
-          if (parsedScore >= 80) {
-            scoreSection.classList.add('bg-success-v7');
-            scoreSection.style.backgroundColor = '';
-          } else if (parsedScore < 50) {
-            scoreSection.classList.add('bg-danger');
-            scoreSection.style.backgroundColor = '';
+          if (!Number.isNaN(parsedScore)) {
+            // Keep modal score synced with fetched value (teacher-side truth)
+            modalScore.textContent = parsedScore.toFixed(1) + '%';
+
+            if (parsedScore >= 80) {
+              scoreSection.classList.add('bg-success-v7');
+              scoreSection.style.backgroundColor = '';
+            } else if (parsedScore < 50) {
+              scoreSection.classList.add('bg-danger');
+              scoreSection.style.backgroundColor = '';
+            } else {
+              scoreSection.style.backgroundColor = V7_COLORS.coralDark;
+            }
           } else {
+            modalScore.textContent = '--';
             scoreSection.style.backgroundColor = V7_COLORS.coralDark;
           }
 
           modalComment.innerHTML = data.comment
-            ? data.comment.replace(/\n/g, '<br>')
+            ? String(data.comment).replace(/\n/g, '<br>')
             : "No specific comments provided by the teacher.";
         })
         .catch(error => {
@@ -332,15 +388,13 @@ document.addEventListener("DOMContentLoaded", function() {
     });
   }
 
-function fetchSubmissionReview(assignment_id) {
-  return fetch(`/api/assignment_review/${assignment_id}`)
-    .then(response => {
-      if (!response.ok) {
-        throw new Error('Network response was not ok');
-      }
-      return response.json();
-    });
-}
+  function fetchSubmissionReview(assignment_id) {
+    return fetch(`/api/assignment_review/${assignment_id}`)
+      .then(response => {
+        if (!response.ok) throw new Error('Network response was not ok');
+        return response.json();
+      });
+  }
 });
 </script>
 
@@ -357,9 +411,7 @@ function fetchSubmissionReview(assignment_id) {
   --light-soft-blue-v7: #ffece5;
 }
 
-body{
-  background-color: #F5FCFB;
-}
+body{ background-color: #F5FCFB; }
 
 /* Helpers */
 .text-success-v7 { color: var(--success-v7) !important; }
@@ -380,7 +432,7 @@ body{
 
 .assignments-page { min-height: calc(100vh - 80px); }
 
-/* NEW: class filter UI */
+/* class filter UI */
 .class-filter{
   max-width: 280px;
   border-radius: 999px;
@@ -392,6 +444,25 @@ body{
   border: 1px solid var(--coral-light);
   font-weight: 700;
   letter-spacing: .01em;
+}
+
+/* NEW: due pill */
+.due-pill{
+  display: inline-flex;
+  align-items: center;
+  gap: .25rem;
+  padding: .2rem .6rem;
+  border-radius: 999px;
+  border: 1px solid var(--coral-light);
+  background: #E9FBF2;
+  color: var(--coral-dark);
+  font-weight: 700;
+  width: fit-content;
+}
+.due-pill-none{
+  background: #f3f4f6;
+  border-color: #e5e7eb;
+  color: #6b7280;
 }
 
 /* Empty state */

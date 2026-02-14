@@ -139,6 +139,13 @@
                            placeholder="e.g. Space Adventure: Week 1" required
                            {% if not selected_class_id %}disabled{% endif %}>
                   </div>
+                  <div class="mb-4">
+                    <label class="lexi-label mb-2">Deadline (optional)</label>
+                    <input type="datetime-local" name="due_at" id="dueAtInput"
+                           class="form-control lexi-input"
+                           {% if not selected_class_id %}disabled{% endif %}>
+                    <div class="form-text text-muted">Students can still submit after the deadline, but you can show it as “late”.</div>
+                  </div>
                   <div class="d-flex justify-content-end">
                     <button type="button" class="btn lexi-btn-primary btn-step-next" data-next-step="2" {% if not selected_class_id %}disabled{% endif %}>
                       Next Step <i class="bi bi-arrow-right ms-2"></i>
@@ -188,10 +195,13 @@
                       <div class="col-md-6">
                         <label class="lexi-label-micro">Target Level</label>
                         <select name="writing_level" id="writingLevelSelect" class="form-select lexi-select">
-                          <option value="beginner">Beginner</option>
-                          <option value="intermediate">Intermediate</option>
-                          <option value="advanced">Advanced</option>
+                          <option value="level_1">Level 1: Beginner (50-80 words)</option>
+                          <option value="level_2" selected>Level 2: Intermediate (100-150 words)</option>
+                          <option value="level_3">Level 3: Advanced (180-250 words)</option>
                         </select>
+                        <div class="form-text text-muted small mt-1">
+                          <strong>L1:</strong> SVO sentences. <strong>L2:</strong> Compound sentences. <strong>L3:</strong> Paragraphs.
+                        </div>
                       </div>
                       <div class="col-md-6">
                         <label class="lexi-label-micro">Task Type</label>
@@ -214,9 +224,9 @@
                       <div class="col-md-4">
                         <label class="lexi-label-micro">Difficulty</label>
                         <select name="worksheet_level" id="readingLevelSelect" class="form-select lexi-select">
-                          <option value="beginner" selected>Beginner</option>
-                          <option value="intermediate">Intermediate</option>
-                          <option value="advanced">Advanced</option>
+                          <option value="level_1">Level 1: Beginner</option>
+                          <option value="level_2" selected>Level 2: Intermediate</option>
+                          <option value="level_3">Level 3: Advanced</option>
                         </select>
                       </div>
                       <div class="col-md-4">
@@ -324,6 +334,7 @@
                         <i class="bi bi-book me-1"></i> {{ g.story_title }}<br>
                       {% endif %}
                       <i class="bi bi-calendar me-1"></i> {{ g.created_at|dt("%b %d") }}
+                      {% if g.due_at %}<br><i class="bi bi-alarm me-1"></i> Due {{ g.due_at|dt("%b %d, %H:%M") }}{% endif %}
                     </div>
                   </td>
                   <td class="d-none d-md-table-cell">
@@ -369,6 +380,12 @@
                           <div class="mb-3">
                             <label class="lexi-label-micro">Title</label>
                             <input type="text" name="worksheet_title" class="form-control lexi-input" value="{{ g.assignment_title }}" required>
+                          </div>
+                          <div class="mb-3">
+                            <label class="lexi-label-micro">Deadline (optional)</label>
+                            <input type="datetime-local" name="due_at" class="form-control lexi-input"
+                                   value="{% if g.due_at %}{{ g.due_at[:16].replace(" ","T") }}{% endif %}">
+                            <div class="form-text text-muted">Leave empty to clear the deadline.</div>
                           </div>
                           <div class="alert alert-light border small text-muted">
                             <i class="bi bi-info-circle me-1"></i> Currently assigned to {{ g.assignees|length }} students.

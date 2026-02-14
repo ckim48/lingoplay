@@ -19,6 +19,7 @@
           </div>
           <div class="text-end score-box-v7">
             <div class="small text-muted game-text-body">Progress</div>
+            {# NOTE: this counter is now "Completed puzzles", not only correct #}
             <div class="score-number-v7">
               <span id="scoreCorrect">0</span>/<span id="scoreTotal">{{ puzzles|length }}</span>
             </div>
@@ -40,8 +41,7 @@
             </div>
           </div>
 
-          <div id="puzzleDisplay" class="puzzle-display-v7 mb-4">
-          </div>
+          <div id="puzzleDisplay" class="puzzle-display-v7 mb-4"></div>
 
           <div class="input-feedback-area text-center">
             <form id="scrambleForm" class="d-flex justify-content-center gap-3">
@@ -54,8 +54,12 @@
               <button class="btn btn-lg btn-coral-v7" type="submit" id="checkButton">Check</button>
             </form>
 
-            <div id="feedbackContainer" class="feedback-container-v7">
+            <!-- Attempts left -->
+            <div class="small text-muted mt-2 game-text-body">
+              Attempts left: <span id="attemptsLeft" class="fw-bold">3</span>
             </div>
+
+            <div id="feedbackContainer" class="feedback-container-v7"></div>
 
             <button id="nextButton" class="btn btn-lg btn-success-v7 mt-4 px-5" style="display: none;">
               Next Puzzle <i class="bi bi-arrow-right"></i>
@@ -77,47 +81,51 @@
   </div>
 </div>
 
-
 <script>
 (function () {
-  const puzzles = {{ puzzles | tojson }}; // Puzzles array from Flask
+  const puzzles = {{ puzzles | tojson }};
   const puzzleDisplay = document.getElementById('puzzleDisplay');
   const scrambleForm = document.getElementById('scrambleForm');
   const scrambleInput = document.getElementById('scrambleInput');
   const checkButton = document.getElementById('checkButton');
   const nextButton = document.getElementById('nextButton');
   const restartButton = document.getElementById('restartButton');
-  const scoreCorrectEl = document.getElementById('scoreCorrect');
+  const scoreCorrectEl = document.getElementById('scoreCorrect');   // now used as "Completed"
   const scoreTotalEl = document.getElementById('scoreTotal');
   const feedbackContainer = document.getElementById('feedbackContainer');
 
   const levelBadge = document.getElementById('levelBadge');
   const levelDots = document.querySelectorAll('.level-step-dot');
 
-  let currentPuzzleIndex = 0;
-  let correctCount = 0;
-  let currentPuzzle = null;
-  let currentLevel = 1; // 1: easy, 2: medium, 3: hard
+  const attemptsLeftEl = document.getElementById('attemptsLeft');
 
-  // --- Helpers: Level detection & UI ---
+  let currentPuzzleIndex = 0;
+
+  // ✅ CHANGE: progress should go up even if answer is revealed after 3 wrong
+  let completedCount = 0;
+
+  let currentPuzzle = null;
+  let currentLevel = 1;
+
+  const MAX_WRONG_PER_PUZZLE = 3;
+  let wrongTriesThisPuzzle = 0;
+
+  // ✅ prevent double count
+  let puzzleCompleted = false;
 
   function getLevelFromWord(word) {
     const len = (word || '').length;
-    if (len === 4) return 1;      // Easy
-    if (len === 5) return 2;      // Medium
-    return 3;                     // Hard
+    if (len === 4) return 1;
+    if (len === 5) return 2;
+    return 3;
   }
 
   function updateLevelUI(level) {
     if (levelBadge) {
       let label = '';
-      if (level === 1) {
-        label = 'Level 1 · Easy (4 letters)';
-      } else if (level === 2) {
-        label = 'Level 2 · Medium (5 letters)';
-      } else {
-        label = 'Level 3 · Hard (6+ letters)';
-      }
+      if (level === 1) label = 'Level 1 · Easy (4 letters)';
+      else if (level === 2) label = 'Level 2 · Medium (5 letters)';
+      else label = 'Level 3 · Hard (6+ letters)';
       levelBadge.textContent = label;
     }
     if (levelDots && levelDots.length) {
@@ -130,13 +138,9 @@
 
   function showLevelUp(level) {
     let text = '';
-    if (level === 2) {
-      text = "Great job! You have unlocked Level 2 – 5-letter words.";
-    } else if (level === 3) {
-      text = "Amazing. You are now on Level 3 – challenge words (6+ letters).";
-    } else {
-      return;
-    }
+    if (level === 2) text = "Great job! You have unlocked Level 2 – 5-letter words.";
+    else if (level === 3) text = "Amazing. You are now on Level 3 – challenge words (6+ letters).";
+    else return;
 
     feedbackContainer.innerHTML = '';
     const msgElement = document.createElement('div');
@@ -145,32 +149,42 @@
     feedbackContainer.appendChild(msgElement);
   }
 
-  // --- HTML Rendering Functions ---
-
   function renderLetters(scrambledText) {
     let html = '<div class="scramble-letters-v7">';
     for (const ch of scrambledText) {
-      if (ch === ' ') {
-        html += '<span class="scramble-letter-space-v7">&nbsp;</span>';
-      } else {
-        html += `<span class="scramble-letter-v7">${ch}</span>`;
-      }
+      if (ch === ' ') html += '<span class="scramble-letter-space-v7">&nbsp;</span>';
+      else html += `<span class="scramble-letter-v7">${ch}</span>`;
     }
     html += '</div>';
     return html;
   }
 
+  function updateAttemptsLeftUI() {
+    if (!attemptsLeftEl) return;
+    const left = Math.max(0, MAX_WRONG_PER_PUZZLE - wrongTriesThisPuzzle);
+    attemptsLeftEl.textContent = String(left);
+  }
+
+  function markPuzzleCompleted() {
+    if (puzzleCompleted) return;
+    puzzleCompleted = true;
+    completedCount++;
+    scoreCorrectEl.textContent = completedCount;
+  }
+
   function renderPuzzle(puzzle) {
     if (!puzzle) return;
 
-    // Render the puzzle content
+    wrongTriesThisPuzzle = 0;
+    puzzleCompleted = false;
+    updateAttemptsLeftUI();
+
     puzzleDisplay.innerHTML = `
       <div class="scramble-number-circle mb-3">${currentPuzzleIndex + 1}</div>
       ${renderLetters(puzzle.scrambled)}
       ${puzzle.definition ? `<div class="small text-muted mt-3 game-text-body">Hint: ${puzzle.definition}</div>` : ''}
     `;
 
-    // Reset any success styles on letters
     puzzleDisplay.querySelectorAll('.scramble-letter-v7').forEach(el => {
       el.classList.remove('correct');
       el.style.backgroundColor = '';
@@ -184,24 +198,18 @@
     scrambleInput.disabled = false;
     checkButton.disabled = false;
     nextButton.style.display = 'none';
+    scrambleInput.style.display = '';
+    checkButton.style.display = '';
     scrambleInput.focus();
   }
-
-  // --- Game Flow Control ---
 
   function loadNextPuzzle() {
     if (currentPuzzleIndex < puzzles.length) {
       const upcoming = puzzles[currentPuzzleIndex];
       const newLevel = getLevelFromWord(upcoming.word);
 
-      // If we are entering a new level (but not on the very first question),
-      // show a "congrats" / level-up message.
-      if (currentPuzzleIndex > 0 && newLevel > currentLevel) {
-        showLevelUp(newLevel);
-      } else {
-        // Normal case: clear previous feedback when going to next puzzle
-        feedbackContainer.innerHTML = '';
-      }
+      if (currentPuzzleIndex > 0 && newLevel > currentLevel) showLevelUp(newLevel);
+      else feedbackContainer.innerHTML = '';
 
       currentLevel = newLevel;
       updateLevelUI(currentLevel);
@@ -215,41 +223,32 @@
 
   function showFinalScore() {
     feedbackContainer.innerHTML = '';
-
     puzzleDisplay.innerHTML = `
       <h4 class="fw-bold game-title-v7 mb-2">Game Complete</h4>
-      <p class="score-number-v7 mb-1">${correctCount} out of ${puzzles.length} correct.</p>
+      <p class="score-number-v7 mb-1">${completedCount} out of ${puzzles.length} completed.</p>
       <p class="text-muted game-text-body mb-0">
         You have cleared all 3 levels. Select “Play Again from Level 1” to try a fresh mix of words.
       </p>
     `;
 
-    if (levelBadge) {
-      levelBadge.textContent = 'All levels complete';
-    }
-    if (levelDots && levelDots.length) {
-      levelDots.forEach(dot => dot.classList.add('active'));
-    }
+    if (levelBadge) levelBadge.textContent = 'All levels complete';
+    if (levelDots && levelDots.length) levelDots.forEach(dot => dot.classList.add('active'));
 
     checkButton.style.display = 'none';
     scrambleInput.style.display = 'none';
-    nextButton.style.display = 'none';   // hide Next on final screen
+    nextButton.style.display = 'none';
     restartButton.style.display = 'inline-block';
   }
 
-  // --- Animated Feedback ---
-
-  function showFeedback(isCorrect, message) {
+  function showFeedback(isCorrect, messageHtml) {
     feedbackContainer.innerHTML = '';
     const msgElement = document.createElement('div');
     msgElement.className = 'feedback-message';
 
     if (isCorrect) {
-      // Use Bootstrap Check Icon
-      msgElement.innerHTML = `<span class="feedback-icon text-success-v7"><i class="bi bi-check-circle-fill"></i></span> ${message}`;
+      msgElement.innerHTML = `<span class="feedback-icon text-success-v7"><i class="bi bi-check-circle-fill"></i></span> ${messageHtml}`;
       msgElement.style.color = 'var(--success-color)';
 
-      // Success animation for letters
       puzzleDisplay.querySelectorAll('.scramble-letter-v7').forEach(el => {
         el.classList.add('correct');
         el.style.backgroundColor = 'var(--success-color)';
@@ -260,50 +259,62 @@
       });
 
     } else {
-      // Use Bootstrap X Icon
-      msgElement.innerHTML = `<span class="feedback-icon text-danger"><i class="bi bi-x-circle-fill"></i></span> ${message}`;
+      msgElement.innerHTML = `<span class="feedback-icon text-danger"><i class="bi bi-x-circle-fill"></i></span> ${messageHtml}`;
       msgElement.style.color = 'var(--coral-main)';
 
-      // Animate the input field red and shake
       scrambleForm.classList.add('shake');
       setTimeout(() => scrambleForm.classList.remove('shake'), 500);
     }
 
     feedbackContainer.appendChild(msgElement);
-    // Trigger CSS transition
     setTimeout(() => msgElement.classList.add('active'), 10);
   }
 
-  // --- Event Handlers ---
+  function revealAnswerAndLock() {
+    // ✅ progress goes up even if revealed
+    markPuzzleCompleted();
+
+    const answer = (currentPuzzle.word || '').toUpperCase();
+    showFeedback(false, `Answer revealed: <b>${answer}</b>. Click “Next Puzzle” to continue.`);
+
+    scrambleInput.disabled = true;
+    checkButton.disabled = true;
+    nextButton.style.display = 'inline-block';
+  }
 
   scrambleForm.addEventListener('submit', (e) => {
     e.preventDefault();
+    if (puzzleCompleted) return;
+
     const guess = scrambleInput.value.trim().toLowerCase();
     const answer = (currentPuzzle.word || '').toLowerCase();
-
     if (!guess) return;
 
-    // Clear any previous feedback
-    feedbackContainer.innerHTML = '';
-
     if (guess === answer) {
-      // Correct Answer
-      correctCount++;
-      scoreCorrectEl.textContent = correctCount;
+      // ✅ correct -> completed
+      markPuzzleCompleted();
 
       showFeedback(true, "Great work. You got it right.");
-
       scrambleInput.disabled = true;
       checkButton.disabled = true;
       nextButton.style.display = 'inline-block';
-
-    } else {
-      // Incorrect Answer
-      showFeedback(false, "Not quite. Try one more time.");
-
-      scrambleInput.value = '';
-      scrambleInput.focus();
+      return;
     }
+
+    // ❌ wrong
+    wrongTriesThisPuzzle++;
+    updateAttemptsLeftUI();
+
+    const left = MAX_WRONG_PER_PUZZLE - wrongTriesThisPuzzle;
+
+    if (wrongTriesThisPuzzle >= MAX_WRONG_PER_PUZZLE) {
+      revealAnswerAndLock();
+      return;
+    }
+
+    showFeedback(false, `Not quite. Try again. (${left} left)`);
+    scrambleInput.value = '';
+    scrambleInput.focus();
   });
 
   nextButton.addEventListener('click', () => {
@@ -312,13 +323,10 @@
   });
 
   restartButton.addEventListener('click', () => {
-    // Simple reload – backend will choose a fresh random set of words
     window.location.reload();
   });
 
-  // --- Initialization ---
   if (puzzles.length > 0) {
-    // Initial level indicator for first puzzle
     currentLevel = getLevelFromWord(puzzles[0].word);
     updateLevelUI(currentLevel);
   }
@@ -328,150 +336,117 @@
 
 <style>
 :root {
-    --coral-main: #ff6b6b;
-    --coral-light: #ffd7cc;
-    --ink: #111827;
-    --muted: #6b7280;
-    --paper: #ffffff;
-    --success-color: #10b981;
-    --success-dark-color: #047857;
-    --success-light-color: #a7f3d0;
-    --success-dark-color-light: #4ade80;
+  --coral-main: #ff6b6b;
+  --coral-light: #ffd7cc;
+  --ink: #111827;
+  --muted: #6b7280;
+  --paper: #ffffff;
+  --success-color: #10b981;
+  --success-dark-color: #047857;
+  --success-light-color: #a7f3d0;
+  --success-dark-color-light: #4ade80;
 }
 
 /* Fonts */
 .game-title-v7, .score-number-v7, .btn, .feedback-message {
-    font-family: 'Baloo 2', cursive;
-    font-weight: 700;
+  font-family: 'Baloo 2', cursive;
+  font-weight: 700;
 }
 .game-text-body, .scramble-input-v7, .scramble-letter-v7 {
-    font-family: 'Fredoka', 'Nunito', sans-serif;
+  font-family: 'Fredoka', 'Nunito', sans-serif;
 }
-.score-box-v7, .game-title-v7 {
-    color: var(--ink);
-}
+.score-box-v7, .game-title-v7 { color: var(--ink); }
 
-/* --- Layout & Container Styles --- */
+/* Layout */
 .game-bg-v7 {
-    background: linear-gradient(145deg, #fff7e5 0%, #fff2f2 50%, #fefcfb 100%) !important;
-    border: 3px solid var(--coral-light);
-    border-radius: 30px !important;
-    box-shadow: 0 10px 30px rgba(255, 107, 107, 0.15);
+  background: linear-gradient(145deg, #fff7e5 0%, #fff2f2 50%, #fefcfb 100%) !important;
+  border: 3px solid var(--coral-light);
+  border-radius: 30px !important;
+  box-shadow: 0 10px 30px rgba(255, 107, 107, 0.15);
 }
-.game-title-v7 {
-    color: var(--coral-main);
-    font-size: 2rem;
-}
-.score-number-v7 {
-    font-size: 2.25rem;
-    color: var(--ink);
-}
-.border-bottom-soft {
-    border-bottom: 2px solid rgba(255, 107, 107, 0.15) !important;
-}
+.game-title-v7 { color: var(--coral-main); font-size: 2rem; }
+.score-number-v7 { font-size: 2.25rem; color: var(--ink); }
+.border-bottom-soft { border-bottom: 2px solid rgba(255, 107, 107, 0.15) !important; }
 
-/* --- Level Indicator --- */
-.level-indicator-v7 {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-}
+/* Level Indicator */
+.level-indicator-v7 { display: flex; align-items: center; justify-content: space-between; }
 .level-chip-v7 {
-    padding: 0.3rem 1rem;
-    border-radius: 999px;
-    background: #fff4f4;
-    color: var(--coral-main);
-    font-size: 0.9rem;
-    font-weight: 600;
-    border: 1px solid rgba(255, 107, 107, 0.5);
-    white-space: nowrap;
+  padding: 0.3rem 1rem;
+  border-radius: 999px;
+  background: #fff4f4;
+  color: var(--coral-main);
+  font-size: 0.9rem;
+  font-weight: 600;
+  border: 1px solid rgba(255, 107, 107, 0.5);
+  white-space: nowrap;
 }
-.level-steps-v7 {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-}
+.level-steps-v7 { display: flex; align-items: center; gap: 0.4rem; }
 .level-step-dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 999px;
-    background: #ffe0e0;
-    opacity: 0.5;
+  width: 10px; height: 10px;
+  border-radius: 999px;
+  background: #ffe0e0;
+  opacity: 0.5;
 }
-.level-step-dot.active {
-    background: var(--coral-main);
-    opacity: 1;
-}
+.level-step-dot.active { background: var(--coral-main); opacity: 1; }
 
-/* --- Puzzle Display --- */
+/* Puzzle Display */
 .puzzle-display-v7 {
-    min-height: 150px;
-    padding: 2rem 1.5rem;
-    border-radius: 20px;
-    background: var(--paper);
-    border: 2px solid var(--coral-light);
-    box-shadow: 0 4px 15px rgba(255, 107, 107, 0.12);
-
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
+  min-height: 150px;
+  padding: 2rem 1.5rem;
+  border-radius: 20px;
+  background: var(--paper);
+  border: 2px solid var(--coral-light);
+  box-shadow: 0 4px 15px rgba(255, 107, 107, 0.12);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
 }
-
-/* Container for the letter tiles */
 .scramble-letters-v7 {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    align-items: center;
-    gap: 0.75rem;
-    margin-top: 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
 }
-
-/* Individual letter tiles */
 .scramble-letter-v7 {
-    width: 60px;
-    height: 60px;
-    border-radius: 12px;
-    background: transparent;
-    color: var(--ink);
-    border: 3px solid var(--coral-light);
-    font-size: 1.8rem;
-    font-weight: 800;
-    text-transform: uppercase;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    box-shadow: none;
-    transform: translateY(0);
-    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
-                border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  width: 60px; height: 60px;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--ink);
+  border: 3px solid var(--coral-light);
+  font-size: 1.8rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: none;
+  transform: translateY(0);
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .scramble-letter-v7:hover {
-    transform: translateY(-2px);
-    border-color: var(--coral-main);
-    cursor: grab;
+  transform: translateY(-2px);
+  border-color: var(--coral-main);
+  cursor: grab;
 }
-
-/* Question number */
 .scramble-number-circle {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    background: var(--coral-main);
-    color: white;
-    font-size: 1.25rem;
-    font-weight: 700;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 3px 8px rgba(255, 107, 107, 0.3);
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  background: var(--coral-main);
+  color: white;
+  font-size: 1.25rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 3px 8px rgba(255, 107, 107, 0.3);
 }
 
-/* --- Input & Button --- */
+/* Input & Button */
 .scramble-input-v7 {
   max-width: 350px;
   height: 60px;
@@ -497,44 +472,33 @@
   transform: translateY(-1px);
 }
 .btn-success-v7 {
-    background-color: var(--success-color);
-    border-color: var(--success-color);
-    border-radius: 999px !important;
-    box-shadow: 0 5px 12px rgba(16, 185, 129, 0.4);
-    font-size: 1.25rem;
+  background-color: var(--success-color);
+  border-color: var(--success-color);
+  border-radius: 999px !important;
+  box-shadow: 0 5px 12px rgba(16, 185, 129, 0.4);
+  font-size: 1.25rem;
 }
 .btn-success-v7:hover {
-    background-color: #0e9f6e;
-    box-shadow: 0 7px 14px rgba(16, 185, 129, 0.5);
-    transform: translateY(-1px);
+  background-color: #0e9f6e;
+  box-shadow: 0 7px 14px rgba(16, 185, 129, 0.5);
+  transform: translateY(-1px);
 }
 
-/* ----- Animated Feedback ----- */
-.feedback-container-v7 {
-    margin-top: 1.5rem;
-    min-height: 40px;
-}
+/* Feedback */
+.feedback-container-v7 { margin-top: 1.5rem; min-height: 40px; }
 .feedback-message {
-    font-size: 1.75rem;
-    opacity: 0;
-    transform: translateY(10px);
-    transition: opacity 0.3s, transform 0.3s;
+  font-size: 1.75rem;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.3s, transform 0.3s;
 }
-.feedback-message.active {
-    opacity: 1;
-    transform: translateY(0);
-}
+.feedback-message.active { opacity: 1; transform: translateY(0); }
 .feedback-icon {
-    font-size: 3rem;
-    margin-right: 10px;
-    vertical-align: middle;
+  font-size: 3rem;
+  margin-right: 10px;
+  vertical-align: middle;
 }
-.levelup-message {
-    font-size: 1.3rem;
-    color: var(--coral-main);
-}
-
-/* generic colors */
+.levelup-message { font-size: 1.3rem; color: var(--coral-main); }
 .text-success-v7 { color: var(--success-color); }
 .text-danger { color: var(--coral-main) !important; }
 
@@ -543,9 +507,7 @@
   20%, 60% { transform: translateX(-10px); }
   40%, 80% { transform: translateX(10px); }
 }
-.shake {
-    animation: shake 0.5s ease-in-out;
-}
+.shake { animation: shake 0.5s ease-in-out; }
 </style>
 
 {% endblock %}

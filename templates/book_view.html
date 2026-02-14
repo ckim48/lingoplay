@@ -14,17 +14,10 @@
 
     <div class="d-flex align-items-center gap-3">
       <div class="btn-group rounded-pill overflow-hidden shadow-sm border border-coral-light">
-        <button id="tts-play" class="btn btn-coral-v7 tts-ctrl" title="Play/Resume">
-          <i class="bi bi-play-fill"></i>
-        </button>
-        <button id="tts-pause" class="btn btn-coral-v7 tts-ctrl" title="Pause">
-          <i class="bi bi-pause-fill"></i>
-        </button>
-        <button id="tts-stop" class="btn btn-coral-v7 tts-ctrl" title="Stop">
-          <i class="bi bi-stop-fill"></i>
-        </button>
+        <button id="tts-play" class="btn btn-coral-v7 tts-ctrl" title="Play/Resume"><i class="bi bi-play-fill"></i></button>
+        <button id="tts-pause" class="btn btn-coral-v7 tts-ctrl" title="Pause"><i class="bi bi-pause-fill"></i></button>
+        <button id="tts-stop" class="btn btn-coral-v7 tts-ctrl" title="Stop"><i class="bi bi-stop-fill"></i></button>
       </div>
-
       <a href="{{ url_for('library') }}" class="btn btn-outline-secondary rounded-pill btn-sm game-text-body">
         <i class="bi bi-book"></i> Library
       </a>
@@ -34,6 +27,7 @@
   <div class="book-wrap-v7" id="book">
     <div class="book-stage">
       <div class="spread" id="spread">
+
         <div class="sheet left" id="page-left" aria-live="polite">
           <div class="page-content" id="content-left"></div>
           <div class="page-number" id="pnum-left"></div>
@@ -52,7 +46,6 @@
           </button>
         </div>
 
-        <div class="flip-layer" id="flip-layer" aria-hidden="true"></div>
       </div>
     </div>
   </div>
@@ -61,82 +54,133 @@
 <style>
 :root {
   --coral-main: #ff6b6b;
-  --coral-dark: #e85a5a;
   --coral-light: #ffd7cc;
   --ink: #111827;
   --muted: #6b7280;
   --paper: #fffcf8;
   --paper-edge: #fcece4;
-  --paper-shadow: 0 10px 30px rgba(255, 107, 107, 0.15);
   --bg-game: linear-gradient(145deg, #fff7e5 0%, #fff2f2 50%, #fefcfb 100%);
-  --gutter: 20px; --flip-ms: 460ms; --arrow-pad: 56px;
+  --gutter: 20px;
+  --arrow-pad: 56px;
+
+  /* Dynamic Reader Variables */
+  --reader-font-size: {{ reader_cfg.font_size or '1.4rem' }};
+  --reader-line-height: {{ reader_cfg.line_height or '1.9' }};
+  --reader-max-width: {{ reader_cfg.max_width or '90%' }};
 }
-.page-image-box {
-  width: 100%;
-  height: 220px;
-  background-size: cover;
-  background-position: center;
-  border-radius: 15px;
-  margin-bottom: 1.5rem;
-  border: 2px solid var(--paper-edge);
-  box-shadow: 0 5px 15px rgba(0,0,0,0.05);
-}
-/* Ensure text adjusts when image is present */
-.sheet.has-image .page-content {
-  font-size: 1.2rem;
-  line-height: 1.6;
-}
-.btn-coral-v7 { background-color: var(--coral-main); color: white !important; border: none; padding: 8px 16px; transition: all 0.2s ease; }
+
+/* Base Buttons */
+.btn-coral-v7 { background-color: var(--coral-main); color: white !important; border: none; padding: 8px 16px; }
 .btn-coral-v7:hover { background-color: #e86060; }
-/* Active state for TTS buttons */
-.btn-coral-v7.active { background-color: darkseagreen; box-shadow: inset 0 2px 5px rgba(0,0,0,0.2); }
 
-.border-coral-light { border: 2px solid var(--coral-light) !important; }
-
-.game-title-v7, .book-title, .book-author { font-family: 'Baloo 2', cursive; font-weight: 800; }
-.game-text-body, .page-content { font-family: 'Fredoka', 'Nunito', sans-serif; color: var(--ink); }
-
+/* Book Wrapper */
 .book-wrap-v7 {
-  position: relative; background: var(--bg-game) !important; border-radius: 30px; border: 3px solid var(--coral-light);
-  box-shadow: 0 12px 40px rgba(255,107,107,.25); overflow: hidden; max-width: 1200px; margin-inline: auto;
+  position: relative; background: var(--bg-game) !important;
+  border-radius: 30px; border: 3px solid var(--coral-light);
+  box-shadow: 0 12px 40px rgba(255,107,107,.25); overflow: hidden;
+  max-width: 1200px; margin-inline: auto;
 }
-.book-stage { position: relative; padding: 24px 18px 24px; perspective: 1600px; perspective-origin: 50% 40%; min-height: 64vh; }
-.spread { position: relative; display: grid; grid-template-columns: minmax(280px, 1fr) var(--gutter) minmax(280px, 1fr); align-items: center; justify-items: center; min-height: 56vh; }
-.spine { width: var(--gutter); border-radius: 12px; background: repeating-linear-gradient(180deg, #ffe7bb 0 6px, #ffdca8 6px 12px); border-left: 1px solid #ffd79b; border-right: 1px solid #ffe8c4; box-shadow: inset 0 0 18px rgba(255,174,53,.25); height: 100%; }
+.book-stage {
+  position: relative; padding: 24px 18px;
+  min-height: 64vh;
+  display: flex; align-items: center; justify-content: center;
+}
+.spread {
+  position: relative; display: grid;
+  grid-template-columns: minmax(280px, 1fr) var(--gutter) minmax(280px, 1fr);
+  align-items: center; justify-items: center;
+  width: 100%;
+}
+.spine {
+  width: var(--gutter); height: 100%; min-height: 500px;
+  border-radius: 12px;
+  background: repeating-linear-gradient(180deg, #ffe7bb 0 6px, #ffdca8 6px 12px);
+  border-left: 1px solid #ffd79b; border-right: 1px solid #ffe8c4;
+}
 
-.sheet { position: relative; background: var(--paper); border-radius: 20px; border: 2px solid var(--paper-edge); box-shadow: var(--paper-shadow); padding: 28px var(--arrow-pad) 44px var(--arrow-pad); line-height: 1.9; overflow: hidden; height: clamp(520px, 70vh, 82vh); aspect-ratio: 3 / 4; display: flex; flex-direction: column; }
-.sheet.left { transform: rotate(-.15deg); }
-.sheet.right { transform: rotate(.15deg); }
+/* Sheets (Pages) */
+.sheet {
+  position: relative; background: var(--paper);
+  border-radius: 20px; border: 2px solid var(--paper-edge);
+  box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+  padding: 30px 40px; /* Reduced side padding */
+  overflow: hidden;
+  height: clamp(520px, 70vh, 82vh); width: 100%;
+  display: flex; flex-direction: column;
+}
 
-.page-content { margin: auto 0; font-size: 1.35rem; line-height: 1.8; text-align: center; max-width: 90%; align-self: center; }
-.page-number { position: absolute; right: 16px; bottom: 14px; font-weight: 700; font-size: .9rem; color: var(--muted); }
+/* Dynamic Page Content */
+.page-content {
+  margin: auto 0;
+  width: 100%;
+  align-self: center;
 
-.sheet.is-cover { background: transparent; padding: 0; }
-.sheet.is-cover .page-content { margin: 0; padding: 0; max-width: 100%; align-self: stretch; height: 100%; }
-.cover-page-v2 { position: relative; width: 100%; height: 100%; background-size: cover; background-position: center; color: #fff; }
-.cover-front-overlay-v2 { position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,.7), rgba(0,0,0,.15)); }
-.cover-front-inner-v2 { position: relative; z-index: 2; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; text-align: center; padding: 2.5rem; }
-.book-title { font-size: clamp(2.6rem, 4vw, 3.4rem); line-height: 1.1; margin-bottom: .5rem; color: #fff; }
+  /* Dynamic Styles Applied Here */
+  font-size: var(--reader-font-size);
+  line-height: var(--reader-line-height);
+  max-width: var(--reader-max-width);
 
-.page-arrow-v7 { position: absolute; top: 50%; transform: translateY(-50%); width: 50px; height: 50px; border-radius: 50%; background: var(--coral-main); color: white; border: none; z-index: 3; font-size: 1.25rem; box-shadow: 0 5px 12px rgba(255,107,107,.4); transition: all 0.2s; }
-.page-arrow-v7.left { left: 16px; }
-.page-arrow-v7.right { right: 16px; }
-.page-arrow-v7:disabled { opacity: .6; background: #ccc; }
+  text-align: center; /* Default center, can be changed for advanced */
+  white-space: pre-wrap; /* Preserves paragraphs */
+}
 
-.flip-layer { position: absolute; inset: 24px 18px 24px 18px; pointer-events: none; }
+/* Advanced Level Tweaks: Left align if text is dense */
+{% if story.level == 'advanced' %}
+.page-content {
+  text-align: left;
+  padding-left: 10px;
+  padding-right: 10px;
+}
+{% endif %}
+
+.page-number {
+  position: absolute; right: 24px; bottom: 18px;
+  font-weight: 700; font-size: .9rem; color: var(--muted);
+}
+
+/* Full Image Page */
+.sheet.is-full-image { padding: 0; border: none; background-color: #333; }
+.sheet.is-full-image .page-content { width: 100%; height: 100%; margin: 0; max-width: 100%; }
+.full-page-img {
+  width: 100%; height: 100%;
+  background-size: cover; background-position: center; background-repeat: no-repeat;
+}
+
+/* Cover Styling */
+.cover-page-v2 { width: 100%; height: 100%; background-size: cover; background-position: center; }
+.cover-title-text {
+  font-family: 'Baloo 2', cursive; font-size: 3rem;
+  color: var(--coral-main); margin-bottom: 1rem; line-height: 1.1;
+}
+
+/* Navigation Arrows */
+.page-arrow-v7 {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  width: 44px; height: 44px; border-radius: 50%;
+  background: var(--coral-main); color: white; border: none;
+  z-index: 10; font-size: 1.2rem;
+  box-shadow: 0 4px 10px rgba(255,107,107,.4);
+  transition: transform 0.2s;
+}
+.page-arrow-v7:hover { transform: translateY(-50%) scale(1.1); }
+.page-arrow-v7.left { left: 10px; }
+.page-arrow-v7.right { right: 10px; }
+.page-arrow-v7:disabled { opacity: 0; pointer-events: none; }
 
 @media (max-width: 900px) {
   .spread { grid-template-columns: 1fr; }
-  .spine, .flip-layer { display: none; }
-  .sheet { transform: none; }
-  .page-arrow-v7 { top: auto; bottom: 16px; transform: none; }
+  .spine { display: none; }
+  .sheet { height: auto; min-height: 550px; }
 }
 </style>
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
   const storyTitle = {{ (story.title or '')|tojson }};
+  const storyAuthor = {{ (story.author_name or 'AI')|tojson }};
   const pageTexts = {{ (pages or [])|tojson }};
+  const pageImages = {{ (page_images or [])|tojson }};
+  const coverImage = '{{ story.visuals or "" }}';
 
   function escapeHTML(s){
     return (s||'').replace(/[&<>"'`=\/]/g, c => ({
@@ -145,159 +189,138 @@ document.addEventListener('DOMContentLoaded', function () {
     }[c]));
   }
 
-  function buildPagesFromServerList() {
+  function buildPages() {
     const list = [];
+    const hasAnyImages = Array.isArray(pageImages) && pageImages.some(u => u && u.length > 5);
+
+    // 1. Cover (Left)
     list.push({
-      html: `<div class="cover-page-v2" style="background-image: url('{{ story.visuals or "" }}');">
-              <div class="cover-front-overlay-v2"></div>
-              <div class="cover-front-inner-v2">
-                <h1 class="book-title">${escapeHTML(storyTitle)}</h1>
-              </div>
-            </div>`,
-      isTechnical: true
+      html: `<div class="cover-page-v2" style="background-image:url('${coverImage}');"></div>`,
+      type: 'image-full'
     });
 
-    pageTexts.forEach(text => {
+    // 2. Title Page (Right)
+    list.push({
+      html: `<div class="d-flex flex-column align-items-center justify-content-center h-100 p-4">
+               <h1 class="cover-title-text text-center">${escapeHTML(storyTitle)}</h1>
+               <div style="width:60px; height:4px; background:var(--coral-main); margin: 2rem 0; opacity:0.6;"></div>
+               <p class="text-muted text-uppercase small fw-bold tracking-wide">Written by</p>
+               <h4 class="fw-bold text-dark">${escapeHTML(storyAuthor)}</h4>
+             </div>`,
+      type: 'text',
+      speakText: `${storyTitle}. Written by ${storyAuthor}.`
+    });
+
+    // 3. Story Pages
+    pageTexts.forEach((text, i) => {
+      // Check for matching image
+      const imgUrl = hasAnyImages && pageImages[i] ? String(pageImages[i]).trim() : "";
+
+      if (imgUrl) {
+        list.push({
+          html: `<div class="full-page-img" style="background-image:url('${imgUrl}');"></div>`,
+          type: 'image-full'
+        });
+      }
+
       list.push({
-        html: `<div>${escapeHTML(text).replace(/\\n/g, '<br>')}</div>`,
-        isTechnical: false
+        html: `<div class="fade-in-text">${escapeHTML(text)}</div>`,
+        type: 'text',
+        speakText: text
       });
     });
 
+    // 4. End Page
     list.push({
       html: `<div class="h-100 d-flex flex-column justify-content-center align-items-center text-center">
-              <h2 class="mb-3 game-title-v7" style="color:var(--coral-main); font-size:2.5rem;">The End</h2>
+              <h2 class="mb-3" style="color:var(--coral-main); font-family:'Baloo 2'; font-size:2.5rem;">The End</h2>
+              <i class="bi bi-star-fill text-warning fs-3"></i>
             </div>`,
-      isTechnical: true
+      type: 'end'
     });
+
     return list;
   }
 
-  const pages = buildPagesFromServerList();
+  const pages = buildPages();
   const totalPages = pages.length;
-  const contentLeft = document.getElementById('content-left');
-  const contentRight = document.getElementById('content-right');
+
+  // DOM Elements
   const spreadLeft = document.getElementById('page-left');
   const spreadRight = document.getElementById('page-right');
+  const contentLeft = document.getElementById('content-left');
+  const contentRight = document.getElementById('content-right');
   const nextBtn = document.getElementById('next-btn');
   const prevBtn = document.getElementById('prev-btn');
 
-  // TTS LOGIC
+  // TTS
   const synth = window.speechSynthesis;
-  let chosenVoice = null;
-  let lastTextSpoken = "";
-
-  const btnPlay = document.getElementById('tts-play');
-  const btnPause = document.getElementById('tts-pause');
-  const btnStop = document.getElementById('tts-stop');
-
-  function setActiveBtn(activeId) {
-    document.querySelectorAll('.tts-ctrl').forEach(b => b.classList.remove('active'));
-    if(activeId) document.getElementById(activeId).classList.add('active');
-  }
-
-  function voiceScore(v) {
-    const name = (v.name || "").toLowerCase();
-    const lang = (v.lang || "").toLowerCase();
-    let score = 0;
-    if (lang.startsWith("en-us")) score += 70;
-    else if (lang.startsWith("en-")) score += 50;
-    const good = ["neural", "natural", "premium", "google", "microsoft", "samantha", "aria"];
-    good.forEach(k => { if (name.includes(k)) score += 10; });
-    return score;
-  }
-
-  function pickBestVoice() {
-    const vs = synth.getVoices() || [];
-    return vs.slice().sort((a,b) => voiceScore(b) - voiceScore(a))[0] || null;
-  }
-
-  function ensureVoiceReady(cb) {
-    chosenVoice = pickBestVoice();
-    if (chosenVoice) { cb && cb(); return; }
-    setTimeout(() => { chosenVoice = pickBestVoice(); cb && cb(); }, 200);
-  }
-
-  function getCurrentSpreadText() {
-    const leftIdx = (spread - 1) * 2;
-    const rightIdx = leftIdx + 1;
-    let text = "";
-    if (pages[leftIdx] && !pages[leftIdx].isTechnical) text += (contentLeft.innerText || "").trim() + " ";
-    if (pages[rightIdx] && !pages[rightIdx].isTechnical) text += (contentRight.innerText || "").trim();
-    return text.trim();
-  }
-
-  function speakOrResume() {
-    if (synth.paused) {
-      synth.resume();
-      setActiveBtn('tts-play');
-      return;
-    }
-
-    const text = getCurrentSpreadText();
-    if (!text) return;
-
-    ensureVoiceReady(() => {
-      synth.cancel();
-      const utter = new SpeechSynthesisUtterance(text);
-      if (chosenVoice) utter.voice = chosenVoice;
-
-      // SPEED ADJUSTMENT: 0.8 is slower and more natural for reading
-      utter.rate = 0.80;
-      utter.pitch = 1.0;
-
-      utter.onstart = () => setActiveBtn('tts-play');
-      utter.onend = () => setActiveBtn(null);
-      utter.onerror = () => setActiveBtn(null);
-
-      synth.speak(utter);
-    });
-  }
-
-  btnPlay.addEventListener('click', speakOrResume);
-
-  btnPause.addEventListener('click', () => {
-    if (synth.speaking && !synth.paused) {
-      synth.pause();
-      setActiveBtn('tts-pause');
-    }
-  });
-
-  btnStop.addEventListener('click', () => {
-    synth.cancel();
-    setActiveBtn('tts-stop');
-    setTimeout(() => setActiveBtn(null), 500); // Flash stop then clear
-  });
-
-  // NAVIGATION
   let spread = 1;
+
   function showSpread(s) {
-    spread = s;
+    const maxSpread = Math.ceil(totalPages / 2);
+    spread = Math.max(1, Math.min(s, maxSpread));
+
     const leftIdx = (spread - 1) * 2;
     const rightIdx = leftIdx + 1;
 
-    spreadLeft.classList.toggle('is-cover', leftIdx === 0);
-    contentLeft.innerHTML = pages[leftIdx].html;
+    // Render Left
+    renderPage(spreadLeft, contentLeft, 'pnum-left', leftIdx);
 
-    if (rightIdx < totalPages) {
-      spreadRight.style.visibility = "visible";
-      contentRight.innerHTML = pages[rightIdx].html;
-    } else {
-      spreadRight.style.visibility = "hidden";
-      contentRight.innerHTML = "";
-    }
+    // Render Right
+    renderPage(spreadRight, contentRight, 'pnum-right', rightIdx);
 
-    prevBtn.disabled = (spread === 1);
-    nextBtn.disabled = (spread >= Math.ceil(totalPages / 2));
-
-    // Auto-update page numbers if they exist in your UI
-    if(document.getElementById('pnum-left')) document.getElementById('pnum-left').innerText = leftIdx + 1;
-    if(document.getElementById('pnum-right')) document.getElementById('pnum-right').innerText = rightIdx + 1;
+    // Buttons
+    prevBtn.disabled = (spread <= 1);
+    nextBtn.disabled = (spread >= maxSpread);
   }
 
-  nextBtn.addEventListener('click', () => { synth.cancel(); setActiveBtn(null); showSpread(spread + 1); });
-  prevBtn.addEventListener('click', () => { synth.cancel(); setActiveBtn(null); showSpread(spread - 1); });
+  function renderPage(sheetEl, contentEl, pNumId, idx) {
+    if (pages[idx]) {
+      sheetEl.style.visibility = "visible";
+      contentEl.innerHTML = pages[idx].html;
 
+      if (pages[idx].type === 'image-full') {
+        sheetEl.classList.add('is-full-image');
+      } else {
+        sheetEl.classList.remove('is-full-image');
+      }
+
+      const pNum = document.getElementById(pNumId);
+      // Only show page numbers on text pages that aren't Title/End
+      const showNum = pages[idx].type === 'text' && idx > 1;
+      if (pNum) pNum.innerText = showNum ? (Math.ceil(idx/2)) : '';
+    } else {
+      sheetEl.style.visibility = "hidden";
+      sheetEl.classList.remove('is-full-image');
+    }
+  }
+
+  // TTS Controls
+  document.getElementById('tts-play').addEventListener('click', () => {
+    synth.cancel();
+    const leftIdx = (spread - 1) * 2;
+    const rightIdx = leftIdx + 1;
+
+    let textToSpeak = "";
+    if (pages[leftIdx] && pages[leftIdx].speakText) textToSpeak += pages[leftIdx].speakText + " ";
+    if (pages[rightIdx] && pages[rightIdx].speakText) textToSpeak += pages[rightIdx].speakText;
+
+    if (textToSpeak.trim()) {
+      const utter = new SpeechSynthesisUtterance(textToSpeak);
+      utter.rate = 0.9;
+      synth.speak(utter);
+    }
+  });
+
+  document.getElementById('tts-stop').addEventListener('click', () => synth.cancel());
+  document.getElementById('tts-pause').addEventListener('click', () => synth.pause());
+
+  // Nav
+  nextBtn.addEventListener('click', () => { synth.cancel(); showSpread(spread + 1); });
+  prevBtn.addEventListener('click', () => { synth.cancel(); showSpread(spread - 1); });
+
+  // Init
   showSpread(1);
 });
 </script>
