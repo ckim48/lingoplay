@@ -185,128 +185,55 @@
                 Select a student on the left to see detailed progress.
               </div>
 
-              <div id="studentDetailContent" style="display:none;">
-                <!-- Top: identity + quick actions -->
-                <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
-                  <div>
-                    <div class="d-flex align-items-center gap-2 mb-1">
-                      <h3 class="mb-0 fw-bold admin-title-v7" id="detailName"></h3>
-                      <span class="badge bg-soft-level admin-text-tag" id="detailLevelBadge"></span>
-                    </div>
-                    <div class="small text-muted admin-text-body" id="detailEmail"></div>
-                    <div class="mt-1">
-                      <span class="badge bg-light text-muted border admin-text-tag" id="detailLangBadge"></span>
-                    </div>
-                    <div class="mt-1 small text-muted admin-text-body" id="detailLastSeenWrapper" style="display:none;">
-                      Last active:
-                      <span id="detailLastSeen"></span>
-                    </div>
-                  </div>
-                  <div class="d-flex flex-wrap gap-2">
-                    <a id="detailAnalyticsLink"
-                       href="#"
-                       class="btn btn-sm btn-analytics-main rounded-pill admin-text-button d-flex align-items-center gap-1">
-                      <i class="bi bi-bar-chart-fill"></i>
-                      <span>Progress History</span>
-                    </a>
-                  </div>
-                </div>
+<div id="studentDetailContent" style="display:none;">
+  <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+    <div>
+      <div class="d-flex align-items-center gap-2 mb-1">
+        <h3 class="mb-0 fw-bold admin-title-v7" id="detailName"></h3>
 
-                <!-- KPIs -->
-                <div class="row g-3 mb-3">
-                  <div class="col-md-4 col-6">
-                    <div class="detail-metric-card">
-                      <div class="detail-metric-label">Completion</div>
-                      <div class="detail-metric-value" id="detailCompletionPercent">0%</div>
-                      <div class="detail-metric-sub" id="detailCompletionCounts">0 / 0 done</div>
-                    </div>
-                  </div>
-                  <div class="col-md-4 col-6">
-                    <div class="detail-metric-card">
-                      <div class="detail-metric-label">Average score</div>
-                      <div class="detail-metric-value" id="detailAvgScore">—</div>
-                      <div class="detail-metric-sub">Across completed work</div>
-                    </div>
-                  </div>
-                  <div class="col-md-4 col-12">
-                    <div class="detail-metric-card">
-                      <div class="detail-metric-label">Overdue</div>
-                      <div class="detail-metric-value text-danger" id="detailOverdueCount">0</div>
-                      <div class="detail-metric-sub" id="detailOverdueLabel">No overdue assignments</div>
-                    </div>
-                  </div>
-                </div>
+        <div id="levelDisplayWrap" class="d-flex align-items-center gap-2">
+          <span class="badge bg-soft-level admin-text-tag" id="detailLevelBadge"></span>
+          <button class="btn btn-link p-0 text-muted" id="btnEditLevel" title="Change Level" style="font-size:0.85rem;">
+            <i class="bi bi-pencil-square"></i>
+          </button>
+        </div>
 
-                <!-- Visual progress "chart" -->
-                <div class="mb-3">
-                  <div class="d-flex justify-content-between align-items-center mb-1">
-                    <div class="small text-muted text-uppercase fw-semibold admin-text-body">
-                      Assignment completion
-                    </div>
-                    <div class="small text-muted admin-text-body" id="detailCompletionSummary"></div>
-                  </div>
-                  <div class="student-progress-bar">
-                    <div class="student-progress-fill" id="detailProgressFill"></div>
-                  </div>
-                </div>
+        <form id="levelEditForm" action="{{ url_for('admin_update_user_level') }}" method="POST" class="d-flex align-items-center gap-1" style="display:none;">
+          <input type="hidden" name="user_id" id="editLevelUserId">
+          <input type="hidden" name="next" value="{{ request.url }}">
 
-                <!-- Assignments collapse toggle -->
-                <div class="d-flex justify-content-between align-items-center mt-3 mb-2">
-                  <h6 class="mb-0 small text-muted text-uppercase admin-text-body">
-                    Assignments
-                  </h6>
-                  <button
-                    class="btn btn-sm btn-light assignments-toggle rounded-pill d-inline-flex align-items-center gap-1"
-                    type="button"
-                    data-bs-toggle="collapse"
-                    data-bs-target="#assignmentsCollapse"
-                    aria-expanded="true"
-                    aria-controls="assignmentsCollapse">
-                    <i class="bi bi-list-check"></i>
-                    <span>Show / hide</span>
-                    <i class="bi bi-chevron-down small"></i>
-                  </button>
-                </div>
+          <select name="new_level" id="editLevelSelect" class="form-select form-select-sm py-0 rounded-pill" style="font-size:0.75rem; width:auto;">
+            <option value="beginner">Beginner</option>
+            <option value="intermediate">Intermediate</option>
+            <option value="advanced">Advanced</option>
+          </select>
 
-                <!-- Assignment buckets (simple counts) -->
-                <div class="collapse show" id="assignmentsCollapse">
-                  <div class="row g-3 mt-1">
-                    <div class="col-md-6">
-                      <div class="fw-semibold small text-muted text-uppercase admin-text-body mb-2">
-                        Still to do
-                      </div>
-                      <div class="detail-list-box small admin-text-body" id="detailTodoBox">
-                        <div class="d-flex justify-content-between">
-                          <span>Assigned (not overdue)</span>
-                          <span id="detailAssignedCount">0</span>
-                        </div>
-                        <div class="d-flex justify-content-between mt-1">
-                          <span>Past due</span>
-                          <span id="detailPastDueCount">0</span>
-                        </div>
-                        <div class="text-muted mt-2 small" id="detailTodoEmpty" style="display:none;">
-                          No pending assignments.
-                        </div>
-                      </div>
-                    </div>
-                    <div class="col-md-6">
-                      <div class="fw-semibold small text-muted text-uppercase admin-text-body mb-2">
-                        Submitted
-                      </div>
-                      <div class="detail-list-box small admin-text-body" id="detailSubmittedBox">
-                        <div class="d-flex justify-content-between">
-                          <span>Completed</span>
-                          <span id="detailCompletedCount">0</span>
-                        </div>
-                        <div class="text-muted mt-2 small" id="detailSubmittedEmpty" style="display:none;">
-                          No submitted assignments yet.
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+          <button type="submit" class="btn btn-sm btn-success rounded-circle p-0 d-flex align-items-center justify-content-center" style="width:24px; height:24px;">
+            <i class="bi bi-check"></i>
+          </button>
+          <button type="button" id="btnCancelLevel" class="btn btn-sm btn-light border rounded-circle p-0 d-flex align-items-center justify-content-center" style="width:24px; height:24px;">
+            <i class="bi bi-x"></i>
+          </button>
+        </form>
 
-              </div> <!-- /studentDetailContent -->
+      </div>
+      <div class="small text-muted admin-text-body" id="detailEmail"></div>
+      <div class="mt-1">
+        <span class="badge bg-light text-muted border admin-text-tag" id="detailLangBadge"></span>
+      </div>
+      <div class="mt-1 small text-muted admin-text-body" id="detailLastSeenWrapper" style="display:none;">
+        Last active:
+        <span id="detailLastSeen"></span>
+      </div>
+    </div>
+
+    <div class="d-flex flex-wrap gap-2">
+      <a id="detailAnalyticsLink" href="#" class="btn btn-sm btn-analytics-main rounded-pill admin-text-body d-flex align-items-center gap-1">
+        <i class="bi bi-bar-chart-fill"></i>
+        <span>Progress History</span>
+      </a>
+    </div>
+  </div>
             </div>
           </div>
         </div>
@@ -641,6 +568,7 @@ document.addEventListener('DOMContentLoaded', function(){
   const detailEmpty = document.getElementById('studentDetailEmpty');
   const detailContent = document.getElementById('studentDetailContent');
 
+  // Basic Info Elements
   const elName = document.getElementById('detailName');
   const elEmail = document.getElementById('detailEmail');
   const elLang = document.getElementById('detailLangBadge');
@@ -648,6 +576,15 @@ document.addEventListener('DOMContentLoaded', function(){
   const elLastSeen = document.getElementById('detailLastSeen');
   const elLastSeenWrap = document.getElementById('detailLastSeenWrapper');
 
+  // Level Edit Elements
+  const elLevelDisplay = document.getElementById('levelDisplayWrap');
+  const elLevelForm = document.getElementById('levelEditForm');
+  const elEditLevelUserId = document.getElementById('editLevelUserId');
+  const elEditLevelSelect = document.getElementById('editLevelSelect');
+  const btnEditLevel = document.getElementById('btnEditLevel');
+  const btnCancelLevel = document.getElementById('btnCancelLevel');
+
+  // Metrics Elements
   const elCompletionPercent = document.getElementById('detailCompletionPercent');
   const elCompletionCounts = document.getElementById('detailCompletionCounts');
   const elAvgScore = document.getElementById('detailAvgScore');
@@ -657,6 +594,7 @@ document.addEventListener('DOMContentLoaded', function(){
   const elProgressFill = document.getElementById('detailProgressFill');
   const elAnalyticsLink = document.getElementById('detailAnalyticsLink');
 
+  // Bucket Elements
   const elAssignedCount = document.getElementById('detailAssignedCount');
   const elPastDueCount = document.getElementById('detailPastDueCount');
   const elCompletedCount = document.getElementById('detailCompletedCount');
@@ -666,12 +604,11 @@ document.addEventListener('DOMContentLoaded', function(){
   // Modal elements
   const analyticsModalEl = document.getElementById('analyticsModal');
   const analyticsStudentName = document.getElementById('analyticsModalStudentName');
-
+  // ... (Timeline vars remain same) ...
   const completionSvg = document.getElementById('completionTimelineSvg');
   const completionTicks = document.getElementById('completionTimelineTicks');
   const completionEmpty = document.getElementById('completionTimelineEmpty');
   const completionLabel = document.getElementById('completionTimelineLabel');
-
   const scoreSvg = document.getElementById('scoreTimelineSvg');
   const scoreTicks = document.getElementById('scoreTimelineTicks');
   const scoreEmpty = document.getElementById('scoreTimelineEmpty');
@@ -680,7 +617,7 @@ document.addEventListener('DOMContentLoaded', function(){
   let currentCompletionHistory = [];
   let currentScoreHistory = [];
 
-  // List-local search & filter
+  // --- FILTER LOGIC (Keep existing logic) ---
   const searchInput = document.getElementById('studentListSearch');
   const filterSelect = document.getElementById('studentListFilterStatus');
 
@@ -692,213 +629,155 @@ document.addEventListener('DOMContentLoaded', function(){
       const name = (item.dataset.name || '').toLowerCase();
       const email = (item.dataset.email || '').toLowerCase();
       const overdue = parseInt(item.dataset.overdue || '0', 10);
-
-      const matchesText =
-        !term ||
-        name.includes(term) ||
-        email.includes(term);
-
+      const matchesText = !term || name.includes(term) || email.includes(term);
       let matchesStatus = true;
-      if (status === 'needs'){
-        matchesStatus = overdue > 0;
-      } else if (status === 'ok'){
-        matchesStatus = overdue === 0;
-      }
+      if (status === 'needs') matchesStatus = overdue > 0;
+      else if (status === 'ok') matchesStatus = overdue === 0;
 
-      if (matchesText && matchesStatus){
-        item.style.display = '';
-      } else {
-        item.style.display = 'none';
-      }
+      item.style.display = (matchesText && matchesStatus) ? '' : 'none';
     });
   }
 
-  if (searchInput){
-    searchInput.addEventListener('input', applyListFilters);
-  }
-  if (filterSelect){
-    filterSelect.addEventListener('change', applyListFilters);
-  }
+  if (searchInput) searchInput.addEventListener('input', applyListFilters);
+  if (filterSelect) filterSelect.addEventListener('change', applyListFilters);
 
+  // --- CHART RENDERING (Keep existing logic) ---
   function renderLineChart(history, svgEl, ticksEl, emptyEl, labelEl, lineClass){
-    while (svgEl.firstChild) svgEl.removeChild(svgEl.firstChild);
-    ticksEl.innerHTML = '';
-
-    if (!history || !history.length){
-      emptyEl.style.display = 'block';
-      svgEl.style.display = 'none';
-      ticksEl.style.display = 'none';
-      if (labelEl) labelEl.textContent = '';
-      return;
-    }
-
-    emptyEl.style.display = 'none';
-    svgEl.style.display = 'block';
-    ticksEl.style.display = 'flex';
-
-    const values = history.map(d => {
-      if (typeof d.value === 'number') return d.value;
-      const parsed = parseFloat(d.value);
-      return isNaN(parsed) ? 0 : parsed;
-    });
-    const labels = history.map(d => d.label || '');
-
-    const maxVal = Math.max.apply(null, values);
-    const minVal = Math.min.apply(null, values);
-    const span = (maxVal - minVal) || 1;
-
-    const points = values.map((v, idx) => {
-      const x = history.length === 1 ? 0 : (idx / (history.length - 1)) * 100;
-      const norm = (v - minVal) / span;
-      const y = 100 - norm * 100;
-      return { x, y };
-    });
-
-    const ns = 'http://www.w3.org/2000/svg';
-    const path = document.createElementNS(ns, 'path');
-    const d = points.map((p, idx) => `${idx === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
-    path.setAttribute('d', d);
-    path.setAttribute('class', 'timeline-line ' + lineClass);
-    svgEl.appendChild(path);
-
-    points.forEach((p) => {
-      const circle = document.createElementNS(ns, 'circle');
-      circle.setAttribute('cx', p.x);
-      circle.setAttribute('cy', p.y);
-      circle.setAttribute('r', 1.8);
-      circle.setAttribute('class', 'timeline-dot');
-      svgEl.appendChild(circle);
-    });
-
-    labels.forEach(label => {
-      const spanEl = document.createElement('span');
-      spanEl.textContent = label;
-      ticksEl.appendChild(spanEl);
-    });
-
-    if (labelEl){
-      const lastVal = values[values.length - 1];
-      const lastLabel = labels[labels.length - 1] || '';
-      const valText = (typeof lastVal === 'number' && lastVal.toFixed)
-        ? lastVal.toFixed(1)
-        : lastVal;
-      labelEl.textContent = lastLabel ? `${lastLabel}: ${valText}` : `${valText}`;
-    }
+     // ... (Existing chart logic matches what you had) ...
+     while (svgEl.firstChild) svgEl.removeChild(svgEl.firstChild);
+     ticksEl.innerHTML = '';
+     if (!history || !history.length){
+       emptyEl.style.display = 'block'; svgEl.style.display = 'none'; ticksEl.style.display = 'none';
+       if (labelEl) labelEl.textContent = ''; return;
+     }
+     emptyEl.style.display = 'none'; svgEl.style.display = 'block'; ticksEl.style.display = 'flex';
+     const values = history.map(d => parseFloat(d.value) || 0);
+     const labels = history.map(d => d.label || '');
+     const maxVal = Math.max(...values); const minVal = Math.min(...values);
+     const span = (maxVal - minVal) || 1;
+     const points = values.map((v, idx) => {
+       const x = history.length === 1 ? 0 : (idx / (history.length - 1)) * 100;
+       const y = 100 - ((v - minVal) / span) * 100;
+       return { x, y };
+     });
+     const ns = 'http://www.w3.org/2000/svg';
+     const path = document.createElementNS(ns, 'path');
+     const d = points.map((p, idx) => `${idx === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+     path.setAttribute('d', d); path.setAttribute('class', 'timeline-line ' + lineClass);
+     svgEl.appendChild(path);
+     points.forEach(p => {
+       const c = document.createElementNS(ns, 'circle');
+       c.setAttribute('cx', p.x); c.setAttribute('cy', p.y); c.setAttribute('r', 1.8); c.setAttribute('class', 'timeline-dot');
+       svgEl.appendChild(c);
+     });
+     labels.forEach(l => {
+       const s = document.createElement('span'); s.textContent = l; ticksEl.appendChild(s);
+     });
+     if (labelEl && values.length) {
+       labelEl.textContent = (labels[labels.length-1]||'') + ': ' + values[values.length-1].toFixed(1);
+     }
   }
 
+  // --- SELECT STUDENT LOGIC ---
   function selectStudent(btn){
     listItems.forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
 
+    // Reset Level Editor to "View Mode" immediately when switching students
+    elLevelDisplay.style.display = 'flex';
+    elLevelForm.style.display = 'none';
+
+    // Data parsing
+    const sId = btn.dataset.studentId;
+    const sLevel = btn.dataset.level || 'beginner';
     const total = parseInt(btn.dataset.total || '0', 10);
     const completed = parseInt(btn.dataset.completed || '0', 10);
     const overdue = parseInt(btn.dataset.overdue || '0', 10);
     const avgScore = parseFloat(btn.dataset.avgScore || '0');
     const completionRate = total > 0 ? (completed / total * 100) : 0;
-
     const remaining = Math.max(total - completed, 0);
     const assignedNotOverdue = Math.max(remaining - overdue, 0);
 
-    // Show detail panel
+    // Show panel
     detailEmpty.style.display = 'none';
     detailContent.style.display = '';
 
+    // Populate Info
     elName.textContent = btn.dataset.name || '';
     elEmail.textContent = btn.dataset.email || '';
     elLang.textContent = (btn.dataset.l1 || 'L1') + ' / ' + (btn.dataset.l2 || 'L2');
-    elLevel.textContent = 'Level: ' + (btn.dataset.level || 'Unknown');
+    elLevel.textContent = 'Level: ' + sLevel;
 
+    // --- POPULATE LEVEL EDIT FORM ---
+    elEditLevelUserId.value = sId;
+    elEditLevelSelect.value = sLevel.toLowerCase();
+
+    // Metrics
     const lastSeen = btn.dataset.lastSeen || '';
-    if (lastSeen){
-      elLastSeenWrap.style.display = '';
-      elLastSeen.textContent = lastSeen;
-    } else {
-      elLastSeenWrap.style.display = 'none';
-    }
+    elLastSeenWrap.style.display = lastSeen ? '' : 'none';
+    if(lastSeen) elLastSeen.textContent = lastSeen;
 
     elCompletionPercent.textContent = completionRate.toFixed(1) + '%';
     elCompletionCounts.textContent = `${completed} / ${total} done`;
     elCompletionSummary.textContent = `${completed} done · ${overdue} overdue · ${remaining} remaining`;
-
     elAvgScore.textContent = total > 0 ? avgScore.toFixed(1) + '%' : '—';
-
     elOverdue.textContent = overdue.toString();
-    elOverdueLabel.textContent = overdue > 0
-      ? 'Has overdue assignments'
-      : 'No overdue assignments';
-
+    elOverdueLabel.textContent = overdue > 0 ? 'Has overdue assignments' : 'No overdue assignments';
     elProgressFill.style.width = completionRate.toFixed(0) + '%';
 
-    // Simple assignment breakdown
+    // Assignment breakdown
     elAssignedCount.textContent = assignedNotOverdue.toString();
     elPastDueCount.textContent = overdue.toString();
     elCompletedCount.textContent = completed.toString();
+    elTodoEmpty.style.display = remaining === 0 ? 'block' : 'none';
+    elSubmittedEmpty.style.display = completed === 0 ? 'block' : 'none';
 
-    // Empty messages
-    if (remaining === 0){
-      elTodoEmpty.style.display = 'block';
-    } else {
-      elTodoEmpty.style.display = 'none';
-    }
-
-    if (completed === 0){
-      elSubmittedEmpty.style.display = 'block';
-    } else {
-      elSubmittedEmpty.style.display = 'none';
+    // Analytics Link
+    if (elAnalyticsLink) {
+        elAnalyticsLink.setAttribute('href', btn.dataset.analyticsUrl);
     }
 
-    // Parse histories for modal
-    try {
-      currentCompletionHistory = JSON.parse(btn.dataset.completionHistory || '[]');
-    } catch (e) {
-      currentCompletionHistory = [];
-    }
-    try {
-      currentScoreHistory = JSON.parse(btn.dataset.scoreHistory || '[]');
-    } catch (e) {
-      currentScoreHistory = [];
-    }
+    // Parse histories
+    try { currentCompletionHistory = JSON.parse(btn.dataset.completionHistory || '[]'); } catch(e){ currentCompletionHistory=[]; }
+    try { currentScoreHistory = JSON.parse(btn.dataset.scoreHistory || '[]'); } catch(e){ currentScoreHistory=[]; }
   }
 
-  listItems.forEach(btn => {
-    btn.addEventListener('click', () => selectStudent(btn));
-  });
+  // --- LEVEL EDIT TOGGLES ---
+  if(btnEditLevel && btnCancelLevel) {
+    btnEditLevel.addEventListener('click', function(){
+      elLevelDisplay.style.display = 'none';
+      elLevelForm.style.display = 'flex';
+    });
 
-  // Analytics modal open
-  if (elAnalyticsLink && analyticsModalEl){
+    btnCancelLevel.addEventListener('click', function(){
+      elLevelForm.style.display = 'none';
+      elLevelDisplay.style.display = 'flex';
+    });
+  }
+
+  // Listeners
+  listItems.forEach(btn => btn.addEventListener('click', () => selectStudent(btn)));
+
+  // Analytics Modal Listener
+  if(elAnalyticsLink && analyticsModalEl){
     elAnalyticsLink.addEventListener('click', function(e){
+      // If user holds Ctrl/Cmd, let the link open in new tab (default href)
+      if (e.ctrlKey || e.metaKey) return;
+
       e.preventDefault();
-      if (typeof bootstrap === 'undefined') return;
-
+      // Open Modal logic
+      if(typeof bootstrap === 'undefined') return;
       analyticsStudentName.textContent = elName.textContent || 'Student analytics';
-
-      renderLineChart(
-        currentCompletionHistory,
-        completionSvg,
-        completionTicks,
-        completionEmpty,
-        completionLabel,
-        'timeline-line-completion'
-      );
-      renderLineChart(
-        currentScoreHistory,
-        scoreSvg,
-        scoreTicks,
-        scoreEmpty,
-        scoreLabel,
-        'timeline-line-score'
-      );
-
+      renderLineChart(currentCompletionHistory, completionSvg, completionTicks, completionEmpty, completionLabel, 'timeline-line-completion');
+      renderLineChart(currentScoreHistory, scoreSvg, scoreTicks, scoreEmpty, scoreLabel, 'timeline-line-score');
       const modal = new bootstrap.Modal(analyticsModalEl);
       modal.show();
     });
   }
 
-  // Auto-select first *visible* student
+  // Init
   const firstVisible = Array.from(listItems).find(li => li.style.display !== 'none');
-  if (firstVisible){
-    selectStudent(firstVisible);
-  }
+  if(firstVisible) selectStudent(firstVisible);
 });
 </script>
 {% endif %}

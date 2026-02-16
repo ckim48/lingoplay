@@ -213,7 +213,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // 3. Story Pages
     pageTexts.forEach((text, i) => {
-      // Check for matching image
       const imgUrl = hasAnyImages && pageImages[i] ? String(pageImages[i]).trim() : "";
 
       if (imgUrl) {
@@ -226,7 +225,8 @@ document.addEventListener('DOMContentLoaded', function () {
       list.push({
         html: `<div class="fade-in-text">${escapeHTML(text)}</div>`,
         type: 'text',
-        speakText: text
+        speakText: text,
+        pageDisplay: i + 1 // Fixed page numbering logic
       });
     });
 
@@ -253,8 +253,40 @@ document.addEventListener('DOMContentLoaded', function () {
   const nextBtn = document.getElementById('next-btn');
   const prevBtn = document.getElementById('prev-btn');
 
-  // TTS
+  // --- TTS SETUP (Voice Selection) ---
   const synth = window.speechSynthesis;
+  let availableVoices = [];
+
+  function loadVoices() {
+    availableVoices = synth.getVoices();
+  }
+
+  // Chrome loads voices asynchronously
+  if (speechSynthesis.onvoiceschanged !== undefined) {
+    speechSynthesis.onvoiceschanged = loadVoices;
+  }
+  loadVoices(); // Initial try
+
+  function getAmericanVoice() {
+    if (!availableVoices.length) loadVoices();
+
+    // 1. Try specific high-quality US voices (Google/Microsoft/Apple)
+    const preferred = availableVoices.find(v =>
+      v.name === "Google US English" ||
+      v.name === "Microsoft David" ||
+      v.name === "Samantha"
+    );
+    if (preferred) return preferred;
+
+    // 2. Fallback: Any voice marked strictly as 'en-US'
+    const anyUS = availableVoices.find(v => v.lang === 'en-US');
+    if (anyUS) return anyUS;
+
+    // 3. Last resort: First English voice
+    return availableVoices.find(v => v.lang.startsWith('en'));
+  }
+  // --- END TTS SETUP ---
+
   let spread = 1;
 
   function showSpread(s) {
@@ -264,13 +296,9 @@ document.addEventListener('DOMContentLoaded', function () {
     const leftIdx = (spread - 1) * 2;
     const rightIdx = leftIdx + 1;
 
-    // Render Left
     renderPage(spreadLeft, contentLeft, 'pnum-left', leftIdx);
-
-    // Render Right
     renderPage(spreadRight, contentRight, 'pnum-right', rightIdx);
 
-    // Buttons
     prevBtn.disabled = (spread <= 1);
     nextBtn.disabled = (spread >= maxSpread);
   }
@@ -287,9 +315,9 @@ document.addEventListener('DOMContentLoaded', function () {
       }
 
       const pNum = document.getElementById(pNumId);
-      // Only show page numbers on text pages that aren't Title/End
-      const showNum = pages[idx].type === 'text' && idx > 1;
-      if (pNum) pNum.innerText = showNum ? (Math.ceil(idx/2)) : '';
+      if (pNum) {
+        pNum.innerText = pages[idx].pageDisplay ? pages[idx].pageDisplay : '';
+      }
     } else {
       sheetEl.style.visibility = "hidden";
       sheetEl.classList.remove('is-full-image');
@@ -298,7 +326,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // TTS Controls
   document.getElementById('tts-play').addEventListener('click', () => {
-    synth.cancel();
+    synth.cancel(); // Stop any previous speech
+
     const leftIdx = (spread - 1) * 2;
     const rightIdx = leftIdx + 1;
 
@@ -308,7 +337,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (textToSpeak.trim()) {
       const utter = new SpeechSynthesisUtterance(textToSpeak);
-      utter.rate = 0.9;
+
+      // --- APPLY AMERICAN VOICE ---
+      const usVoice = getAmericanVoice();
+      if (usVoice) {
+        utter.voice = usVoice;
+      }
+      utter.lang = 'en-US'; // Force locale
+      utter.rate = 0.9;     // Slightly slower for reading
+
       synth.speak(utter);
     }
   });
